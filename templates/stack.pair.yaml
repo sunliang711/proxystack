@@ -1,0 +1,63 @@
+# pair 模板，也是 add 默认模板
+# 使用方式：
+#   proxystack-agent add <name> --template pair
+# 生成后用户需要修改端口、server、凭据字段和 user。
+
+name: example
+enabled: true
+role: edge
+labels: []
+xrelay:
+  enabled: true
+  outbound:
+    type: clash
+    ref: example.clash.socks.local
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 127.0.0.1
+      port: 24000
+      udp: true
+      auth:
+        type: noauth
+      user: demo
+      remark: example local socks
+      sub: false
+    - name: vmess
+      protocol: vmess
+      listen: 0.0.0.0
+      port: 24100
+      uuid: 11111111-1111-4111-8111-111111111111
+      network: raw
+      user: demo
+      remark: example vmess
+      sub: true
+clash:
+  enabled: true
+  mode: Rule
+  controller:
+    listen: 127.0.0.1:19090
+    secret: change-me-clash-api-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17090
+  upstreams:
+    - name: server-a
+      type: raw
+      config:
+        type: vmess
+        server: server.example.com
+        port: 443
+        uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+        network: ws
+        tls: true
+        ws_opts:
+          path: /vmess
+  groups:
+    - name: AllProxy
+      type: select
+      proxies: [server-a, DIRECT]
+  rules:
+    profile: default

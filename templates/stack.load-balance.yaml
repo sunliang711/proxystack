@@ -1,0 +1,55 @@
+# load-balance 实例模板
+# 需要把 usa1/usa2 改成实际已有实例名，把 relay 改成目标 xrelay inbound name。
+
+name: auto-balance
+enabled: true
+role: auto
+labels: [auto]
+xrelay:
+  enabled: true
+  outbound:
+    type: clash
+    ref: auto-balance.clash.socks.local
+  inbounds:
+    - name: relay
+      protocol: socks5
+      listen: 0.0.0.0
+      port: 26000
+      udp: true
+      auth:
+        type: password
+        username: balance
+        password: change-me-relay-password
+      user: demo
+      remark: balance relay socks
+      sub: true
+clash:
+  enabled: true
+  mode: Rule
+  controller:
+    listen: 127.0.0.1:19160
+    secret: change-me-clash-api-secret
+  listeners:
+    socks:
+      - name: local
+        listen: 127.0.0.1
+        port: 17160
+  upstreams:
+    - name: usa1-local
+      type: xrelay-socks5
+      ref: usa1.xrelay.socks5.relay
+    - name: usa2-local
+      type: xrelay-socks5
+      ref: usa2.xrelay.socks5.relay
+  groups:
+    - name: BalanceProxy
+      type: load-balance
+      proxies: [usa1-local, usa2-local]
+      url: http://www.gstatic.com/generate_204
+      interval: 120
+      strategy: consistent-hashing
+    - name: AllProxy
+      type: select
+      proxies: [BalanceProxy, usa1-local, usa2-local, DIRECT]
+  rules:
+    profile: default
