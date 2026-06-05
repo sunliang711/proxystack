@@ -24,6 +24,14 @@ def test_agent_version_is_available() -> None:
     assert "proxystack-agent" in result.output
 
 
+def test_agent_validate_examples() -> None:
+    """验证 proxystack-agent validate 可以校验示例配置。"""
+    result = runner.invoke(agent_app, ["validate", "-c", "examples/config.yaml", "--skip-system-ports"])
+
+    assert result.exit_code == 0
+    assert "配置校验通过" in result.output
+
+
 def test_sub_help_is_available() -> None:
     """验证 proxystack-sub 帮助可以正常输出。"""
     result = runner.invoke(sub_app, ["--help"])

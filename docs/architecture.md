@@ -108,7 +108,7 @@ flowchart LR
 - ClashInstance：mihomo 运行实例，包含监听端口、proxies、proxy-groups、rules、mode。
 - Inbound：Xray inbound，`name` 是本 stack 内引用和订阅生成的稳定标识。
 - Outbound：Xray outbound，支持 `clash`、`socks5`、`http`、`direct`。
-- Ref：跨实例引用，如 `usa1.xrelay.socks5.relay`。
+- Ref：跨实例引用，如 xrelay inbound 简写 `usa1.relay`。
 - SubscriptionNode：由 `sub: true` 的 inbound 编译出来的订阅节点。
 - SubscriptionInput：单个订阅输入文件，只包含由 xrelay inbound 编译出的订阅节点和来源元数据；agent 和 sub 共同支持该格式。
 - SubscriptionBundle：本地 agent 导出的订阅发布包，可包含一个或多个 SubscriptionInput、模板版本、生成时间和签名/校验信息。

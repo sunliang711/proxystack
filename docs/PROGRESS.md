@@ -10,7 +10,7 @@
 - [x] 确认本地文件统一放在 `/opt/proxystack`
 - [x] 确认全局配置使用 `config.yaml`，每个 stack 使用独立 `stacks/<name>.yaml`
 - [x] 初始化 Python 项目
-- [ ] 实现配置模型和校验
+- [x] 实现配置模型和校验
 - [ ] 实现配置生成器
 - [ ] 实现 CLI 和 systemd 管理
 - [ ] 实现订阅发布包、多输入合并和订阅服务本地/Docker部署

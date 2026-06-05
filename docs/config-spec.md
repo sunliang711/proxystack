@@ -270,7 +270,7 @@ outbound:
   ref: usa1.clash.socks.local
 ```
 
-ref 四段含义：
+ref 两段含义：
 
 ```text
 <stack>.clash.<listener_type>.<listener_name>
@@ -323,21 +323,20 @@ rules:
 upstreams:
   - name: usa1-local
     type: xrelay-socks5
-    ref: usa1.xrelay.socks5.relay
+    ref: usa1.relay
 ```
 
-ref 四段含义：
+ref 两段含义：
 
 ```text
-<stack>.<component>.<protocol>.<inbound_name>
+<stack>.<inbound_name>
 ```
 
 - 第一段 `usa1`：目标 stack 名称。
-- 第二段 `xrelay`：当前只支持 `xrelay`，为后续扩展预留。
-- 第三段 `socks5`：目标 inbound 的协议。P0 只支持 `socks5`，`http` 作为 P1 扩展预留。
-- 第四段 `relay`：目标 xrelay inbound 的 `name` 字段。
+- 第二段 `relay`：目标 stack 中 `xrelay.inbounds[].name` 字段。
 
 `relay` 不是固定字面量，它由用户在目标 stack 的 `xrelay.inbounds[].name` 中定义。
+`type: xrelay-socks5` 已经声明目标必须是 xrelay 的 socks5 inbound，因此校验层会根据 `ref` 找到目标 inbound 后确认 `protocol: socks5`。
 
 `upstreams[].name` 有用。它会成为 mihomo `proxies[].name`，也会被 `proxy-groups[].proxies` 引用。比如 `usa1-local`、`usa2-local` 就是 auto 组里的节点名。
 

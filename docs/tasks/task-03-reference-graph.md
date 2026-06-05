@@ -23,7 +23,7 @@
 
 ## 验收标准
 
-- `usa1.xrelay.socks5.relay` 能解析到 xrelay inbound 端口，其中 `kind` 表示 inbound protocol。
+- `usa1.relay` 能解析到 xrelay inbound 端口，其中 `kind` 表示 inbound protocol。
 - `usa1.clash.socks.local` 能解析到 clash socks listener，其中 `kind` 表示 listener type。
 - ref 不存在、组件不匹配、协议不匹配时失败。
 - auto 场景无循环时通过，有循环时失败。

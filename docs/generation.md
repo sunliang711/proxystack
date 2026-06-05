@@ -121,7 +121,7 @@ socks-port: 17091
 upstreams:
   - name: usa1-local
     type: xrelay-socks5
-    ref: usa1.xrelay.socks5.relay
+    ref: usa1.relay
 ```
 
 生成：
