@@ -27,8 +27,10 @@ from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 
 SUPPORTED_INPUT_EXTENSIONS = {".yaml", ".yml", ".json"}
+BUNDLE_SCHEMA = "proxystack.sub-bundle"
 BUNDLE_VERSION = 1
 INDEX_VERSION = 1
+INPUT_SCHEMA = "proxystack.subscription-input"
 INPUT_VERSION = 1
 DEFAULT_ACCESS = {"type": "none"}
 
@@ -98,10 +100,25 @@ class SubscriptionInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    input_schema: Literal["proxystack.subscription-input"] = INPUT_SCHEMA
     input_version: Literal[1]
     source: str = Field(min_length=1)
     generated_at: str = Field(min_length=1)
     nodes: list[SubscriptionNode] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_schema_metadata(cls, value: Any) -> Any:
+        """校验 input schema 和版本，兼容缺少 schema 的 v1 输入。"""
+        if not isinstance(value, dict):
+            return value
+        input_schema = value.get("input_schema", INPUT_SCHEMA)
+        if input_schema != INPUT_SCHEMA:
+            raise ValueError(f"unsupported subscription input schema: {input_schema}")
+        input_version = value.get("input_version")
+        if input_version is not None and (type(input_version) is not int or input_version != INPUT_VERSION):
+            raise ValueError(f"unsupported subscription input version: {input_version}")
+        return value
 
     @field_validator("nodes")
     @classmethod
@@ -149,12 +166,36 @@ class BundleManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    bundle_schema: Literal["proxystack.sub-bundle"] = BUNDLE_SCHEMA
     bundle_version: Literal[1]
     source: str = Field(min_length=1)
     generated_at: str = Field(min_length=1)
     inputs_sha256: dict[str, str]
     template_version: str = "builtin-v1"
     access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_schema_metadata(cls, value: Any) -> Any:
+        """校验 bundle schema 和版本，避免和后续原生备份包混用。"""
+        if not isinstance(value, dict):
+            return value
+        bundle_schema = value.get("bundle_schema", BUNDLE_SCHEMA)
+        if bundle_schema != BUNDLE_SCHEMA:
+            raise ValueError(f"unsupported subscription bundle schema: {bundle_schema}")
+        bundle_version = value.get("bundle_version")
+        if bundle_version is not None and (type(bundle_version) is not int or bundle_version != BUNDLE_VERSION):
+            raise ValueError(f"unsupported subscription bundle version: {bundle_version}")
+        return value
+
+    @field_validator("inputs_sha256")
+    @classmethod
+    def validate_inputs_sha256(cls, inputs_sha256: dict[str, str]) -> dict[str, str]:
+        """校验 manifest 中的 input hash 是标准 sha256 十六进制值。"""
+        for name, digest in inputs_sha256.items():
+            if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+                raise ValueError(f"invalid input sha256 for {name}")
+        return inputs_sha256
 
 
 def now_iso() -> str:
@@ -246,6 +287,20 @@ def load_input_file(path: Path) -> SubscriptionInput:
         raise SubscriptionGeneratorError(f"invalid subscription input {path}: {exc}") from exc
 
 
+def load_input_content(name: str, content: bytes) -> SubscriptionInput:
+    """从发布包成员内容读取并校验订阅 input。"""
+    validate_bundle_input_name(name)
+    try:
+        text = content.decode("utf-8")
+        if Path(name).suffix == ".json":
+            loaded = json.loads(text)
+        else:
+            loaded = load_yaml_mapping_text(text, name)
+        return SubscriptionInput.model_validate(loaded)
+    except (UnicodeDecodeError, ValueError, ValidationError) as exc:
+        raise SubscriptionGeneratorError(f"invalid bundled subscription input {name}: {exc}") from exc
+
+
 def load_yaml_mapping(path: Path) -> dict[str, Any]:
     """读取 YAML 文件并要求顶层是 mapping。"""
     yaml = YAML(typ="safe")
@@ -255,6 +310,17 @@ def load_yaml_mapping(path: Path) -> dict[str, Any]:
         return {}
     if not isinstance(loaded, dict):
         raise ValueError(f"subscription input must be a mapping: {path}")
+    return loaded
+
+
+def load_yaml_mapping_text(text: str, label: str) -> dict[str, Any]:
+    """读取 YAML 文本并要求顶层是 mapping。"""
+    yaml = YAML(typ="safe")
+    loaded = yaml.load(text)
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise ValueError(f"subscription input must be a mapping: {label}")
     return loaded
 
 
@@ -524,11 +590,9 @@ def validate_zip_member(member: ZipInfo) -> None:
         raise SubscriptionGeneratorError(f"unsafe bundle path: {name}")
     if name == "manifest.json":
         return
-    if member.is_dir() and name in {"inputs/", "templates/"}:
+    if member.is_dir() and name == "inputs/":
         return
     if name.startswith("inputs/") and len(path.parts) == 2 and path.parts[1]:
-        return
-    if name.startswith("templates/") and len(path.parts) == 2 and path.parts[1]:
         return
     raise SubscriptionGeneratorError(f"unexpected bundle path: {name}")
 
@@ -558,7 +622,8 @@ def extract_bundle_inputs(bundle_path: Path, data_dir: Path) -> BundleManifest:
             actual_hash = sha256_bytes(content)
             if actual_hash != manifest.inputs_sha256[name]:
                 raise SubscriptionGeneratorError(f"input hash mismatch: {name}")
-            validate_bundle_input_name(name)
+        loaded_inputs = [(Path(name), load_input_content(name, content)) for name, content in input_members.items()]
+        merge_inputs(loaded_inputs, access=manifest.access)
         input_dir = data_dir / "inputs"
         input_dir.mkdir(parents=True, exist_ok=True)
         clear_managed_input_files(input_dir)

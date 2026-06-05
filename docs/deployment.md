@@ -215,7 +215,7 @@ docker run -d \
   --restart unless-stopped \
   -p 3003:3003 \
   -v /opt/proxystack/sub:/data \
-  --user 1000:1000 \
+  --user 10001:10001 \
   --read-only \
   --cap-drop ALL \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \

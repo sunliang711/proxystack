@@ -17,6 +17,7 @@ import proxystack.cli.agent as agent_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
 from proxystack.systemd import CommandResult
+from scripts.build_package import clean_build_state
 
 runner = CliRunner()
 
@@ -508,8 +509,11 @@ def test_agent_publish_example(tmp_path: Path) -> None:
     with ZipFile(output) as zip_file:
         assert sorted(zip_file.namelist()) == ["inputs/local.yaml", "manifest.json"]
         manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
+        bundled_input = YAML(typ="safe").load(zip_file.read("inputs/local.yaml").decode("utf-8"))
+    assert manifest["bundle_schema"] == "proxystack.sub-bundle"
     assert manifest["bundle_version"] == 1
     assert "local.yaml" in manifest["inputs_sha256"]
+    assert bundled_input["input_schema"] == "proxystack.subscription-input"
 
 
 def test_sub_help_is_available() -> None:
@@ -544,6 +548,42 @@ def test_sub_import_rebuilds_bundle(tmp_path: Path) -> None:
     rendered_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
     assert "alice" in rendered_index["users"]
     assert rendered_index["access"]["token"] == "demo-subscription-token"
+
+
+def test_subscription_publish_import_e2e_matches_input_merge(tmp_path: Path) -> None:
+    """验证 inputs 经 agent 发布再由 sub 导入后，合并节点与 agent 预览一致。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    export_result = runner.invoke(
+        agent_app,
+        [
+            "sub",
+            "export-input",
+            "--source",
+            "local",
+            "-o",
+            str(input_dir / "local.yaml"),
+            "-c",
+            "examples/config.yaml",
+            "--skip-system-ports",
+        ],
+    )
+    write_cli_input(input_dir / "manual.yaml", source="manual", node_id="manual:id")
+    agent_render = runner.invoke(agent_app, ["render", "sub", "--input-dir", str(input_dir)])
+    bundle = tmp_path / "sub-bundle.zip"
+    publish_result = runner.invoke(agent_app, ["publish", "--input-dir", str(input_dir), "--source", "merged", "-o", str(bundle)])
+    data_dir = tmp_path / "sub"
+    import_result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir)])
+
+    assert export_result.exit_code == 0
+    assert agent_render.exit_code == 0
+    assert publish_result.exit_code == 0
+    assert import_result.exit_code == 0
+    agent_index = json.loads(agent_render.output)
+    sub_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
+    assert [node["id"] for node in sub_index["nodes"]] == [node["id"] for node in agent_index["nodes"]]
+    assert sub_index["sources"] == agent_index["sources"]
+    assert sorted(sub_index["users"]) == sorted(agent_index["users"])
 
 
 def test_sub_import_replaces_old_inputs(tmp_path: Path) -> None:
@@ -587,9 +627,41 @@ def test_sub_rebuild_reads_inputs(tmp_path: Path) -> None:
     assert rendered_index["nodes"][0]["id"] == "manual:id"
 
 
+def test_release_artifacts_define_console_scripts_and_sub_container_defaults() -> None:
+    """验证发布材料包含 console scripts 和 proxystack-sub 容器默认命令。"""
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+    makefile = Path("Makefile").read_text(encoding="utf-8")
+    dockerfile = Path("Dockerfile.sub").read_text(encoding="utf-8")
+    compose = Path("docker-compose.sub.yml").read_text(encoding="utf-8")
+
+    assert 'proxystack-agent = "proxystack.cli.agent:run"' in pyproject
+    assert 'proxystack-sub = "proxystack.cli.sub:run"' in pyproject
+    assert "scripts/build_package.py" in makefile
+    assert 'CMD ["proxystack-sub", "serve", "--host", "0.0.0.0", "--port", "3003", "--data-dir", "/data"]' in dockerfile
+    assert "- /opt/proxystack/sub:/data" in compose
+    assert "- /data" in compose
+
+
+def test_release_build_cleanup_removes_stale_build_state(tmp_path: Path) -> None:
+    """验证发布构建前会清理旧 build、dist 和 egg-info 状态。"""
+    dist_dir = tmp_path / "dist"
+    build_dir = tmp_path / "build"
+    egg_info_dir = tmp_path / "src" / "proxystack.egg-info"
+    for directory in [dist_dir, build_dir, egg_info_dir]:
+        directory.mkdir(parents=True)
+        (directory / "stale.txt").write_text("stale", encoding="utf-8")
+
+    clean_build_state(dist_dir, no_clean=False, build_dir=build_dir, egg_info_dir=egg_info_dir)
+
+    assert not dist_dir.exists()
+    assert not build_dir.exists()
+    assert not egg_info_dir.exists()
+
+
 def write_cli_input(path: Path, source: str = "manual", node_id: str = "manual:id") -> None:
     """写入 CLI 测试使用的最小订阅 input。"""
     content = {
+        "input_schema": "proxystack.subscription-input",
         "input_version": 1,
         "source": source,
         "generated_at": "2026-06-05T12:00:00+08:00",

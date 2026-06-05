@@ -1,5 +1,6 @@
 """订阅生成器入口。"""
 
+from proxystack.generator.sub.config import BundleManifest
 from proxystack.generator.sub.config import SubscriptionAccess
 from proxystack.generator.sub.config import SubscriptionGeneratorError
 from proxystack.generator.sub.config import SubscriptionIndex
@@ -26,6 +27,7 @@ from proxystack.generator.sub.config import validate_bundle_input_name
 from proxystack.generator.sub.config import write_bundle
 
 __all__ = [
+    "BundleManifest",
     "SubscriptionAccess",
     "SubscriptionGeneratorError",
     "SubscriptionIndex",

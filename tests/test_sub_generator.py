@@ -15,7 +15,9 @@ from proxystack.cli.sub import rebuild_data_dir
 from proxystack.config import load_config
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
+from proxystack.generator.sub import BundleManifest
 from proxystack.generator.sub import SubscriptionGeneratorError
+from proxystack.generator.sub import SubscriptionInput
 from proxystack.generator.sub import extract_bundle_inputs
 from proxystack.generator.sub import index_to_json
 from proxystack.generator.sub import input_to_yaml
@@ -106,6 +108,22 @@ def test_agent_and_sub_merge_logic_are_consistent(tmp_path: Path) -> None:
     assert sub_index.users.keys() == agent_index.users.keys()
 
 
+def test_input_yaml_contains_schema_metadata() -> None:
+    """验证导出的订阅 input 包含 schema 和版本元数据。"""
+    rendered_input = YAML(typ="safe").load(input_to_yaml(render_stack_input(make_stack_set(), "local")))
+
+    assert rendered_input["input_schema"] == "proxystack.subscription-input"
+    assert rendered_input["input_version"] == 1
+
+
+def test_input_and_bundle_version_metadata_require_integer_v1() -> None:
+    """验证版本元数据必须是整型 v1，避免 bool/float 被宽松接受。"""
+    with pytest.raises(ValueError, match="unsupported subscription input version"):
+        SubscriptionInput.model_validate({"input_version": True, "source": "bad", "generated_at": "now", "nodes": []})
+    with pytest.raises(ValueError, match="unsupported subscription bundle version"):
+        BundleManifest.model_validate({"bundle_version": 1.0, "source": "bad", "generated_at": "now", "inputs_sha256": {}})
+
+
 def test_publish_input_dir_excludes_stack_by_default(tmp_path: Path) -> None:
     """验证 publish --input-dir 默认只打包 input-dir，不包含当前 stack。"""
     input_dir = tmp_path / "inputs"
@@ -132,6 +150,7 @@ def test_publish_input_dir_excludes_stack_by_default(tmp_path: Path) -> None:
     with ZipFile(output) as zip_file:
         assert sorted(zip_file.namelist()) == ["inputs/manual.yaml", "manifest.json"]
         manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
+    assert manifest["bundle_schema"] == "proxystack.sub-bundle"
     assert manifest["access"]["type"] == "token"
     assert manifest["access"]["token"] == "demo-subscription-token"
 
@@ -230,6 +249,56 @@ def test_extract_bundle_rejects_hash_mismatch(tmp_path: Path) -> None:
         extract_bundle_inputs(bundle, tmp_path / "sub")
 
 
+def test_extract_bundle_rejects_invalid_hash_format(tmp_path: Path) -> None:
+    """验证 manifest 中的 input hash 必须是标准 sha256 十六进制。"""
+    bundle = tmp_path / "bad-hash-format.zip"
+    content = input_to_yaml(render_stack_input(make_stack_set(), "manual")).encode("utf-8")
+    with ZipFile(bundle, "w") as zip_file:
+        zip_file.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "bundle_version": 1,
+                    "source": "bad",
+                    "generated_at": "now",
+                    "inputs_sha256": {"manual.yaml": "not-sha256"},
+                }
+            ),
+        )
+        zip_file.writestr("inputs/manual.yaml", content)
+
+    with pytest.raises(SubscriptionGeneratorError, match="bundle manifest schema is invalid"):
+        extract_bundle_inputs(bundle, tmp_path / "sub")
+
+
+def test_extract_bundle_rejects_duplicate_nodes_before_replacing_inputs(tmp_path: Path) -> None:
+    """验证坏 bundle 合并失败时不会提前清理旧 inputs。"""
+    data_dir = tmp_path / "sub"
+    old_bundle = tmp_path / "old.zip"
+    bad_bundle = tmp_path / "bad-duplicate.zip"
+    old_input = tmp_path / "old.yaml"
+    first_input = tmp_path / "first.yaml"
+    second_input = tmp_path / "second.yaml"
+    write_input(old_input, "old", "old:id", "alice")
+    write_input(first_input, "first", "same:id", "alice")
+    write_input(second_input, "second", "same:id", "bob")
+    write_bundle(old_bundle, "old", [("old.yaml", old_input.read_bytes())])
+    write_bundle(
+        bad_bundle,
+        "bad",
+        [
+            ("first.yaml", first_input.read_bytes()),
+            ("second.yaml", second_input.read_bytes()),
+        ],
+    )
+    extract_bundle_inputs(old_bundle, data_dir)
+
+    with pytest.raises(SubscriptionGeneratorError, match="duplicate node id: same:id"):
+        extract_bundle_inputs(bad_bundle, data_dir)
+
+    assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["old.yaml"]
+
+
 def test_extract_bundle_rejects_unsupported_input_extension(tmp_path: Path) -> None:
     """验证导入发布包时拒绝 manifest 中不支持的 input 扩展名。"""
     bundle = tmp_path / "bad-extension.zip"
@@ -271,6 +340,51 @@ def test_extract_bundle_rejects_invalid_bundle_version(tmp_path: Path) -> None:
         zip_file.writestr("inputs/manual.yaml", content)
 
     with pytest.raises(SubscriptionGeneratorError, match="bundle manifest schema is invalid"):
+        extract_bundle_inputs(bundle, tmp_path / "sub")
+
+
+def test_extract_bundle_rejects_native_backup_schema(tmp_path: Path) -> None:
+    """验证订阅导入拒绝后续 M5 原生备份包 schema。"""
+    bundle = tmp_path / "backup-like.zip"
+    content = input_to_yaml(render_stack_input(make_stack_set(), "manual")).encode("utf-8")
+    with ZipFile(bundle, "w") as zip_file:
+        zip_file.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "bundle_schema": "proxystack.native-backup",
+                    "bundle_version": 1,
+                    "source": "bad",
+                    "generated_at": "now",
+                    "inputs_sha256": {"manual.yaml": __import__("hashlib").sha256(content).hexdigest()},
+                }
+            ),
+        )
+        zip_file.writestr("inputs/manual.yaml", content)
+
+    with pytest.raises(SubscriptionGeneratorError, match="bundle manifest schema is invalid"):
+        extract_bundle_inputs(bundle, tmp_path / "sub")
+
+
+def test_extract_bundle_rejects_invalid_bundled_input_schema(tmp_path: Path) -> None:
+    """验证导入发布包时会校验 input schema，而不是只校验 hash。"""
+    bundle = tmp_path / "bad-input-schema.zip"
+    content = b'input_schema: proxystack.other\ninput_version: 1\nsource: bad\ngenerated_at: "now"\nnodes: []\n'
+    with ZipFile(bundle, "w") as zip_file:
+        zip_file.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "bundle_version": 1,
+                    "source": "bad",
+                    "generated_at": "now",
+                    "inputs_sha256": {"manual.yaml": __import__("hashlib").sha256(content).hexdigest()},
+                }
+            ),
+        )
+        zip_file.writestr("inputs/manual.yaml", content)
+
+    with pytest.raises(SubscriptionGeneratorError, match="invalid bundled subscription input manual.yaml"):
         extract_bundle_inputs(bundle, tmp_path / "sub")
 
 

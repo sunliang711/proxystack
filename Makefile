@@ -9,4 +9,4 @@ lint:
 	$(PYTHON) -m compileall -q src tests
 
 build:
-	$(PYTHON) -m pip wheel --no-deps -w dist .
+	$(PYTHON) scripts/build_package.py

@@ -156,8 +156,6 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - `proxystack-sub import sub-bundle.zip`
 - `proxystack-sub rebuild`
 - `proxystack-sub serve`
-- `proxystack-sub routes`
-- `proxystack-sub status`
 
 订阅 HTTP：
 

@@ -20,7 +20,7 @@
 - [x] 实现 CLI 生命周期命令、runtime 生成文件和 manifest apply
 - [x] 实现 mihomo/xray/geo 下载安装更新和 self update P0 候选版
 - [x] 实现 systemd unit 安装和真实服务管理 P0
-- [x] 实现订阅服务 Docker 示例
+- [x] 实现发布构建、订阅包 schema 校验和订阅服务 Docker 示例 P0
 - [ ] 建立测试矩阵和端到端验证
 
 ## 里程碑
@@ -43,6 +43,7 @@
 - [Task 07 交付记录：CLI 生命周期命令](delivery/2026-06-05-18-08-00-feature-python-cli-lifecycle.md)
 - [Task 08 交付记录：下载安装与更新 P0 候选版](delivery/2026-06-05-19-28-35-feature-python-install-update.md)
 - [Task 09 交付记录：systemd 服务管理 P0](delivery/2026-06-05-19-54-24-feature-python-systemd-manager.md)
+- [Task 10 交付记录：发布构建与订阅包 P0](delivery/2026-06-05-20-17-11-feature-python-import-export-release.md)
 
 ## 任务列表
 

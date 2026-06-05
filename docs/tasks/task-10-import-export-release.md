@@ -15,13 +15,13 @@
 
 ## 实现步骤
 
-1. 定义 `sub-bundle.zip` 版本元数据和校验规则。
-2. 定义 subscription input 文件 schema 和版本元数据。
-3. 实现 agent 从当前 stack 或 inputs 目录生成 bundle 的 `publish` 流程。
-4. 增加 Python wheel/sdist 构建脚本。
-5. 增加 `proxystack-sub` Dockerfile 和 Compose 示例。
-6. 增加端到端示例测试。
-7. 预留 M5 备份包结构设计文档，但不在 P0 实现 `export/import`。
+1. [x] 定义 `sub-bundle.zip` 版本元数据和校验规则。
+2. [x] 定义 subscription input 文件 schema 和版本元数据。
+3. [x] 实现 agent 从当前 stack 或 inputs 目录生成 bundle 的 `publish` 流程。
+4. [x] 增加 Python wheel/sdist 构建脚本。
+5. [x] 增加 `proxystack-sub` Dockerfile 和 Compose 示例。
+6. [x] 增加端到端示例测试。
+7. [x] 预留 M5 备份包结构设计文档，但不在 P0 实现 `export/import`。
 
 ## 验收标准
 
@@ -40,3 +40,12 @@ Task 07、Task 08、Task 09。
 ## 风险
 
 订阅发布包版本需要写入元数据；后续 schema 升级时要能给出清晰兼容性错误。原生备份包不能和订阅发布包混用。
+
+## P0 实现状态
+
+- subscription input 使用 `input_schema: proxystack.subscription-input` 和 `input_version: 1`；缺少 schema 的 v1 文件按兼容输入读取。
+- sub bundle manifest 使用 `bundle_schema: proxystack.sub-bundle` 和 `bundle_version: 1`，导入时校验 input hash、input schema 和合并冲突。
+- `publish --input-dir` 与 `proxystack-sub rebuild/import` 复用同一套 input 合并逻辑。
+- `scripts/build_package.py` 和 `make build` 生成 wheel 与 sdist；wheel 包含 `proxystack-agent` 和 `proxystack-sub` console scripts。
+- Dockerfile 与 Compose 示例保留 `/data` volume 和订阅服务默认命令。
+- M5 原生备份包结构记录在 `docs/m5-native-backup-package.md`，P0 不实现通用 `export/import`。

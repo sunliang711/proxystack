@@ -30,14 +30,13 @@ proxystack-agent
   update
   service
   sub
-  mihomo
+  version
 
 proxystack-sub
+  version
   import
   rebuild
   serve
-  routes
-  status
 ```
 
 常用命令面向日常管理；高级命令保留给排障、自动化和精细控制。

@@ -305,6 +305,7 @@ Subscription input 是 agent 和 sub 共享的格式。`proxystack-sub` 支持�
 每个 input 文件只包含订阅节点和来源元数据，不包含完整 stack：
 
 ```yaml
+input_schema: proxystack.subscription-input
 input_version: 1
 source: usa1
 generated_at: "2026-06-05T12:00:00+08:00"
@@ -336,6 +337,7 @@ nodes:
 - 单个输入文件校验失败时，默认整个 rebuild 失败，避免发布半新半旧订阅。
 - rebuild 成功后原子写入 `<data_dir>/current/index.json`。
 - `current/index.json` 包含 `index_version: 1`、`generated_at`、`sources`、`nodes`、按 user 分组的 `users`，以及供 HTTP 服务读取的 `access`。
+- input 文件必须是 `input_schema: proxystack.subscription-input`、`input_version: 1`；缺少 `input_schema` 的 v1 文件按兼容输入读取，其他 schema 或版本会失败。
 
 本地 agent 默认会从当前 stack 生成一个 input 文件，也可以打包成 bundle：
 
@@ -365,12 +367,13 @@ sub-bundle.zip
     <source>.yaml
 ```
 
-P0 使用内置渲染器，不需要模板目录；后续如引入模板，可以增加可选 `templates/` 目录。
+P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `manifest.json` 和 `inputs/*.yaml|*.yml|*.json`，导入时会拒绝绝对路径、反斜杠、`..` 和其他未知成员。
 
 `manifest.json` 示例：
 
 ```json
 {
+  "bundle_schema": "proxystack.sub-bundle",
   "bundle_version": 1,
   "source": "usa1",
   "generated_at": "2026-06-05T12:00:00+08:00",
@@ -393,6 +396,7 @@ P0 使用内置渲染器，不需要模板目录；后续如引入模板，可�
 - 不包含 clash upstream、proxy-groups、rules、mode。
 - 不包含 mihomo controller 配置。
 - 不包含本地运行目录和 systemd 信息。
+- manifest 必须是 `bundle_schema: proxystack.sub-bundle`、`bundle_version: 1`；缺少 `bundle_schema` 的 v1 发布包按兼容输入读取，原生备份包等其他 schema 会被拒绝。
 
 `proxystack-sub import sub-bundle.zip` 校验 manifest 和 hash 后，把 bundle 内的 inputs 解包到 `<data_dir>/inputs/`，默认执行 rebuild 并原子切换 `current` 指针；只有传入 `--no-rebuild` 时才跳过 rebuild。`proxystack-sub serve` 只读取 `current/index.json` 和模板。
 
