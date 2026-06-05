@@ -122,10 +122,71 @@ class DefaultClashConfig(ProxystackModel):
     rule_profile: Literal["default"] = "default"
 
 
+class XrelayApiConfig(ProxystackModel):
+    """Xray API 配置，默认关闭且只允许监听本机回环地址。"""
+
+    enabled: bool = False
+    tag: Name = "api"
+    listen: str = "127.0.0.1:10085"
+    services: list[str] = Field(default_factory=lambda: ["StatsService"], min_length=1)
+
+    @field_validator("tag")
+    @classmethod
+    def validate_tag(cls, value: str) -> str:
+        """校验 API tag 适合作为 Xray 出站标识。"""
+        validate_identifier(value, "xray api tag")
+        return value
+
+    @field_validator("listen")
+    @classmethod
+    def validate_listen(cls, value: str) -> str:
+        """校验 API 监听地址必须是 loopback host 和合法端口。"""
+        host, _ = parse_listen(value)
+        if not is_loopback_listen_host(host):
+            raise ValueError("xray api listen must use loopback host")
+        return value
+
+    @field_validator("services")
+    @classmethod
+    def validate_services(cls, value: list[str]) -> list[str]:
+        """校验 API services 至少包含一个非空服务名。"""
+        for service in value:
+            if not service:
+                raise ValueError("xray api service name is required")
+        return value
+
+
+class XrelayStatsConfig(ProxystackModel):
+    """Xray stats 配置开关。"""
+
+    enabled: bool = False
+
+
+class XrelayPolicySystemConfig(ProxystackModel):
+    """Xray system policy 中与全局流量统计相关的配置。"""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True, str_strip_whitespace=True)
+
+    stats_inbound_uplink: Optional[bool] = Field(default=None, alias="statsInboundUplink")
+    stats_inbound_downlink: Optional[bool] = Field(default=None, alias="statsInboundDownlink")
+    stats_outbound_uplink: Optional[bool] = Field(default=None, alias="statsOutboundUplink")
+    stats_outbound_downlink: Optional[bool] = Field(default=None, alias="statsOutboundDownlink")
+
+
+class XrelayPolicyConfig(ProxystackModel):
+    """Xray policy 配置，当前支持 system 统计字段。"""
+
+    enabled: bool = False
+    system: XrelayPolicySystemConfig = Field(default_factory=XrelayPolicySystemConfig)
+
+
 class DefaultXrelayConfig(ProxystackModel):
     """xrelay 默认配置。"""
 
     loglevel: str = "warning"
+    api: XrelayApiConfig = Field(default_factory=XrelayApiConfig)
+    stats: XrelayStatsConfig = Field(default_factory=XrelayStatsConfig)
+    policy: XrelayPolicyConfig = Field(default_factory=XrelayPolicyConfig)
 
 
 class DefaultsConfig(ProxystackModel):
@@ -268,12 +329,83 @@ class XrelayConfig(ProxystackModel):
     enabled: bool = True
     outbound: XrelayOutbound
     inbounds: list[Inbound] = Field(min_length=1)
+    api: Optional[XrelayApiConfig] = None
+    stats: Optional[XrelayStatsConfig] = None
+    policy: Optional[XrelayPolicyConfig] = None
 
     @model_validator(mode="after")
     def validate_unique_inbounds(self) -> "XrelayConfig":
         """校验同一 xrelay 内 inbound 名称唯一。"""
         ensure_unique([inbound.name for inbound in self.inbounds], "duplicate inbound name")
         return self
+
+
+def resolve_xrelay_api_config(defaults: DefaultXrelayConfig, xrelay: XrelayConfig) -> XrelayApiConfig:
+    """合并全局 defaults.xrelay.api 和单个 stack 的 xrelay.api 覆盖。"""
+    if xrelay.api is None:
+        return defaults.api
+    return merge_xrelay_api_config(defaults.api, xrelay.api)
+
+
+def resolve_xrelay_stats_config(defaults: DefaultXrelayConfig, xrelay: XrelayConfig) -> XrelayStatsConfig:
+    """合并全局 defaults.xrelay.stats 和单个 stack 的 xrelay.stats 覆盖。"""
+    if xrelay.stats is None:
+        return defaults.stats
+    return merge_xrelay_stats_config(defaults.stats, xrelay.stats)
+
+
+def resolve_xrelay_policy_config(defaults: DefaultXrelayConfig, xrelay: XrelayConfig) -> XrelayPolicyConfig:
+    """合并全局 defaults.xrelay.policy 和单个 stack 的 xrelay.policy 覆盖。"""
+    if xrelay.policy is None:
+        return defaults.policy
+    return merge_xrelay_policy_config(defaults.policy, xrelay.policy)
+
+
+def merge_xrelay_api_config(default_config: XrelayApiConfig, override_config: XrelayApiConfig) -> XrelayApiConfig:
+    """按显式配置字段合并 Xray API 配置。"""
+    values = default_config.model_dump()
+    for field_name in override_config.model_fields_set:
+        values[field_name] = getattr(override_config, field_name)
+    return XrelayApiConfig.model_validate(values)
+
+
+def merge_xrelay_stats_config(
+    default_config: XrelayStatsConfig,
+    override_config: XrelayStatsConfig,
+) -> XrelayStatsConfig:
+    """按显式配置字段合并 Xray stats 配置。"""
+    values = default_config.model_dump()
+    for field_name in override_config.model_fields_set:
+        values[field_name] = getattr(override_config, field_name)
+    return XrelayStatsConfig.model_validate(values)
+
+
+def merge_xrelay_policy_config(
+    default_config: XrelayPolicyConfig,
+    override_config: XrelayPolicyConfig,
+) -> XrelayPolicyConfig:
+    """按显式配置字段合并 Xray policy 配置。"""
+    values = default_config.model_dump()
+    for field_name in override_config.model_fields_set:
+        if field_name == "system":
+            values[field_name] = merge_xrelay_policy_system_config(
+                default_config.system,
+                override_config.system,
+            )
+        else:
+            values[field_name] = getattr(override_config, field_name)
+    return XrelayPolicyConfig.model_validate(values)
+
+
+def merge_xrelay_policy_system_config(
+    default_config: XrelayPolicySystemConfig,
+    override_config: XrelayPolicySystemConfig,
+) -> XrelayPolicySystemConfig:
+    """按显式配置字段合并 Xray system policy 配置。"""
+    values = default_config.model_dump()
+    for field_name in override_config.model_fields_set:
+        values[field_name] = getattr(override_config, field_name)
+    return XrelayPolicySystemConfig.model_validate(values)
 
 
 class ClashController(ProxystackModel):
@@ -512,6 +644,11 @@ def parse_listen(value: str) -> tuple[str, int]:
     if port < 1 or port > 65535:
         raise ValueError("listen port must be between 1 and 65535")
     return host, port
+
+
+def is_loopback_listen_host(host: str) -> bool:
+    """判断监听 host 是否为本机回环地址。"""
+    return host in {"127.0.0.1", "::1", "localhost"}
 
 
 def validate_raw_proxy_config(config: dict[str, Any]) -> None:

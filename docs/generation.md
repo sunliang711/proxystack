@@ -24,6 +24,40 @@
 
 每个 enabled stack 的 `xrelay` 生成一个 Xray JSON。
 
+### api、stats 和 policy
+
+默认不生成 `api`、`stats`、`policy`。当 `api.enabled: true` 时生成 Xray 简化 API 配置：
+
+```json
+{
+  "api": {
+    "tag": "api",
+    "listen": "127.0.0.1:10085",
+    "services": ["StatsService"]
+  }
+}
+```
+
+API listen 必须是 loopback 地址，避免把 Xray API 暴露到公网。
+
+当 `stats.enabled: true` 时生成：
+
+```json
+{
+  "stats": {},
+  "policy": {
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  }
+}
+```
+
+如果用户显式配置 `policy.system` 中的统计字段，生成器使用显式配置覆盖 Stats 默认值。
+
 ### inbounds
 
 支持协议：

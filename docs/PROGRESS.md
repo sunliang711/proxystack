@@ -12,6 +12,8 @@
 - [x] 初始化 Python 项目
 - [x] 实现配置模型和校验
 - [x] 实现引用解析和依赖图
+- [x] 实现 Xray 配置生成器和 `render xrelay`
+- [x] 扩展 Xray API、Stats、Policy 生成
 - [ ] 实现配置生成器
 - [ ] 实现 CLI 和 systemd 管理
 - [ ] 实现订阅发布包、多输入合并和订阅服务本地/Docker部署
@@ -23,10 +25,15 @@
 | --- | --- | --- |
 | M0 | 项目文档、配置规范、任务拆分 | 已完成 |
 | M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
-| M2 | Xray/mihomo/sub 生成器、golden tests | 未开始 |
+| M2 | Xray/mihomo/sub 生成器、golden tests | 进行中 |
 | M3 | apply、manifest、systemd 管理 | 未开始 |
 | M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 未开始 |
 | M5 | mihomo API、原生备份导入导出和发布增强 | 未开始 |
+
+## 交付记录
+
+- [Task 04 交付记录：Xray 配置生成器](delivery/2026-06-05-16-40-32-feature-python-xray-generator.md)
+- [Task 04 扩展交付记录：Xray API、Stats、Policy](delivery/2026-06-05-17-01-47-feature-python-xray-api-stats-policy.md)
 
 ## 任务列表
 

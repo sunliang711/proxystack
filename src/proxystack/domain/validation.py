@@ -10,6 +10,7 @@ from proxystack.domain.models import Inbound
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import parse_listen
+from proxystack.domain.models import resolve_xrelay_api_config
 from proxystack.graph import compile_reference_graph
 
 
@@ -48,7 +49,7 @@ def validate_stack_set(stack_set: StackSet, check_system_ports: bool = True) -> 
     issues: list[ValidationIssue] = []
     issues.extend(validate_unique_stack_names(stack_set.stacks))
     issues.extend(validate_public_inbound_auth(stack_set.config, stack_set.stacks))
-    port_bindings = collect_port_bindings(stack_set.stacks)
+    port_bindings = collect_port_bindings(stack_set)
     issues.extend(validate_unique_ports(port_bindings))
     issues.extend(validate_reference_graph(stack_set))
     if check_system_ports:
@@ -97,9 +98,10 @@ def validate_public_inbound_auth(config: GlobalConfig, stacks: list[Stack]) -> l
     return issues
 
 
-def collect_port_bindings(stacks: list[Stack]) -> list[PortBinding]:
+def collect_port_bindings(stack_set: StackSet) -> list[PortBinding]:
     """收集所有本地监听端口，供唯一性和占用检查使用。"""
     bindings: list[PortBinding] = []
+    stacks = stack_set.stacks
     for stack in stacks:
         for inbound_index, inbound in enumerate(stack.xrelay.inbounds):
             bindings.append(
@@ -125,6 +127,16 @@ def collect_port_bindings(stacks: list[Stack]) -> list[PortBinding]:
                 path=f"stacks.{stack.name}.clash.controller.listen",
             )
         )
+        api_config = resolve_xrelay_api_config(stack_set.config.defaults.xrelay, stack.xrelay)
+        if api_config.enabled:
+            api_host, api_port = parse_listen(api_config.listen)
+            bindings.append(
+                PortBinding(
+                    host=api_host,
+                    port=api_port,
+                    path=f"stacks.{stack.name}.xrelay.api.listen",
+                )
+            )
     return bindings
 
 

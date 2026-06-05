@@ -1,5 +1,7 @@
 """CLI 骨架测试。"""
 
+import json
+
 from typer.testing import CliRunner
 
 from proxystack.cli.agent import app as agent_app
@@ -41,6 +43,15 @@ def test_agent_plan_examples() -> None:
     assert "建议操作顺序" in result.output
     assert "auto.clash" in result.output
     assert "proxystack-xray@usa1.service" in result.output
+
+
+def test_agent_render_xrelay_example() -> None:
+    """验证 proxystack-agent render xrelay 可以输出 Xray JSON。"""
+    result = runner.invoke(agent_app, ["render", "xrelay", "usa1", "-c", "examples/config.yaml", "--skip-system-ports"])
+
+    assert result.exit_code == 0
+    rendered_config = json.loads(result.output)
+    assert rendered_config["outbounds"][0]["settings"]["servers"][0]["port"] == 17091
 
 
 def test_sub_help_is_available() -> None:

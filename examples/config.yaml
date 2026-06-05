@@ -35,6 +35,15 @@ defaults:
     rule_profile: default
   xrelay:
     loglevel: warning
+    api:
+      enabled: false
+      tag: api
+      listen: 127.0.0.1:10085
+      services: [StatsService]
+    stats:
+      enabled: false
+    policy:
+      enabled: false
 
 security:
   require_auth_for_public_socks_http: true

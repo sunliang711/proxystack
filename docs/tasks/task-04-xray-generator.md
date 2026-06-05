@@ -12,7 +12,7 @@
 
 ## 实现步骤
 
-1. 生成日志和基础 inbound/outbound 容器字段；P0 不生成 Xray API、Stats 或 policy。
+1. 生成日志、API、Stats、Policy 和基础 inbound/outbound 容器字段；API、Stats 默认关闭。
 2. 生成 vmess inbound。
 3. 生成 shadowsocks inbound。
 4. 生成 socks5/http inbound，支持 noauth/password。
@@ -25,6 +25,8 @@
 - `type: clash` outbound 能解析到目标 mihomo listener。
 - 生成 JSON 可格式化且字段稳定。
 - golden tests 覆盖每种 inbound 和 outbound。
+- API listen 默认使用 `127.0.0.1:10085`，显式配置非 loopback 地址时校验失败。
+- 开启 Stats 时生成 `stats: {}`，并默认生成四个 `policy.system` 统计开关为 `true`。
 
 ## 依赖
 

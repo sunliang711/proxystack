@@ -200,6 +200,21 @@ def test_validate_rejects_duplicate_listen_port(tmp_path: Path) -> None:
         load_stacks(config, check_system_ports=False)
 
 
+def test_validate_rejects_duplicate_xray_api_listen_port(tmp_path: Path) -> None:
+    """验证 Xray API 监听端口会参与全局端口冲突校验。"""
+    project_dir = write_project(
+        tmp_path,
+        valid_stack_yaml("edge").replace(
+            "xrelay:\n  enabled: true",
+            "xrelay:\n  enabled: true\n  api:\n    enabled: true\n    listen: 127.0.0.1:24001",
+        ),
+    )
+    config = load_config(project_dir / "config.yaml")
+
+    with pytest.raises(ConfigValidationError, match="duplicate listen port 24001"):
+        load_stacks(config, check_system_ports=False)
+
+
 def test_validate_rejects_duplicate_stack_name() -> None:
     """验证跨文件重复 stack name 会失败。"""
     config = load_config(Path("examples/config.yaml"))

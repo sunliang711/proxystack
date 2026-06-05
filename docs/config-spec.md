@@ -83,6 +83,15 @@ defaults:
     rule_profile: default
   xrelay:
     loglevel: warning
+    api:
+      enabled: false
+      tag: api
+      listen: 127.0.0.1:10085
+      services: [StatsService]
+    stats:
+      enabled: false
+    policy:
+      enabled: false
 
 security:
   require_auth_for_public_socks_http: true
@@ -210,6 +219,34 @@ clash:
 | `clash` | 是 | mihomo/clash 配置 |
 
 ## 4. xrelay 配置
+
+### API、Stats 和 Policy
+
+`defaults.xrelay` 和单个 stack 的 `xrelay` 都可以配置 Xray API、Stats 和 Policy。stack 内配置只覆盖显式填写的字段：
+
+```yaml
+xrelay:
+  api:
+    enabled: true
+    tag: api
+    listen: 127.0.0.1:10085
+    services: [StatsService]
+  stats:
+    enabled: true
+  policy:
+    system:
+      statsInboundUplink: true
+      statsInboundDownlink: true
+      statsOutboundUplink: true
+      statsOutboundDownlink: true
+```
+
+规则：
+
+- `api.enabled` 默认 `false`；开启时默认 `tag: api`、`listen: 127.0.0.1:10085`、`services: [StatsService]`。
+- API listen 只能使用 `127.0.0.1`、`::1` 或 `localhost`，不能配置公网监听地址。
+- `stats.enabled` 默认 `false`；开启时生成 `stats: {}`。
+- 开启 Stats 时，四个 `policy.system` 流量统计开关默认生成 `true`，显式配置值可以覆盖。
 
 ### inbound 字段
 
