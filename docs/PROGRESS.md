@@ -9,7 +9,7 @@
 - [x] 确认 systemd 服务管理子命令纳入功能清单
 - [x] 确认本地文件统一放在 `/opt/proxystack`
 - [x] 确认全局配置使用 `config.yaml`，每个 stack 使用独立 `stacks/<name>.yaml`
-- [ ] 初始化 Python 项目
+- [x] 初始化 Python 项目
 - [ ] 实现配置模型和校验
 - [ ] 实现配置生成器
 - [ ] 实现 CLI 和 systemd 管理
@@ -21,7 +21,7 @@
 | 阶段 | 范围 | 状态 |
 | --- | --- | --- |
 | M0 | 项目文档、配置规范、任务拆分 | 已完成 |
-| M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 未开始 |
+| M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
 | M2 | Xray/mihomo/sub 生成器、golden tests | 未开始 |
 | M3 | apply、manifest、systemd 管理 | 未开始 |
 | M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 未开始 |
