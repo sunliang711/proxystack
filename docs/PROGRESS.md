@@ -14,7 +14,7 @@
 - [x] 实现引用解析和依赖图
 - [x] 实现 Xray 配置生成器和 `render xrelay`
 - [x] 扩展 Xray API、Stats、Policy 生成
-- [ ] 实现配置生成器
+- [x] 实现 mihomo 配置生成器和 `render clash`
 - [ ] 实现 CLI 和 systemd 管理
 - [ ] 实现订阅发布包、多输入合并和订阅服务本地/Docker部署
 - [ ] 建立测试矩阵和端到端验证
@@ -34,6 +34,7 @@
 
 - [Task 04 交付记录：Xray 配置生成器](delivery/2026-06-05-16-40-32-feature-python-xray-generator.md)
 - [Task 04 扩展交付记录：Xray API、Stats、Policy](delivery/2026-06-05-17-01-47-feature-python-xray-api-stats-policy.md)
+- [Task 05 交付记录：mihomo 配置生成器](delivery/2026-06-05-17-18-16-feature-python-mihomo-generator.md)
 
 ## 任务列表
 

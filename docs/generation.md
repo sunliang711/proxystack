@@ -125,6 +125,8 @@ xrelay:
 
 每个 enabled stack 的 `clash` 生成一个 mihomo YAML。
 
+`proxystack-agent render clash <stack>` 可只读输出指定 stack 的最终 mihomo YAML，不写入 runtime、manifest 或 systemd 配置。
+
 ### 基础字段
 
 默认：
@@ -231,6 +233,8 @@ rules:
   - GEOIP,CN,DIRECT
   - MATCH,<rules.final>
 ```
+
+实际生成顺序为：`rules.extra`、default profile 内置规则、`MATCH,<rules.final>`。这样用户显式规则优先匹配，最终兜底规则始终可见。
 
 规则目标允许：
 

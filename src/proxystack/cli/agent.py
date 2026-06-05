@@ -13,6 +13,7 @@ from proxystack.config import DEFAULT_CONFIG_PATH
 from proxystack.config import load_config
 from proxystack.config import load_stacks
 from proxystack.domain import ConfigValidationError
+from proxystack.generator.mihomo import dumps_mihomo_config
 from proxystack.generator.xray import dumps_xray_config
 from proxystack.graph import ServiceNode
 from proxystack.graph import build_reference_graph
@@ -98,6 +99,23 @@ def render_xrelay(
         rendered_config = dumps_xray_config(stack_set, name)
     except (ValidationError, ConfigValidationError, ValueError) as exc:
         typer.echo(f"Xray 配置渲染失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(rendered_config, nl=False)
+
+
+@render_app.command("clash")
+def render_clash(
+    name: str = typer.Argument(..., help="要渲染的 stack 名称。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
+) -> None:
+    """输出指定 stack 的 mihomo YAML，不写入运行目录。"""
+    try:
+        global_config = load_config(config)
+        stack_set = load_stacks(global_config, check_system_ports=not skip_system_ports)
+        rendered_config = dumps_mihomo_config(stack_set, name)
+    except (ValidationError, ConfigValidationError, ValueError) as exc:
+        typer.echo(f"mihomo 配置渲染失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(rendered_config, nl=False)
 

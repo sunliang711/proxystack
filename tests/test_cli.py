@@ -2,6 +2,7 @@
 
 import json
 
+from ruamel.yaml import YAML
 from typer.testing import CliRunner
 
 from proxystack.cli.agent import app as agent_app
@@ -52,6 +53,16 @@ def test_agent_render_xrelay_example() -> None:
     assert result.exit_code == 0
     rendered_config = json.loads(result.output)
     assert rendered_config["outbounds"][0]["settings"]["servers"][0]["port"] == 17091
+
+
+def test_agent_render_clash_example() -> None:
+    """验证 proxystack-agent render clash 可以输出 mihomo YAML。"""
+    result = runner.invoke(agent_app, ["render", "clash", "auto", "-c", "examples/config.yaml", "--skip-system-ports"])
+
+    assert result.exit_code == 0
+    rendered_config = YAML(typ="safe").load(result.output)
+    assert [proxy["name"] for proxy in rendered_config["proxies"]] == ["usa1-local", "usa2-local"]
+    assert rendered_config["proxy-groups"][0]["type"] == "url-test"
 
 
 def test_sub_help_is_available() -> None:
