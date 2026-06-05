@@ -885,7 +885,7 @@ def publish(
                 global_config = load_config(config)
                 bundle_source = source or global_config.subscription.source
                 access = SubscriptionAccess.model_validate(global_config.subscription.access.model_dump())
-            stack_set = load_stacks(global_config, check_system_ports=not skip_system_ports)
+            stack_set = load_stacks(global_config, check_system_ports=False)
         if input_dir is None:
             subscription_input = render_stack_input(stack_set, bundle_source)
             merge_inputs([(Path(f"{bundle_source}.yaml"), subscription_input)], access=access)

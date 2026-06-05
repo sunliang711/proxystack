@@ -1,6 +1,7 @@
 """安装与更新命令测试。"""
 
 import hashlib
+import gzip
 from pathlib import Path
 from typing import Optional
 from typing import Sequence
@@ -15,6 +16,7 @@ from proxystack.config import load_config
 from proxystack.install import CommandResult
 from proxystack.install import InstallRequest
 from proxystack.install import SelfUpdateRequest
+from proxystack.install import build_install_request
 from proxystack.install import detect_component_version
 from proxystack.install import install_artifact
 from proxystack.install import run_self_update
@@ -65,6 +67,89 @@ def test_install_xray_uses_fake_downloader(tmp_path: Path) -> None:
     assert result.installed_paths == (config.parent / "bin" / "xray",)
     assert result.installed_paths[0].read_bytes() == payload
     assert downloaded_paths == [config.parent / "downloads" / "xray"]
+
+
+def test_install_auto_source_falls_back_to_r2_and_extracts_gzip(tmp_path: Path) -> None:
+    """验证托管下载源会在 GitHub 失败后回退到 R2，并解压 mihomo gzip。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    payload = b"mihomo-binary"
+    compressed_payload = gzip.compress(payload)
+    downloaded_sources: list[str] = []
+
+    def fake_downloader(source: str, destination: Path) -> Path:
+        """模拟 GitHub 失败、R2 成功下载 gzip 文件。"""
+        downloaded_sources.append(source)
+        if "github.com" in source:
+            raise OSError("github failed")
+        destination.write_bytes(compressed_payload)
+        return destination
+
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="mihomo", version="v1.2.3", source="auto"),
+        downloader=fake_downloader,
+    )
+
+    assert result.installed_paths == (config.parent / "bin" / "mihomo",)
+    assert result.installed_paths[0].read_bytes() == payload
+    assert downloaded_sources == [
+        "https://github.com/MetaCubeX/mihomo/releases/download/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
+        "https://pub-06197a088952412f8ff879716ee84855.r2.dev/mihomo/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
+    ]
+
+
+def test_install_auto_latest_uses_r2_latest_version_when_github_download_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证 latest 自动回退时使用 R2 当前可用版本。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    payload = b"mihomo-r2-latest"
+    compressed_payload = gzip.compress(payload)
+    downloaded_sources: list[str] = []
+
+    monkeypatch.setattr("proxystack.install.service.github_latest_version", lambda target: "1.2.4")
+    monkeypatch.setattr("proxystack.install.service.r2_latest_version", lambda target: "1.2.3")
+
+    def fake_downloader(source: str, destination: Path) -> Path:
+        """模拟 GitHub 最新版本下载失败、R2 latest 成功。"""
+        downloaded_sources.append(source)
+        if "github.com" in source:
+            raise OSError("github failed")
+        destination.write_bytes(compressed_payload)
+        return destination
+
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="mihomo", version="latest", source="auto"),
+        downloader=fake_downloader,
+    )
+
+    assert result.installed_paths[0].read_bytes() == payload
+    assert downloaded_sources == [
+        "https://github.com/MetaCubeX/mihomo/releases/download/v1.2.4/mihomo-linux-amd64-compatible-v1.2.4.gz",
+        "https://pub-06197a088952412f8ff879716ee84855.r2.dev/mihomo/latest/mihomo-linux-amd64-compatible-v1.2.3.gz",
+    ]
+
+
+def test_install_mihomo_defaults_to_auto_source(tmp_path: Path) -> None:
+    """验证 mihomo 未配置 source 时默认使用托管自动源。"""
+    config = write_install_config(tmp_path, {"mihomo": {"version": "v1.2.3"}})
+    global_config = load_config(config)
+
+    built_request = build_install_request(
+        global_config,
+        "mihomo",
+        None,
+        None,
+        None,
+        None,
+    )
+
+    assert built_request.source == "auto"
+    assert built_request.version == "v1.2.3"
 
 
 def test_download_url_rejects_private_ip() -> None:

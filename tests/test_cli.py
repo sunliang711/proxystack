@@ -594,6 +594,29 @@ def test_agent_publish_example(tmp_path: Path) -> None:
     assert bundled_input["input_schema"] == "proxystack.subscription-input"
 
 
+def test_agent_publish_skips_running_service_ports_by_default(tmp_path: Path) -> None:
+    """验证 publish 不会因自身服务端口已被监听而失败。"""
+    config = copy_example_project(tmp_path)
+    stack_path = config.parent / "stacks" / "usa1.yaml"
+    yaml = YAML()
+    stack_data = yaml.load(stack_path.read_text(encoding="utf-8"))
+    output = tmp_path / "sub-bundle.zip"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("0.0.0.0", 0))
+        sock.listen()
+        stack_data["xrelay"]["inbounds"][0]["port"] = sock.getsockname()[1]
+        with stack_path.open("w", encoding="utf-8") as stack_file:
+            yaml.dump(stack_data, stack_file)
+
+        result = runner.invoke(agent_app, ["publish", "--source", "local", "-o", str(output), "-c", str(config)])
+    finally:
+        sock.close()
+
+    assert result.exit_code == 0
+    assert output.exists()
+
+
 def test_agent_publish_sets_managed_bundle_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 root 发布订阅包时会修正 zip 文件权限和 owner。"""
     output = tmp_path / "sub-bundle.zip"

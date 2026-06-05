@@ -52,5 +52,7 @@ security:
 install:
   mihomo:
     version: latest
+    source: auto
   xray:
     version: latest
+    source: auto

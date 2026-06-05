@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import gzip
 import grp
 import hashlib
 import ipaddress
+import json
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -21,6 +23,7 @@ from typing import Sequence
 from urllib.parse import unquote
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler
+from urllib.request import Request
 from urllib.request import build_opener
 from zipfile import ZipFile
 from zipfile import is_zipfile
@@ -31,6 +34,22 @@ ARTIFACT_TARGETS = ("mihomo", "xray", "geo")
 BINARY_NAMES = {
     "mihomo": "mihomo",
     "xray": "xray",
+}
+MANAGED_SOURCE_ALIASES = {"auto", "github", "r2"}
+MANAGED_DOWNLOAD_ROOT = "https://pub-06197a088952412f8ff879716ee84855.r2.dev"
+MANAGED_PROJECTS = {
+    "mihomo": {
+        "repo": "MetaCubeX/mihomo",
+        "filename_tpl": "mihomo-linux-amd64-compatible-v{version}.gz",
+        "r2_path": "mihomo",
+        "r2_latest": True,
+    },
+    "xray": {
+        "repo": "XTLS/Xray-core",
+        "filename_tpl": "Xray-linux-64.zip",
+        "r2_path": "xray",
+        "r2_latest": False,
+    },
 }
 VERSION_ARGS = {
     "mihomo": ("-v",),
@@ -79,6 +98,16 @@ class InstallResult:
 
 
 @dataclass(frozen=True)
+class ManagedDownloadSource:
+    """表示内置 GitHub/R2 下载源候选。"""
+
+    name: str
+    url: str
+    filename: str
+    version: str
+
+
+@dataclass(frozen=True)
 class SelfUpdateRequest:
     """表示 proxystack Python 包自更新参数。"""
 
@@ -119,6 +148,8 @@ def build_install_request(
         raise ValueError(f"unsupported install target: {target}")
     target_config = getattr(config.install, target)
     resolved_source = source or target_config.source
+    if resolved_source is None and target in BINARY_NAMES:
+        resolved_source = "auto"
     if not resolved_source:
         raise ValueError(f"source is required for {target}")
     return InstallRequest(
@@ -141,7 +172,7 @@ def install_artifact(
     target = normalize_artifact_target(request.target)
     downloads_dir = config.resolve_path(config.paths.downloads)
     require_download_hash(request.source, request.sha256)
-    source_path = fetch_source(request.source, downloads_dir, downloader or download_url)
+    source_path = fetch_source(request, downloads_dir, downloader)
     source_sha256 = file_sha256(source_path)
     verify_sha256_value(source_sha256, request.sha256)
     installed_paths = install_source_files(
@@ -162,6 +193,11 @@ def install_artifact(
     )
 
 
+def is_managed_source_alias(target: str, source: str) -> bool:
+    """判断 source 是否为内置 GitHub/R2 托管源别名。"""
+    return target in MANAGED_PROJECTS and source in MANAGED_SOURCE_ALIASES
+
+
 def normalize_artifact_target(target: str) -> str:
     """校验并返回支持的代理核心/geo 目标名。"""
     if target not in ARTIFACT_TARGETS:
@@ -169,14 +205,18 @@ def normalize_artifact_target(target: str) -> str:
     return target
 
 
-def fetch_source(source: str, downloads_dir: Path, downloader: Downloader) -> Path:
+def fetch_source(request: InstallRequest, downloads_dir: Path, downloader: Optional[Downloader]) -> Path:
     """读取本地文件或下载远端 URL，远端内容写入 downloads 缓存目录。"""
+    source = request.source
+    if is_managed_source_alias(request.target, source):
+        return fetch_managed_source(request, downloads_dir, downloader or download_url_with_redirects)
     parsed_url = urlparse(source)
     if parsed_url.scheme in {"http", "https"}:
-        validate_download_url(source, resolve_dns=downloader is download_url)
+        effective_downloader = downloader or download_url
+        validate_download_url(source, resolve_dns=effective_downloader is download_url)
         ensure_private_directory(downloads_dir)
         destination = downloads_dir / safe_download_name(parsed_url.path)
-        return downloader(source, destination)
+        return effective_downloader(source, destination)
     if parsed_url.scheme == "file":
         local_path = Path(unquote(parsed_url.path))
     elif parsed_url.scheme:
@@ -188,6 +228,127 @@ def fetch_source(source: str, downloads_dir: Path, downloader: Downloader) -> Pa
     if not local_path.exists():
         raise ValueError(f"source file does not exist: {local_path}")
     return local_path
+
+
+def fetch_managed_source(request: InstallRequest, downloads_dir: Path, downloader: Downloader) -> Path:
+    """按内置 GitHub/R2 候选源下载 mihomo 或 xray。"""
+    ensure_private_directory(downloads_dir)
+    sources = build_managed_sources(request.target, request.version, request.source)
+    failures: list[str] = []
+    for source in sources:
+        destination = downloads_dir / source.filename
+        try:
+            return downloader(source.url, destination)
+        except (OSError, TimeoutError, ValueError) as exc:
+            destination.unlink(missing_ok=True)
+            failures.append(f"{source.name}: {exc}")
+    raise ValueError(f"all managed download sources failed for {request.target}: {'; '.join(failures)}")
+
+
+def build_managed_sources(target: str, version: str, source_mode: str) -> list[ManagedDownloadSource]:
+    """根据目标、版本和源模式构造 GitHub/R2 下载候选。"""
+    if target not in MANAGED_PROJECTS:
+        raise ValueError(f"managed download is not supported for {target}")
+    if source_mode not in MANAGED_SOURCE_ALIASES:
+        raise ValueError(f"unsupported managed source: {source_mode}")
+    normalized_version = normalize_managed_version(version)
+    if normalized_version == "latest":
+        return build_latest_managed_sources(target, source_mode)
+    sources: list[ManagedDownloadSource] = []
+    if source_mode in {"auto", "github"}:
+        sources.append(build_github_managed_source(target, normalized_version))
+    if source_mode in {"auto", "r2"}:
+        sources.append(build_r2_versioned_managed_source(target, normalized_version))
+    return sources
+
+
+def build_latest_managed_sources(target: str, source_mode: str) -> list[ManagedDownloadSource]:
+    """按候选源各自的 latest 版本构造下载源。"""
+    sources: list[ManagedDownloadSource] = []
+    failures: list[str] = []
+    builders = []
+    if source_mode in {"auto", "github"}:
+        builders.append(lambda: build_github_managed_source(target, github_latest_version(target)))
+    if source_mode in {"auto", "r2"}:
+        builders.append(lambda: build_r2_latest_managed_source(target))
+    for builder in builders:
+        try:
+            sources.append(builder())
+        except (OSError, TimeoutError, ValueError) as exc:
+            failures.append(str(exc))
+    if not sources:
+        raise ValueError(f"latest version cannot be resolved for {target}: {'; '.join(failures)}")
+    return sources
+
+
+def normalize_managed_version(version: str) -> str:
+    """把 v1.2.3 这类版本号归一为 1.2.3，latest 保持不变。"""
+    normalized_version = version.strip()
+    if normalized_version == "latest":
+        return normalized_version
+    return normalized_version.removeprefix("v")
+
+
+def github_latest_version(target: str) -> str:
+    """通过 GitHub releases/latest API 获取最新版本。"""
+    project = MANAGED_PROJECTS[target]
+    url = f"https://api.github.com/repos/{project['repo']}/releases/latest"
+    data = json.loads(read_url_text(url))
+    return normalize_managed_version(str(data["tag_name"]))
+
+
+def r2_latest_version(target: str) -> str:
+    """通过 R2 latest/.version 获取当前镜像版本。"""
+    project = MANAGED_PROJECTS[target]
+    url = f"{MANAGED_DOWNLOAD_ROOT}/{project['r2_path']}/latest/.version"
+    return normalize_managed_version(read_url_text(url).strip())
+
+
+def read_url_text(url: str) -> str:
+    """读取内置版本探测 URL 文本。"""
+    request = urllib_request(url)
+    with build_opener().open(request, timeout=DOWNLOAD_TIMEOUT) as response:
+        return response.read().decode("utf-8")
+
+
+def build_github_managed_source(target: str, version: str) -> ManagedDownloadSource:
+    """构造 GitHub Release 资产下载源。"""
+    project = MANAGED_PROJECTS[target]
+    filename = managed_filename(project, version)
+    url = f"https://github.com/{project['repo']}/releases/download/v{version}/{filename}"
+    return ManagedDownloadSource("GitHub Release", url, filename, version)
+
+
+def build_r2_latest_managed_source(target: str) -> ManagedDownloadSource:
+    """构造 Cloudflare R2 当前可用的 latest 镜像源。"""
+    project = MANAGED_PROJECTS[target]
+    needs_version = "{version}" in str(project["filename_tpl"])
+    version = r2_latest_version(target) if needs_version or not project["r2_latest"] else ""
+    filename = managed_filename(project, version)
+    if project["r2_latest"]:
+        url = f"{MANAGED_DOWNLOAD_ROOT}/{project['r2_path']}/latest/{filename}"
+        return ManagedDownloadSource("Cloudflare R2 (latest)", url, filename, version)
+    url = f"{MANAGED_DOWNLOAD_ROOT}/{project['r2_path']}/v{version}/{filename}"
+    return ManagedDownloadSource("Cloudflare R2 (latest versioned)", url, filename, version)
+
+
+def build_r2_versioned_managed_source(target: str, version: str) -> ManagedDownloadSource:
+    """构造 Cloudflare R2 指定版本镜像源。"""
+    project = MANAGED_PROJECTS[target]
+    filename = managed_filename(project, version)
+    url = f"{MANAGED_DOWNLOAD_ROOT}/{project['r2_path']}/v{version}/{filename}"
+    return ManagedDownloadSource("Cloudflare R2 (versioned)", url, filename, version)
+
+
+def managed_filename(project: dict[str, object], version: str) -> str:
+    """根据托管项目文件名模板生成资产文件名。"""
+    template = str(project["filename_tpl"])
+    return template.format(version=version)
+
+
+def urllib_request(url: str):
+    """构造带 User-Agent 的 urllib 请求。"""
+    return Request(url, headers={"User-Agent": "proxystack-installer/1.0"})
 
 
 def validate_download_url(source: str, resolve_dns: bool = True) -> None:
@@ -244,10 +405,20 @@ def safe_download_name(raw_path: str) -> str:
 
 def download_url(source: str, destination: Path) -> Path:
     """下载远端文件到缓存路径，失败时不替换既有缓存文件。"""
+    return download_url_with_opener(source, destination, build_opener(NoRedirectHandler()))
+
+
+def download_url_with_redirects(source: str, destination: Path) -> Path:
+    """下载内置托管源文件，允许 GitHub Release 资产重定向。"""
+    return download_url_with_opener(source, destination, build_opener())
+
+
+def download_url_with_opener(source: str, destination: Path, opener) -> Path:
+    """使用指定 opener 下载远端文件到缓存路径。"""
     with tempfile.NamedTemporaryFile("wb", delete=False, dir=destination.parent) as temp_file:
         temp_path = Path(temp_file.name)
         try:
-            with build_opener(NoRedirectHandler()).open(source, timeout=DOWNLOAD_TIMEOUT) as response:
+            with opener.open(source, timeout=DOWNLOAD_TIMEOUT) as response:
                 shutil.copyfileobj(response, temp_file)
         except BaseException:
             temp_path.unlink(missing_ok=True)
@@ -266,6 +437,8 @@ class NoRedirectHandler(HTTPRedirectHandler):
 
 def require_download_hash(source: str, expected_sha256: Optional[str]) -> None:
     """要求远端下载必须显式提供 sha256，避免未校验替换。"""
+    if source in MANAGED_SOURCE_ALIASES:
+        return
     parsed_url = urlparse(source)
     if parsed_url.scheme in {"http", "https"} and not expected_sha256:
         raise ValueError("sha256 is required for downloaded artifacts")
@@ -323,6 +496,12 @@ def materialize_source_files(
     """将普通文件或归档内容释放到 staging 目录。"""
     if is_archive(source_path):
         return extract_archive_files(target, source_path, archive_member, staging_dir)
+    if is_gzip_file(source_path):
+        if target not in BINARY_NAMES:
+            raise ValueError("gzip source is only supported for binary targets")
+        if archive_member is not None:
+            raise ValueError("archive-member requires a zip or tar archive source")
+        return [extract_gzip_file(source_path, staging_dir)]
     if archive_member is not None:
         raise ValueError("archive-member requires an archive source")
     return [source_path]
@@ -331,6 +510,20 @@ def materialize_source_files(
 def is_archive(source_path: Path) -> bool:
     """判断源文件是否为 zip 或 tar 归档。"""
     return is_zipfile(source_path) or tarfile.is_tarfile(source_path)
+
+
+def is_gzip_file(source_path: Path) -> bool:
+    """判断源文件是否为单文件 gzip 压缩包。"""
+    return source_path.suffix == ".gz"
+
+
+def extract_gzip_file(source_path: Path, staging_dir: Path) -> Path:
+    """解压单文件 gzip，并返回 staging 中的解压后文件。"""
+    destination = staging_dir / source_path.with_suffix("").name
+    with gzip.open(source_path, "rb") as source_file:
+        with destination.open("wb") as destination_file:
+            shutil.copyfileobj(source_file, destination_file)
+    return destination
 
 
 def extract_archive_files(

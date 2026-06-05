@@ -214,13 +214,13 @@ ensure_sub_dirs() {
 install_python_package() {
 	local venv_python="${BASE_DIR}/.venv/bin/python"
 
-	run_as_user "${INSTALL_USER}" "${venv_python}" -m pip install --upgrade pip
+	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" --upgrade pip
 	if [[ -n "${WHEEL}" ]]; then
-		run_as_user "${INSTALL_USER}" "${venv_python}" -m pip install "${WHEEL}"
+		pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${WHEEL}"
 	elif [[ -n "${SOURCE_DIR}" ]]; then
-		run_as_user "${INSTALL_USER}" "${venv_python}" -m pip install "${SOURCE_DIR}"
+		pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${SOURCE_DIR}"
 	else
-		run_as_user "${INSTALL_USER}" "${venv_python}" -m pip install "${PACKAGE_SPEC}"
+		pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${PACKAGE_SPEC}"
 	fi
 }
 

@@ -195,6 +195,34 @@ def test_install_agent_install_deps_uses_apt_when_supported(tmp_path: Path) -> N
     assert "install -y python3.11-venv" in apt_output
 
 
+def test_pip_install_with_fallback_tries_next_index(tmp_path: Path) -> None:
+    """验证 pip 安装源失败时会自动尝试下一个 index。"""
+    call_log = tmp_path / "pip.log"
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+run_as_user() {{
+	printf '%s\\n' "$*" >>"{call_log}"
+	case "$*" in
+		*pypi.org*) return 1 ;;
+		*) return 0 ;;
+	esac
+}}
+PIP_INDEX_URLS="https://pypi.org/simple https://pypi.tuna.tsinghua.edu.cn/simple"
+pip_install_with_fallback proxystack /venv/bin/python proxystack
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    output = call_log.read_text(encoding="utf-8")
+    assert "https://pypi.org/simple" in output
+    assert "https://pypi.tuna.tsinghua.edu.cn/simple" in output
+
+
 def test_deploy_sub_docker_dry_run_uses_security_defaults() -> None:
     """验证 Docker dry-run 输出安全默认参数且默认不删除容器。"""
     result = run_script(

@@ -229,8 +229,11 @@ P0 候选版行为：
 
 - 单个目标支持 `--version`、`--sha256`、`--source/--url`、`--archive-member` 和 `--config`。
 - `all` 只展开为 `mihomo`、`xray` 和 `geo`，不包含 `self`；`all` 使用 `config.install.<target>` 中分别配置的 `source`、`sha256` 和 `archive_member`，避免把同一个源误装到多个目标。
+- `mihomo` 和 `xray` 的 `source` 支持 `auto`、`github`、`r2` 三个托管源别名；未配置 source 时默认使用 `auto`，按 GitHub Release 优先、Cloudflare R2 回退的顺序下载。
 - 远端 `http/https` 下载必须提供 sha256；生产下载路径会拒绝本机/私网地址、禁用 HTTP 重定向，并在 DNS 解析到私网地址时失败。
+- 托管源别名只允许下载内置的 mihomo/xray 资产；`sha256` 可选，提供时仍会校验下载文件摘要。
 - 本地文件也建议提供 sha256。sha256 不匹配时不会替换既有文件；多文件 geo 归档替换失败时会回滚已替换文件。
+- mihomo 官方 `.gz` 资产会自动解压后安装为可执行文件。
 - 归档源支持 zip/tar，并拒绝绝对路径或 `..` 路径穿越；二进制归档未能唯一识别 `mihomo` 或 `xray` 成员时，需要显式传 `--archive-member`。
 - `install/update mihomo|xray` 默认写入 `/opt/proxystack/bin`，代理核心二进制 owner 为 `proxystack:proxystack`，权限为 `0750`。
 - `install/update geo` 默认写入 `/opt/proxystack/geo`，geo 数据文件 owner 为 `proxystack:proxystack`，权限为 `0640`。
@@ -246,14 +249,11 @@ P0 候选版行为：
 ```yaml
 install:
   mihomo:
-    version: v1.19.0
-    source: /opt/proxystack/downloads/mihomo-linux-amd64
-    sha256: <64-hex>
+    version: latest
+    source: auto
   xray:
-    version: v25.1.1
-    source: https://example.com/xray.zip
-    sha256: <64-hex>
-    archive_member: xray
+    version: v26.3.27
+    source: r2
   geo:
     version: latest
     source: /opt/proxystack/downloads/geo.dat

@@ -411,6 +411,59 @@ run_as_user() {
 	die "Required command not found: runuser or sudo"
 }
 
+# 输出 pip index 候选源，优先使用用户显式配置。
+pip_index_candidates() {
+	local indexes=()
+	local seen=" "
+	local index_url
+
+	if [[ -n "${PIP_INDEX_URL:-}" ]]; then
+		indexes+=("${PIP_INDEX_URL}")
+	fi
+	if [[ -n "${PIP_INDEX_URLS:-}" ]]; then
+		for index_url in ${PIP_INDEX_URLS}; do
+			indexes+=("${index_url}")
+		done
+	else
+		indexes+=("https://pypi.org/simple")
+		indexes+=("https://pypi.tuna.tsinghua.edu.cn/simple")
+		indexes+=("https://mirrors.aliyun.com/pypi/simple")
+		indexes+=("https://mirrors.ustc.edu.cn/pypi/simple")
+	fi
+
+	for index_url in "${indexes[@]}"; do
+		if [[ -z "${index_url}" || "${seen}" == *" ${index_url} "* ]]; then
+			continue
+		fi
+		seen="${seen}${index_url} "
+		printf '%s\n' "${index_url}"
+	done
+}
+
+# 通过多个 pip index 依次尝试安装 Python 包。
+pip_install_with_fallback() {
+	local target_user="${1:-}"
+	local python_bin="${2:-}"
+	local index_url
+
+	shift 2 || die "pip_install_with_fallback needs a user, python and pip args"
+	if [[ -z "${python_bin}" ]]; then
+		die "pip_install_with_fallback needs a python binary"
+	fi
+	if [[ "$#" -eq 0 ]]; then
+		die "pip_install_with_fallback needs pip install arguments"
+	fi
+
+	while IFS= read -r index_url; do
+		log "Trying pip index: ${index_url}"
+		if run_as_user "${target_user}" "${python_bin}" -m pip install --index-url "${index_url}" "$@"; then
+			return 0
+		fi
+		warn "Pip install failed with index: ${index_url}"
+	done < <(pip_index_candidates)
+	die "Pip install failed with all configured indexes"
+}
+
 # 创建 Python venv；已存在 pyvenv.cfg 时保持不动。
 ensure_venv() {
 	local venv_dir="${1:-}"
