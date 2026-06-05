@@ -1,55 +1,55 @@
 # load-balance 实例模板
 # 需要把 usa1/usa2 改成实际已有实例名，把 relay 改成目标 xrelay inbound name。
 
-name: auto-balance
-enabled: true
-role: auto
-labels: [auto]
-xrelay:
-  enabled: true
-  outbound:
-    type: clash
-    ref: auto-balance.clash.socks.local
-  inbounds:
-    - name: relay
-      protocol: socks5
-      listen: 0.0.0.0
-      port: 26000
-      udp: true
-      auth:
-        type: password
-        username: balance
-        password: change-me-relay-password
-      user: demo
-      remark: balance relay socks
-      sub: true
-clash:
-  enabled: true
-  mode: Rule
-  controller:
-    listen: 127.0.0.1:19160
-    secret: change-me-clash-api-secret
-  listeners:
-    socks:
-      - name: local
-        listen: 127.0.0.1
-        port: 17160
-  upstreams:
-    - name: usa1-local
-      type: xrelay-socks5
-      ref: usa1.relay
-    - name: usa2-local
-      type: xrelay-socks5
-      ref: usa2.relay
-  groups:
-    - name: BalanceProxy
-      type: load-balance
-      proxies: [usa1-local, usa2-local]
-      url: http://www.gstatic.com/generate_204
-      interval: 120
-      strategy: consistent-hashing
-    - name: AllProxy
-      type: select
-      proxies: [BalanceProxy, usa1-local, usa2-local, DIRECT]
-  rules:
-    profile: default
+name: auto-balance # stack 名称；add 时会被替换为用户输入的实例名。
+enabled: true # 是否启用该 stack；false 时不会生成或管理对应服务。
+role: auto # stack 角色标记；auto 表示聚合或自动选择节点实例。
+labels: [auto] # 自定义标签列表；这里标记为自动代理类实例。
+xrelay: # Xray/xrelay 侧配置，用于暴露负载均衡后的入站入口。
+  enabled: true # 是否为该 stack 启用 xrelay 服务。
+  outbound: # xrelay 出站配置，决定入站流量转发到哪里。
+    type: clash # 出站目标类型；clash 表示转发到本 stack 的 Clash 监听器。
+    ref: auto-balance.clash.socks.local # 出站引用；指向 stack.clash.socks.listener 形式的本地 socks 监听。
+  inbounds: # xrelay 入站列表，会生成对应 Xray inbound。
+    - name: relay # 入站名称；供客户端或其他 stack 引用。
+      protocol: socks5 # 入站协议；这里提供 socks5 入口。
+      listen: 0.0.0.0 # 入站监听地址；0.0.0.0 表示监听所有网卡。
+      port: 26000 # 入站监听端口；需要避免与其他服务冲突。
+      udp: true # 是否允许该 socks5 入站转发 UDP。
+      auth: # 入站认证配置。
+        type: password # 认证类型；password 表示使用用户名密码。
+        username: balance # socks5 用户名；部署前按需替换。
+        password: change-me-relay-password # socks5 密码；部署前必须替换。
+      user: demo # 订阅或统计中的用户标识。
+      remark: balance relay socks # 入站备注，会显示在订阅节点名称中。
+      sub: true # 是否导出到订阅；true 表示生成订阅节点。
+clash: # Clash/mihomo 侧配置，用于在多个上游之间负载均衡。
+  enabled: true # 是否为该 stack 启用 Clash 服务。
+  mode: Rule # Clash 运行模式；Rule 表示按规则分流。
+  controller: # Clash external-controller API 配置。
+    listen: 127.0.0.1:19160 # 控制器监听地址；建议只监听本机。
+    secret: change-me-clash-api-secret # 控制器访问密钥；部署前必须替换。
+  listeners: # Clash 本地监听器配置。
+    socks: # socks 监听器列表，供 xrelay 或本机连接。
+      - name: local # socks 监听器名称；会被 ref 引用。
+        listen: 127.0.0.1 # socks 监听地址；127.0.0.1 表示仅本机可访问。
+        port: 17160 # socks 监听端口；需要避免与其他服务冲突。
+  upstreams: # Clash 上游代理列表。
+    - name: usa1-local # 上游代理名称；供代理组引用。
+      type: xrelay-socks5 # 上游类型；表示引用其他 stack 的 xrelay socks5 入站。
+      ref: usa1.relay # 上游引用；指向 usa1 stack 中名为 relay 的入站。
+    - name: usa2-local # 上游代理名称；供代理组引用。
+      type: xrelay-socks5 # 上游类型；表示引用其他 stack 的 xrelay socks5 入站。
+      ref: usa2.relay # 上游引用；指向 usa2 stack 中名为 relay 的入站。
+  groups: # Clash 代理组列表。
+    - name: BalanceProxy # 负载均衡代理组名称；供规则或其他组引用。
+      type: load-balance # 代理组类型；load-balance 会在成员节点间分摊请求。
+      proxies: [usa1-local, usa2-local] # 参与负载均衡的上游节点列表。
+      url: http://www.gstatic.com/generate_204 # 健康检查 URL；用于判断节点可用性。
+      interval: 120 # 健康检查间隔，单位秒。
+      strategy: consistent-hashing # 负载策略；consistent-hashing 尽量保持同目标走同节点。
+    - name: AllProxy # 总代理组名称；提供负载均衡组、单节点和直连选择。
+      type: select # 代理组类型；select 表示手动选择节点。
+      proxies: [BalanceProxy, usa1-local, usa2-local, DIRECT] # 代理组成员；包含负载均衡组、单节点和直连。
+  rules: # Clash 规则集选择。
+    profile: default # 内置规则 profile 名称；default 表示使用默认分流规则。
