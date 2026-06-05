@@ -5,9 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-WHEEL=""
-SOURCE_DIR=""
-PACKAGE_SPEC=""
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SOURCE_DIR="${PROJECT_ROOT}"
 BASE_DIR="/opt/proxystack"
 BIN_DIR="/usr/local/bin"
 PYTHON_BIN="python3"
@@ -15,7 +14,6 @@ INSTALL_USER="proxystack"
 INSTALL_GROUP="proxystack"
 RUN_INIT="1"
 INSTALL_SYSTEMD="0"
-INSTALL_DEPS="0"
 
 # 展示 install-agent 用法。
 usage() {
@@ -26,12 +24,8 @@ Install proxystack-agent into a local Python venv. The script bootstraps users,
 directories, venv, package installation, console-script links, and optionally
 systemd unit files. It does not install mihomo, xray-core, or geo data.
 
-Install source, choose exactly one:
-  --wheel FILE             Install from a wheel file.
-  --source DIR             Install from a local source directory.
-  --package SPEC           Install from a pip package spec.
-
 Options:
+  --source DIR             Install from a local source directory. Default: repository root
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
   --bin-dir DIR            Console-script symlink directory. Default: /usr/local/bin
   --python CMD             Python command used to create the venv. Default: python3
@@ -39,7 +33,6 @@ Options:
   --group GROUP            System group. Default: proxystack
   --no-init                Do not run proxystack-agent init.
   --install-systemd        Run proxystack-agent service install.
-  --install-deps           Install missing native dependencies when supported.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -59,28 +52,12 @@ read_arg() {
 parse_args() {
 	while [[ "$#" -gt 0 ]]; do
 		case "$1" in
-			--wheel)
-				WHEEL="$(read_arg "$1" "${2:-}")"
-				shift 2
-				;;
-			--wheel=*)
-				WHEEL="${1#*=}"
-				shift
-				;;
 			--source)
 				SOURCE_DIR="$(read_arg "$1" "${2:-}")"
 				shift 2
 				;;
 			--source=*)
 				SOURCE_DIR="${1#*=}"
-				shift
-				;;
-			--package)
-				PACKAGE_SPEC="$(read_arg "$1" "${2:-}")"
-				shift 2
-				;;
-			--package=*)
-				PACKAGE_SPEC="${1#*=}"
 				shift
 				;;
 			--base-dir)
@@ -131,10 +108,6 @@ parse_args() {
 				INSTALL_SYSTEMD="1"
 				shift
 				;;
-			--install-deps)
-				INSTALL_DEPS="1"
-				shift
-				;;
 			--dry-run)
 				DRY_RUN="1"
 				shift
@@ -152,24 +125,10 @@ parse_args() {
 
 # 校验安装来源和关键路径。
 validate_args() {
-	local install_sources=0
-
-	[[ -n "${WHEEL}" ]] && ((install_sources += 1))
-	[[ -n "${SOURCE_DIR}" ]] && ((install_sources += 1))
-	[[ -n "${PACKAGE_SPEC}" ]] && ((install_sources += 1))
-	if [[ "${install_sources}" -ne 1 ]]; then
-		die "Choose exactly one of --wheel, --source, or --package"
-	fi
 	guard_managed_path "${BASE_DIR}" "base directory"
 	guard_system_dir "${BIN_DIR}" "bin directory"
 	validate_install_identity "${INSTALL_USER}" "${INSTALL_GROUP}" "${BASE_DIR}" "/usr/sbin/nologin"
-	if [[ -n "${PACKAGE_SPEC}" && "${PACKAGE_SPEC}" == -* ]]; then
-		die "Package spec must not start with '-'"
-	fi
-	if [[ -n "${WHEEL}" && ! -f "${WHEEL}" && "${DRY_RUN}" != "1" ]]; then
-		die "Wheel file does not exist: ${WHEEL}"
-	fi
-	if [[ -n "${SOURCE_DIR}" && ! -d "${SOURCE_DIR}" && "${DRY_RUN}" != "1" ]]; then
+	if [[ ! -d "${SOURCE_DIR}" && "${DRY_RUN}" != "1" ]]; then
 		die "Source directory does not exist: ${SOURCE_DIR}"
 	fi
 }
@@ -214,13 +173,7 @@ install_python_package() {
 	local venv_python="${BASE_DIR}/.venv/bin/python"
 
 	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" --upgrade pip
-	if [[ -n "${WHEEL}" ]]; then
-		pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${WHEEL}"
-	elif [[ -n "${SOURCE_DIR}" ]]; then
-		pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${SOURCE_DIR}"
-	else
-		pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${PACKAGE_SPEC}"
-	fi
+	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${SOURCE_DIR}"
 }
 
 # 链接 console scripts 到系统 bin 目录。
@@ -253,7 +206,7 @@ main() {
 	validate_args
 	require_root
 	require_cmd ln
-	ensure_python_venv_available "${PYTHON_BIN}" "${INSTALL_DEPS}"
+	ensure_python_venv_available "${PYTHON_BIN}"
 
 	ensure_group
 	ensure_user

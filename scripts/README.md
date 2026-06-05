@@ -17,14 +17,13 @@
 安装本地 `proxystack-agent`：
 
 ```bash
-sudo scripts/install-agent.sh --wheel dist/proxystack-0.1.0-py3-none-any.whl
+sudo scripts/install-agent.sh
 ```
 
-从包源安装并安装 systemd unit：
+安装 systemd unit：
 
 ```bash
 sudo scripts/install-agent.sh \
-  --package 'proxystack==0.1.0' \
   --install-systemd
 ```
 
@@ -39,7 +38,7 @@ sudo scripts/install-agent.sh \
 
 主要参数：
 
-- `--wheel FILE`、`--source DIR`、`--package SPEC` 三选一，指定 Python 包安装来源。
+- `--source DIR` 默认脚本所在仓库根目录，用于覆盖源码安装目录。
 - `--base-dir DIR` 默认 `/opt/proxystack`。
 - `--bin-dir DIR` 默认 `/usr/local/bin`，用于链接 `proxystack-agent` 和 `proxystack-sub`。
 - `--python CMD` 默认 `python3`。
@@ -53,7 +52,6 @@ sudo scripts/install-agent.sh \
 
 ```bash
 sudo scripts/install-sub-local.sh \
-  --wheel dist/proxystack-0.1.0-py3-none-any.whl \
   --import-bundle /opt/proxystack/publish/sub-bundle.zip \
   --install-systemd \
   --start
@@ -61,7 +59,7 @@ sudo scripts/install-sub-local.sh \
 
 主要参数：
 
-- `--wheel FILE`、`--source DIR`、`--package SPEC` 三选一，指定 Python 包安装来源。
+- `--source DIR` 默认脚本所在仓库根目录，用于覆盖源码安装目录。
 - `--base-dir DIR` 默认 `/opt/proxystack`，订阅数据目录固定为 `${base_dir}/sub`。
 - `--import-bundle FILE` 调用 `proxystack-sub import FILE --data-dir ${base_dir}/sub`。
 - `--install-systemd` 只安装 `proxystack-sub.service`。
@@ -106,7 +104,7 @@ sudo scripts/deploy-sub-docker.sh \
 ## dry-run 示例
 
 ```bash
-scripts/install-agent.sh --package proxystack --install-systemd --dry-run
-scripts/install-sub-local.sh --package proxystack --import-bundle sub-bundle.zip --dry-run
+scripts/install-agent.sh --install-systemd --dry-run
+scripts/install-sub-local.sh --import-bundle sub-bundle.zip --dry-run
 scripts/deploy-sub-docker.sh --replace --dry-run
 ```

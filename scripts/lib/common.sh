@@ -141,10 +141,9 @@ install_os_packages() {
 	esac
 }
 
-# 预检查 Python venv 依赖；必要时可由 --install-deps 触发自动安装。
+# 预检查 Python venv 依赖；缺失时自动安装当前系统可识别的 venv 包。
 ensure_python_venv_available() {
 	local python_bin="${1:-python3}"
-	local install_deps="${2:-0}"
 	local package_name
 
 	require_cmd "${python_bin}"
@@ -156,9 +155,7 @@ ensure_python_venv_available() {
 		return 0
 	fi
 	package_name="$(python_venv_package_name "${python_bin}")"
-	if [[ "${install_deps}" != "1" ]]; then
-		die "Python venv support is unavailable for ${python_bin}. Install ${package_name} or rerun with --install-deps."
-	fi
+	warn "Python venv support is unavailable for ${python_bin}; trying to install ${package_name}"
 	install_os_packages "${package_name}"
 	if python_venv_probe "${python_bin}"; then
 		return 0

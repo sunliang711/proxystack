@@ -44,7 +44,36 @@ def test_task12_entrypoints_have_help_output() -> None:
         result = run_script(["bash", str(script), "--help"])
 
         assert result.returncode == 0, script
-        assert "--install-deps" in result.stdout
+        assert "--source" in result.stdout
+
+
+def test_install_scripts_default_to_repository_source() -> None:
+    """验证安装脚本不传安装来源时默认使用当前仓库源码。"""
+    agent_result = run_script(
+        [
+            "bash",
+            "scripts/install-agent.sh",
+            "--base-dir",
+            "/tmp/proxystack-task12-default-agent/opt/proxystack",
+            "--bin-dir",
+            "/tmp/proxystack-task12-default-agent/usr/local/bin",
+            "--dry-run",
+        ]
+    )
+    sub_result = run_script(
+        [
+            "bash",
+            "scripts/install-sub-local.sh",
+            "--base-dir",
+            "/tmp/proxystack-task12-default-sub/opt/proxystack",
+            "--dry-run",
+        ]
+    )
+
+    assert agent_result.returncode == 0, agent_result.stderr
+    assert str(Path.cwd()) in agent_result.stderr
+    assert sub_result.returncode == 0, sub_result.stderr
+    assert str(Path.cwd()) in sub_result.stderr
 
 
 def test_install_agent_dry_run_stays_inside_bootstrap_boundary() -> None:
@@ -97,47 +126,8 @@ def test_install_sub_local_dry_run_uses_sub_service_only() -> None:
     assert "systemctl" not in output
 
 
-def test_install_agent_preflights_missing_python_venv_dependency(tmp_path: Path) -> None:
-    """验证原生安装会提前检测 Python venv 依赖缺失并给出明确提示。"""
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    write_fake_command(fake_bin / "getent", "exit 2\n")
-    write_fake_command(
-        fake_bin / "id",
-        "if [[ \"$1\" == \"-u\" && \"$#\" -eq 1 ]]; then echo 0; exit 0; fi\n"
-        "if [[ \"$1\" == \"-un\" ]]; then echo root; exit 0; fi\n"
-        "exit 1\n",
-    )
-    write_fake_command(
-        fake_bin / "python3",
-        "if [[ \"$1\" == \"-c\" ]]; then echo python3.11-venv; exit 0; fi\n"
-        "if [[ \"$1\" == \"-m\" && \"$2\" == \"venv\" ]]; then exit 1; fi\n"
-        "exit 0\n",
-    )
-    env = os.environ.copy()
-    env["PATH"] = f"{fake_bin}:{env['PATH']}"
-
-    result = subprocess.run(
-        [
-            "bash",
-            "scripts/install-agent.sh",
-            "--source",
-            str(Path.cwd()),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-
-    assert result.returncode != 0
-    assert "Python venv support is unavailable" in result.stderr
-    assert "python3.11-venv" in result.stderr
-    assert "--install-deps" in result.stderr
-
-
-def test_install_agent_install_deps_uses_apt_when_supported(tmp_path: Path) -> None:
-    """验证 --install-deps 会在 Debian/Ubuntu 上安装 Python venv 依赖。"""
+def test_install_agent_auto_installs_python_venv_dependency_when_supported(tmp_path: Path) -> None:
+    """验证 Debian/Ubuntu 上缺少 Python venv 依赖时会自动安装。"""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     ready_file = tmp_path / "venv-ready"
@@ -181,7 +171,6 @@ def test_install_agent_install_deps_uses_apt_when_supported(tmp_path: Path) -> N
             "scripts/install-agent.sh",
             "--source",
             str(Path.cwd()),
-            "--install-deps",
         ],
         check=False,
         capture_output=True,

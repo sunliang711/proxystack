@@ -56,7 +56,7 @@ sudo ln -sf /opt/proxystack/.venv/bin/proxystack-sub /usr/local/bin/proxystack-s
 
 - 交互式使用时可以执行 `source /opt/proxystack/.venv/bin/activate`，但不是必需步骤；`/usr/local/bin/proxystack-agent` 和 `/usr/local/bin/proxystack-sub` 会直接指向 venv 内的 console scripts。
 - systemd unit 不依赖 shell 的 venv activate，而是使用 `/opt/proxystack/.venv/bin/proxystack-agent`、`/opt/proxystack/.venv/bin/proxystack-sub` 或生成后的二进制路径。
-- 从源码开发安装时可以在项目目录执行 `/opt/proxystack/.venv/bin/pip install -e .`，发布部署优先使用 wheel。
+- 首次 bootstrap 脚本默认从脚本所在仓库根目录安装源码，也可以用 `--source DIR` 指定源码目录。
 - 安装或升级 Python 包不自动下载 mihomo、xray-core 或 geo 数据；代理核心安装仍由 `proxystack-agent install ...` 显式触发。
 - `proxystack-agent install mihomo|xray` 默认把代理核心写入 `/opt/proxystack/bin`；`proxystack-agent install geo` 默认把 geo 数据写入 `/opt/proxystack/geo`；远端下载必须显式提供 sha256，本地文件也建议提供 sha256。
 - `proxystack-agent install all` 和 `proxystack-agent update all` 只展开 `config.install.mihomo/xray/geo`，不会安装 systemd unit，也不会执行 self update。需要先在 `config.yaml` 中为三个目标分别配置 `source` 和 `sha256`。
@@ -66,8 +66,8 @@ sudo ln -sf /opt/proxystack/.venv/bin/proxystack-sub /usr/local/bin/proxystack-s
 仓库提供首次 bootstrap 脚本，见 [scripts/README.md](../scripts/README.md) 和 [Task 12](tasks/task-12-deployment-scripts.md)。脚本只创建系统用户、目录、Python venv、安装 proxystack Python 包、暴露 CLI，并可选安装 systemd unit；代理核心安装不放在 Shell 脚本中，首次安装后手动执行 `proxystack-agent install all`。`install all` 只覆盖 mihomo、xray-core 和 geo 数据；systemd unit 安装统一使用 `proxystack-agent service install [target]`。
 
 ```bash
-sudo scripts/install-agent.sh --wheel dist/proxystack-0.1.0-py3-none-any.whl
-sudo scripts/install-agent.sh --package 'proxystack==0.1.0' --install-systemd
+sudo scripts/install-agent.sh
+sudo scripts/install-agent.sh --install-systemd
 ```
 
 常用流程：
@@ -122,7 +122,6 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 
 ```bash
 sudo scripts/install-sub-local.sh \
-  --wheel dist/proxystack-0.1.0-py3-none-any.whl \
   --import-bundle /opt/proxystack/publish/sub-bundle.zip \
   --install-systemd \
   --start
