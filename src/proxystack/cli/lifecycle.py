@@ -645,6 +645,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 def resolve_target_scope(stack_set: StackSet, target: Optional[str]) -> TargetScope:
     """把 CLI target 解析为具体组件和 sub 服务范围。"""
+    target = normalize_target(target)
     if target is None:
         components = {
             (stack.name, component)
@@ -665,6 +666,13 @@ def resolve_target_scope(stack_set: StackSet, target: Optional[str]) -> TargetSc
         raise ValueError(f"stack is disabled: {target}")
     components = {(stack.name, component) for component in enabled_components(stack)}
     return TargetScope(raw_target=target, components=frozenset(components), include_sub=False, all_targets=False)
+
+
+def normalize_target(target: Optional[str]) -> Optional[str]:
+    """把显式 all 目标归一为缺省全部目标。"""
+    if target == "all":
+        return None
+    return target
 
 
 def parse_component_target(target: str) -> tuple[str, str]:
@@ -750,7 +758,10 @@ def service_action_lines(action: str, scope: TargetScope, follow: bool = False) 
 
 def resolve_service_scope(config_path: Path, target: Optional[str], check_system_ports: bool) -> TargetScope:
     """解析服务生命周期命令 target，供 up/down/status 等命令复用。"""
+    target = normalize_target(target)
     config = load_config(config_path)
+    if target == "sub":
+        return TargetScope(raw_target=target, components=frozenset(), include_sub=True, all_targets=False)
     stack_set = load_stacks(config, check_system_ports=check_system_ports)
     scope = resolve_target_scope(stack_set, target)
     if target is None:

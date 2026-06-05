@@ -84,10 +84,10 @@ proxystack-agent publish
 - `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
 - `check` 等价于 `validate + plan`。
-- `up` 等价于 `validate + apply` 并启动或重启受影响服务。
+- `up` 等价于 `validate + apply` 并通过 systemd 重启受影响服务。
 - `publish` 默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
 - 后续 proxystack 代码更新使用 `proxystack-agent update self --wheel <file>` 或配置的包源；代理核心更新使用 `proxystack-agent update mihomo|xray|geo|all`。
-- Task08 P0 候选版在更新代理核心时只输出 service adapter 文本计划，不真实调用 `systemctl`；真实停启和 unit 管理由 Task09 提供。
+- `install/update mihomo|xray|geo|all` 仍只处理代理核心和 geo 数据，不自动停启 systemd 服务；真实停启和 unit 管理由 `service` 分组和顶层生命周期命令提供。
 
 systemd unit 文件需要安装到 `/etc/systemd/system/`，这是 systemd 的固定约束；unit 内容必须指向 `/opt/proxystack` 内的配置、虚拟环境和生成文件。
 
@@ -123,7 +123,7 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 
 本地部署要求：
 
-- `proxystack-sub.service` 只运行订阅 HTTP 服务；P0 不实现 systemd 生命周期管理，unit 安装和启停命令留给后续任务。
+- `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装和启停使用 `proxystack-agent service ... sub`，常用重启可用 `proxystack-agent up sub`。
 - 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认自动 rebuild。多个输入文件也可以直接放入 `/opt/proxystack/sub/inputs/` 后执行 `proxystack-sub rebuild`。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
 - 服务进程只读取 `/opt/proxystack/sub/current`，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
@@ -183,8 +183,16 @@ systemd hardening 要求：
 - `ProtectSystem=strict`。
 - `ProtectHome=true`。
 - `PrivateTmp=true`。
-- `ReadWritePaths=/opt/proxystack/runtime /opt/proxystack/publish /opt/proxystack/downloads` 用于 agent 相关服务。
+- `ReadWritePaths=/opt/proxystack/runtime` 用于 xray/clash 运行服务；如果 `config.paths.generated` 不在 runtime 下，也会额外加入该生成目录。
 - `ReadWritePaths=/opt/proxystack/sub` 用于 `proxystack-sub.service`。
+
+Task09 P0 实现的 unit 约束：
+
+- `proxystack-xray@.service` 和 `proxystack-clash@.service` 只引用 `runtime/generated` 下的生成后配置文件，不把 `config.yaml` 或 `stacks/*.yaml` 作为运行配置传入服务。
+- xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
+- `proxystack-sub.service` 只传入 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，不读取或改写 stack 文件。
+- `service install|uninstall` 是唯一 unit 文件安装卸载入口；`install/update` 分组不提供 unit 安装命令。
+- `systemctl` 和 `journalctl` 通过参数数组调用；返回非零时 CLI 展示 stdout/stderr 摘要并失败，不吞掉权限错误。
 
 ## 5. Docker 部署 `proxystack-sub`
 

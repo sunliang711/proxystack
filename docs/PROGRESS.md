@@ -19,7 +19,7 @@
 - [x] 实现 `proxystack-sub import/rebuild/serve` 与 FastAPI 订阅路由
 - [x] 实现 CLI 生命周期命令、runtime 生成文件和 manifest apply
 - [x] 实现 mihomo/xray/geo 下载安装更新和 self update P0 候选版
-- [ ] 实现 systemd unit 安装和真实服务管理
+- [x] 实现 systemd unit 安装和真实服务管理 P0
 - [x] 实现订阅服务 Docker 示例
 - [ ] 建立测试矩阵和端到端验证
 
@@ -30,7 +30,7 @@
 | M0 | 项目文档、配置规范、任务拆分 | 已完成 |
 | M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
 | M2 | Xray/mihomo/sub 生成器、golden tests | 进行中 |
-| M3 | apply、manifest、systemd 管理 | 未开始 |
+| M3 | apply、manifest、systemd 管理 | 进行中 |
 | M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 进行中 |
 | M5 | mihomo API、原生备份导入导出和发布增强 | 未开始 |
 
@@ -42,6 +42,7 @@
 - [Task 06 交付记录：订阅生成与 HTTP 服务](delivery/2026-06-05-17-39-14-feature-python-subscription-generator-server.md)
 - [Task 07 交付记录：CLI 生命周期命令](delivery/2026-06-05-18-08-00-feature-python-cli-lifecycle.md)
 - [Task 08 交付记录：下载安装与更新 P0 候选版](delivery/2026-06-05-19-28-35-feature-python-install-update.md)
+- [Task 09 交付记录：systemd 服务管理 P0](delivery/2026-06-05-19-54-24-feature-python-systemd-manager.md)
 
 ## 任务列表
 

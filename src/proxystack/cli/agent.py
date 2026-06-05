@@ -10,6 +10,8 @@ import typer
 
 from proxystack.cli.common import get_distribution_version
 from proxystack.cli.lifecycle import RuntimePlan
+from proxystack.cli.lifecycle import SUB_SERVICE_NAME
+from proxystack.cli.lifecycle import TargetScope
 from proxystack.cli.lifecycle import add_stack
 from proxystack.cli.lifecycle import apply_runtime_plan
 from proxystack.cli.lifecycle import build_runtime_plan
@@ -18,14 +20,17 @@ from proxystack.cli.lifecycle import doctor_report
 from proxystack.cli.lifecycle import edit_config_or_stack
 from proxystack.cli.lifecycle import init_project
 from proxystack.cli.lifecycle import list_stacks
+from proxystack.cli.lifecycle import normalize_target
 from proxystack.cli.lifecycle import remove_stack
 from proxystack.cli.lifecycle import render_model_json
 from proxystack.cli.lifecycle import resolve_service_scope
+from proxystack.cli.lifecycle import resolve_target_scope
 from proxystack.cli.lifecycle import service_action_lines
 from proxystack.config import DEFAULT_CONFIG_PATH
 from proxystack.config import load_config
 from proxystack.config import load_stacks
 from proxystack.domain import ConfigValidationError
+from proxystack.domain.models import GlobalConfig
 from proxystack.generator.mihomo import dumps_mihomo_config
 from proxystack.generator.sub import SubscriptionAccess
 from proxystack.generator.sub import SubscriptionGeneratorError
@@ -51,6 +56,14 @@ from proxystack.install import expand_artifact_targets
 from proxystack.install import install_artifact
 from proxystack.install import run_self_update
 from proxystack.logging import configure_logging
+from proxystack.systemd import CLASH_TEMPLATE_UNIT
+from proxystack.systemd import SUB_UNIT
+from proxystack.systemd import SYSTEMD_UNIT_DIR
+from proxystack.systemd import UNIT_NAMES
+from proxystack.systemd import XRAY_TEMPLATE_UNIT
+from proxystack.systemd import CommandRunner
+from proxystack.systemd import SystemdCommandError
+from proxystack.systemd import SystemdManager
 
 app = typer.Typer(
     help="本地代理栈管理命令。",
@@ -64,8 +77,16 @@ sub_app = typer.Typer(
     help="订阅 input 校验和导出命令。",
     no_args_is_help=True,
 )
+service_app = typer.Typer(
+    help="systemd unit 安装和服务生命周期管理命令。",
+    no_args_is_help=True,
+)
 app.add_typer(render_app, name="render")
 app.add_typer(sub_app, name="sub")
+app.add_typer(service_app, name="service")
+
+SYSTEMD_RUNNER: Optional[CommandRunner] = None
+SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
 
 
 @app.callback()
@@ -338,26 +359,32 @@ def up(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """准备启动目标服务；Task07 只输出服务动作，不调用 systemctl。"""
+    """先 apply 普通代理配置，再重启本次变化影响到的 systemd 服务。"""
     try:
         if dry_run:
             scope = resolve_service_scope(config, target, check_system_ports=False)
-            typer.echo("Service adapter dry-run; Task09 will execute systemd.")
             echo_service_lines(service_action_lines("restart", scope))
+            return
+        if normalize_target(target) == "sub":
+            global_config = load_config(config)
+            echo_service_lines(build_systemd_manager(global_config).systemctl("restart", (SUB_SERVICE_NAME,)))
             return
         runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
         apply_runtime_plan(runtime_plan)
         service_scope = resolve_service_scope(config, target, check_system_ports=False)
-    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
         typer.echo(f"up 失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     service_names = set(service_scope.service_names)
     services = [service_name for service_name in runtime_plan.changed_services if service_name in service_names]
-    typer.echo("Service adapter execute mode; Task09 will execute systemd.")
     if not services:
         typer.echo("restart: no services selected")
         return
-    echo_service_lines([f"restart: {service_name}" for service_name in services])
+    try:
+        echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl("restart", services))
+    except (OSError, SystemdCommandError) as exc:
+        typer.echo(f"up 失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()
@@ -366,7 +393,7 @@ def down(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """展示停止目标服务的动作，不调用 systemctl。"""
+    """停止目标 systemd 服务，不删除配置和生成文件。"""
     run_service_adapter("stop", target, config, skip_system_ports)
 
 
@@ -376,7 +403,7 @@ def restart(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """展示重启目标服务的动作，不调用 systemctl。"""
+    """重启目标 systemd 服务。"""
     run_service_adapter("restart", target, config, skip_system_ports)
 
 
@@ -386,7 +413,7 @@ def status(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """展示查询目标服务状态的动作，不调用 systemctl。"""
+    """查询目标 systemd 服务状态。"""
     run_service_adapter("status", target, config, skip_system_ports)
 
 
@@ -397,8 +424,8 @@ def logs(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """展示读取目标服务日志的动作，不调用 journalctl。"""
-    run_service_adapter("logs", target, config, skip_system_ports, follow=follow)
+    """读取目标 systemd 服务日志。"""
+    run_service_adapter("log", target, config, skip_system_ports, follow=follow)
 
 
 @app.command()
@@ -407,7 +434,7 @@ def enable(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """展示启用目标服务开机自启的动作，不调用 systemctl。"""
+    """启用目标 systemd 服务开机自启。"""
     run_service_adapter("enable", target, config, skip_system_ports)
 
 
@@ -417,8 +444,90 @@ def disable(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """展示禁用目标服务开机自启的动作，不调用 systemctl。"""
+    """禁用目标 systemd 服务开机自启。"""
     run_service_adapter("disable", target, config, skip_system_ports)
+
+
+@service_app.command("install")
+def service_install(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """安装 systemd unit 文件；这是唯一 unit 安装入口。"""
+    run_unit_operation("install", target, config)
+
+
+@service_app.command("uninstall")
+def service_uninstall(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """卸载 systemd unit 文件；不删除 config 或 stacks。"""
+    run_unit_operation("uninstall", target, config)
+
+
+@service_app.command("enable")
+def service_enable(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """启用目标 systemd 服务开机自启。"""
+    run_service_group_action("enable", target, config)
+
+
+@service_app.command("disable")
+def service_disable(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """禁用目标 systemd 服务开机自启。"""
+    run_service_group_action("disable", target, config)
+
+
+@service_app.command("start")
+def service_start(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """启动目标 systemd 服务。"""
+    run_service_group_action("start", target, config)
+
+
+@service_app.command("stop")
+def service_stop(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """停止目标 systemd 服务。"""
+    run_service_group_action("stop", target, config)
+
+
+@service_app.command("restart")
+def service_restart(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """重启目标 systemd 服务。"""
+    run_service_group_action("restart", target, config)
+
+
+@service_app.command("status")
+def service_status(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """查询目标 systemd 服务状态。"""
+    run_service_group_action("status", target, config)
+
+
+@service_app.command("log")
+def service_log(
+    target: Optional[str] = typer.Argument(None, help="可选目标：all、stack、xrelay/name、clash/name 或 sub。"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="持续跟随 journalctl 输出。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """读取目标 systemd 服务 journal。"""
+    run_service_group_action("log", target, config, follow=follow)
 
 
 @app.command()
@@ -488,14 +597,103 @@ def run_service_adapter(
     skip_system_ports: bool,
     follow: bool = False,
 ) -> None:
-    """解析目标并输出可测试的服务动作说明。"""
+    """解析顶层生命周期目标并调用真实 systemd runner。"""
     try:
         scope = resolve_service_scope(config, target, check_system_ports=False)
-    except (ValidationError, ConfigValidationError, ValueError) as exc:
-        typer.echo(f"服务目标解析失败：\n{exc}", err=True)
+        global_config = load_config(config)
+        manager = build_systemd_manager(global_config)
+        if action == "log":
+            lines = manager.journalctl(scope.service_names, follow=follow)
+        else:
+            lines = manager.systemctl(action, scope.service_names)
+    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+        typer.echo(f"服务操作失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo("Service adapter dry-run; Task09 will execute systemd.")
-    echo_service_lines(service_action_lines(action, scope, follow=follow))
+    echo_service_lines(lines)
+
+
+def run_unit_operation(operation: str, target: Optional[str], config: Path) -> None:
+    """执行 systemd unit 安装或卸载操作。"""
+    try:
+        global_config = load_config(config)
+        manager = build_systemd_manager(global_config)
+        unit_names = resolve_unit_names(config, target)
+        if operation == "install":
+            lines = manager.install_units(unit_names)
+        else:
+            lines = manager.uninstall_units(unit_names)
+    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+        typer.echo(f"unit {operation} 失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    echo_service_lines(lines)
+
+
+def run_service_group_action(
+    action: str,
+    target: Optional[str],
+    config: Path,
+    follow: bool = False,
+) -> None:
+    """执行 service 分组下的 systemd 生命周期命令。"""
+    try:
+        scope = resolve_service_group_scope(config, target)
+        global_config = load_config(config)
+        manager = build_systemd_manager(global_config)
+        if action == "log":
+            lines = manager.journalctl(scope.service_names, follow=follow)
+        else:
+            lines = manager.systemctl(action, scope.service_names)
+    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+        typer.echo(f"服务操作失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    echo_service_lines(lines)
+
+
+def build_systemd_manager(global_config: GlobalConfig) -> SystemdManager:
+    """创建 systemd manager，测试可通过模块变量替换 runner 和 unit_dir。"""
+    return SystemdManager(global_config, runner=SYSTEMD_RUNNER, unit_dir=SYSTEMD_UNIT_DIR_OVERRIDE)
+
+
+def resolve_service_group_scope(config_path: Path, target: Optional[str]) -> TargetScope:
+    """解析 service 分组目标；缺省 all 包含 sub 服务。"""
+    target = normalize_target(target)
+    global_config = load_config(config_path)
+    if target == "sub":
+        return TargetScope(raw_target=target, components=frozenset(), include_sub=True, all_targets=False)
+    stack_set = load_stacks(global_config, check_system_ports=False)
+    return resolve_target_scope(stack_set, target)
+
+
+def resolve_unit_names(config_path: Path, target: Optional[str]) -> tuple[str, ...]:
+    """把 service install/uninstall 目标转换为 unit 模板文件名。"""
+    target = normalize_target(target)
+    if target is None:
+        return UNIT_NAMES
+    if target == "sub":
+        return (SUB_UNIT,)
+    scope = resolve_service_group_scope(config_path, target)
+    return unit_names_for_services(scope.service_names)
+
+
+def unit_names_for_services(service_names: tuple[str, ...]) -> tuple[str, ...]:
+    """把服务实例名转换为需要安装或卸载的 unit 文件名。"""
+    unit_names: list[str] = []
+    for service_name in service_names:
+        if service_name.startswith("proxystack-xray@"):
+            append_unique(unit_names, XRAY_TEMPLATE_UNIT)
+        elif service_name.startswith("proxystack-clash@"):
+            append_unique(unit_names, CLASH_TEMPLATE_UNIT)
+        elif service_name == SUB_SERVICE_NAME:
+            append_unique(unit_names, SUB_UNIT)
+        else:
+            raise ValueError(f"unsupported service name: {service_name}")
+    return tuple(unit_names)
+
+
+def append_unique(values: list[str], value: str) -> None:
+    """按顺序追加不重复的字符串。"""
+    if value not in values:
+        values.append(value)
 
 
 def echo_service_lines(lines: list[str]) -> None:

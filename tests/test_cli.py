@@ -6,15 +6,33 @@ from pathlib import Path
 import shutil
 import socket
 import sys
+from typing import Sequence
 from zipfile import ZipFile
 
+from pytest import MonkeyPatch
 from ruamel.yaml import YAML
 from typer.testing import CliRunner
 
+import proxystack.cli.agent as agent_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
+from proxystack.systemd import CommandResult
 
 runner = CliRunner()
+
+
+class FakeSystemdRunner:
+    """记录 CLI 触发的 systemd 命令，避免调用真实 systemctl。"""
+
+    def __init__(self, stdout: str = "") -> None:
+        """初始化 fake runner 输出。"""
+        self.stdout = stdout
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, args: Sequence[str]) -> CommandResult:
+        """记录参数数组并返回成功结果。"""
+        self.calls.append(tuple(args))
+        return CommandResult(args=tuple(args), returncode=0, stdout=self.stdout)
 
 
 def test_agent_help_is_available() -> None:
@@ -49,6 +67,16 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["apply"],
         ["install"],
         ["update"],
+        ["service"],
+        ["service", "install"],
+        ["service", "uninstall"],
+        ["service", "enable"],
+        ["service", "disable"],
+        ["service", "start"],
+        ["service", "stop"],
+        ["service", "restart"],
+        ["service", "status"],
+        ["service", "log"],
         ["version"],
         ["render"],
         ["render", "model"],
@@ -234,9 +262,10 @@ def test_agent_apply_is_idempotent(tmp_path: Path) -> None:
     assert manifest.stat().st_mtime_ns == 1_000_000_000_000
 
 
-def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path) -> None:
+def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 up 写入生成文件，并只报告目标范围内受影响服务。"""
     config = copy_example_project(tmp_path)
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
     first = runner.invoke(agent_app, ["up", "xrelay/usa1", "-c", str(config), "--skip-system-ports"])
     second = runner.invoke(agent_app, ["up", "xrelay/usa1", "-c", str(config), "--skip-system-ports"])
@@ -247,22 +276,53 @@ def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path) ->
     assert (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
     assert second.exit_code == 0
     assert "restart: no services selected" in second.output
+    assert fake_runner.calls == [("systemctl", "restart", "proxystack-xray@usa1.service")]
 
 
-def test_agent_service_target_selection() -> None:
-    """验证服务 adapter 支持组件和 sub 目标选择。"""
-    status_result = runner.invoke(agent_app, ["status", "clash/usa1", "-c", "examples/config.yaml", "--skip-system-ports"])
-    logs_result = runner.invoke(agent_app, ["logs", "sub", "--follow", "-c", "examples/config.yaml", "--skip-system-ports"])
+def test_agent_service_target_selection(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 service 分组支持组件和 sub 目标选择。"""
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+    status_result = runner.invoke(agent_app, ["service", "status", "clash/usa1", "-c", "examples/config.yaml"])
+    logs_result = runner.invoke(agent_app, ["service", "log", "sub", "--follow", "-c", "examples/config.yaml"])
 
     assert status_result.exit_code == 0
     assert "status: proxystack-clash@usa1.service" in status_result.output
     assert "proxystack-xray@usa1.service" not in status_result.output
     assert logs_result.exit_code == 0
-    assert "logs --follow: proxystack-sub.service" in logs_result.output
+    assert "log: proxystack-sub.service" in logs_result.output
+    assert fake_runner.calls == [
+        ("systemctl", "status", "proxystack-clash@usa1.service"),
+        ("journalctl", "-u", "proxystack-sub.service", "--no-pager", "-n", "100", "-f"),
+    ]
 
 
-def test_agent_service_commands_skip_system_port_occupancy_by_default() -> None:
+def test_agent_service_log_pair_follow_uses_single_journalctl_call(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 service log 对实例对 follow 时一次订阅两个 unit。"""
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+
+    result = runner.invoke(agent_app, ["service", "log", "usa1", "--follow", "-c", "examples/config.yaml"])
+
+    assert result.exit_code == 0
+    assert "log: proxystack-xray@usa1.service" in result.output
+    assert "log: proxystack-clash@usa1.service" in result.output
+    assert fake_runner.calls == [
+        (
+            "journalctl",
+            "-u",
+            "proxystack-clash@usa1.service",
+            "-u",
+            "proxystack-xray@usa1.service",
+            "--no-pager",
+            "-n",
+            "100",
+            "-f",
+        )
+    ]
+
+
+def test_agent_service_commands_skip_system_port_occupancy_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证服务命令默认不会因服务自身端口已占用而失败。"""
+    use_fake_systemd(monkeypatch, tmp_path)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         try:
@@ -276,6 +336,75 @@ def test_agent_service_commands_skip_system_port_occupancy_by_default() -> None:
 
     assert result.exit_code == 0
     assert "status: proxystack-xray@usa1.service" in result.output
+
+
+def test_agent_service_install_uninstall_uses_fake_unit_dir(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 service install/uninstall 写删 fake unit_dir 且保留配置和 stack。"""
+    config = copy_example_project(tmp_path)
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+    unit_dir = tmp_path / "systemd"
+
+    install_result = runner.invoke(agent_app, ["service", "install", "sub", "-c", str(config)])
+    assert install_result.exit_code == 0
+    assert (unit_dir / "proxystack-sub.service").exists()
+
+    uninstall_result = runner.invoke(agent_app, ["service", "uninstall", "sub", "-c", str(config)])
+
+    assert uninstall_result.exit_code == 0
+    assert not (unit_dir / "proxystack-sub.service").exists()
+    assert config.exists()
+    assert (config.parent / "stacks" / "usa1.yaml").exists()
+    assert fake_runner.calls == [("systemctl", "daemon-reload"), ("systemctl", "daemon-reload")]
+
+
+def test_agent_top_level_wrappers_call_fake_runner(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证顶层服务包装命令调用 fake systemd runner。"""
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+    commands = [
+        (["down", "xrelay/usa1"], ("systemctl", "stop", "proxystack-xray@usa1.service")),
+        (["restart", "xrelay/usa1"], ("systemctl", "restart", "proxystack-xray@usa1.service")),
+        (["enable", "xrelay/usa1"], ("systemctl", "enable", "proxystack-xray@usa1.service")),
+        (["disable", "xrelay/usa1"], ("systemctl", "disable", "proxystack-xray@usa1.service")),
+        (["status", "xrelay/usa1"], ("systemctl", "status", "proxystack-xray@usa1.service")),
+        (["logs", "xrelay/usa1"], ("journalctl", "-u", "proxystack-xray@usa1.service", "--no-pager", "-n", "100")),
+    ]
+
+    for command, _ in commands:
+        result = runner.invoke(agent_app, [*command, "-c", "examples/config.yaml"])
+
+        assert result.exit_code == 0, command
+
+    assert fake_runner.calls == [expected for _, expected in commands]
+
+
+def test_agent_up_sub_only_restarts_sub_without_reading_stack(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 up sub 不读取 stack、不创建 runtime/generated，只影响 sub 服务。"""
+    config = write_cli_config_without_valid_stacks(tmp_path)
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+
+    result = runner.invoke(agent_app, ["up", "sub", "-c", str(config)])
+
+    assert result.exit_code == 0
+    assert "restart: proxystack-sub.service" in result.output
+    assert fake_runner.calls == [("systemctl", "restart", "proxystack-sub.service")]
+    assert not (config.parent / "runtime" / "generated").exists()
+
+
+def test_install_update_group_has_no_unit_install_entry(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 install/update 分组没有 systemd unit 安装入口。"""
+    use_fake_systemd(monkeypatch, tmp_path)
+
+    install_help = runner.invoke(agent_app, ["install", "--help"])
+    update_help = runner.invoke(agent_app, ["update", "--help"])
+    invalid_install = runner.invoke(agent_app, ["install", "service", "install"])
+    invalid_update = runner.invoke(agent_app, ["update", "service", "install"])
+
+    assert install_help.exit_code == 0
+    assert update_help.exit_code == 0
+    assert "service install" not in install_help.output
+    assert "service install" not in update_help.output
+    assert invalid_install.exit_code != 0
+    assert invalid_update.exit_code != 0
 
 
 def test_agent_edit_rejects_invalid_stack_before_replacing(tmp_path: Path) -> None:
@@ -510,4 +639,49 @@ def copy_example_project(tmp_path: Path) -> Path:
     writer = YAML()
     with config.open("w", encoding="utf-8") as config_file:
         writer.dump(config_data, config_file)
+    return config
+
+
+def use_fake_systemd(monkeypatch: MonkeyPatch, tmp_path: Path) -> FakeSystemdRunner:
+    """把 agent CLI 的 systemd 调用替换为 fake runner 和 fake unit_dir。"""
+    fake_runner = FakeSystemdRunner()
+    monkeypatch.setattr(agent_module, "SYSTEMD_RUNNER", fake_runner)
+    monkeypatch.setattr(agent_module, "SYSTEMD_UNIT_DIR_OVERRIDE", tmp_path / "systemd")
+    return fake_runner
+
+
+def write_cli_config_without_valid_stacks(tmp_path: Path) -> Path:
+    """写入包含坏 stack 文件的配置，供 up sub 验证不扫描 stacks。"""
+    project_dir = tmp_path / "project"
+    stacks_dir = project_dir / "stacks"
+    stacks_dir.mkdir(parents=True)
+    (stacks_dir / "broken.yaml").write_text("name: [", encoding="utf-8")
+    config = project_dir / "config.yaml"
+    config.write_text(
+        f"""
+version: 1
+base_dir: {project_dir}
+paths:
+  bin: bin
+  geo: geo
+  stacks: stacks
+  runtime: runtime
+  generated: runtime/generated
+  publish: publish
+  downloads: downloads
+  sub: sub
+external_host: proxy.example.com
+subscription:
+  source: local
+  listen: 127.0.0.1:3003
+  access:
+    type: token
+    token: test-token
+port_ranges:
+  xrelay_inbound: 24000-24999
+  clash_socks: 17000-17999
+  clash_controller: 19000-19999
+""".lstrip(),
+        encoding="utf-8",
+    )
     return config
