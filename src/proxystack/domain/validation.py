@@ -10,6 +10,7 @@ from proxystack.domain.models import Inbound
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import parse_listen
+from proxystack.graph import compile_reference_graph
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ def validate_stack_set(stack_set: StackSet, check_system_ports: bool = True) -> 
     issues.extend(validate_public_inbound_auth(stack_set.config, stack_set.stacks))
     port_bindings = collect_port_bindings(stack_set.stacks)
     issues.extend(validate_unique_ports(port_bindings))
+    issues.extend(validate_reference_graph(stack_set))
     if check_system_ports:
         issues.extend(validate_system_ports_available(port_bindings))
     if issues:
@@ -162,6 +164,15 @@ def validate_system_ports_available(bindings: list[PortBinding]) -> list[Validat
             )
         )
     return issues
+
+
+def validate_reference_graph(stack_set: StackSet) -> list[ValidationIssue]:
+    """校验跨 stack ref、服务依赖和循环依赖。"""
+    graph_result = compile_reference_graph(stack_set)
+    return [
+        ValidationIssue(path=issue.path, message=issue.message)
+        for issue in graph_result.issues
+    ]
 
 
 def is_port_available(host: str, port: int) -> bool:

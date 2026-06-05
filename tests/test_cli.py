@@ -32,6 +32,17 @@ def test_agent_validate_examples() -> None:
     assert "配置校验通过" in result.output
 
 
+def test_agent_plan_examples() -> None:
+    """验证 proxystack-agent plan 可以展示依赖和顺序。"""
+    result = runner.invoke(agent_app, ["plan", "-c", "examples/config.yaml", "--skip-system-ports"])
+
+    assert result.exit_code == 0
+    assert "依赖服务" in result.output
+    assert "建议操作顺序" in result.output
+    assert "auto.clash" in result.output
+    assert "proxystack-xray@usa1.service" in result.output
+
+
 def test_sub_help_is_available() -> None:
     """验证 proxystack-sub 帮助可以正常输出。"""
     result = runner.invoke(sub_app, ["--help"])

@@ -12,11 +12,11 @@
 
 ## 实现步骤
 
-1. 实现 `ParseRef`，支持通用四段 `instance.component.kind.name`。
-2. 实现 xrelay inbound 索引：`instance + protocol + inbound_name -> endpoint`。
+1. 实现 `ParseRef`，支持 xrelay inbound 两段 `instance.inbound_name` 和通用四段 `instance.component.kind.name`。
+2. 实现 xrelay inbound 索引：`instance + inbound_name -> endpoint`，endpoint 的 `kind` 表示 inbound protocol。
 3. 实现 clash listener 索引：`instance + listener_type + listener_name -> endpoint`。
 4. 校验 `xrelay.outbound.type: clash` 的 ref。
-5. 校验 `clash.upstreams.type: xrelay-socks5` 的 ref。
+5. 校验 `clash.upstreams.type: xrelay-socks5` 的两段 ref。
 6. 校验 `proxy-groups[].proxies[]` 和 rules 目标。
 7. 实现循环依赖检测。
 8. 输出服务操作顺序建议：被引用的 xrelay socks5 inbound 必须早于引用它的 auto clash 启动。
