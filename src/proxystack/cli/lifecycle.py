@@ -23,6 +23,7 @@ from proxystack.config import DEFAULT_CONFIG_PATH
 from proxystack.config import load_config
 from proxystack.config import load_stacks
 from proxystack.domain.models import GlobalConfig
+from proxystack.domain.models import Inbound
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import parse_listen
@@ -449,7 +450,6 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
     stack_set = load_stacks(config, check_system_ports=check_system_ports)
     rows: list[dict[str, str]] = []
     for stack in stack_set.stacks:
-        xrelay_ports = ",".join(str(inbound.port) for inbound in stack.xrelay.inbounds)
         clash_ports = ",".join(str(listener.port) for listener in stack.clash.listeners.socks)
         rows.append(
             {
@@ -458,12 +458,21 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
                 "role": stack.role,
                 "xrelay": "yes" if stack.xrelay.enabled else "no",
                 "clash": "yes" if stack.clash.enabled else "no",
-                "xrelay_ports": xrelay_ports or "-",
+                "xrelay_ports": format_xrelay_inbounds(stack.xrelay.inbounds),
                 "clash_socks": clash_ports or "-",
                 "clash_controller": stack.clash.controller.listen,
             }
         )
     return rows
+
+
+def format_xrelay_inbounds(inbounds: list[Inbound]) -> str:
+    """把 xrelay inbound 展示为 user/protocol:port，方便 list 一眼区分入口。"""
+    items = []
+    for inbound in inbounds:
+        user = inbound.user or "-"
+        items.append(f"{user}/{inbound.protocol}:{inbound.port}")
+    return ",".join(items) if items else "-"
 
 
 def remove_stack(config_path: Path, name: str, purge: bool) -> list[Path]:

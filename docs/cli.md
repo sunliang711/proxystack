@@ -97,7 +97,7 @@ proxystack-agent doctor
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
 - `edit`：编辑 `/opt/proxystack/config.yaml`。
 - `edit <name>`：编辑 `/opt/proxystack/stacks/<name>.yaml`。
-- `list`：列出 stack 文件、enabled 状态、角色和主要端口。
+- `list`：列出 stack 文件、enabled 状态、角色、xrelay `user/protocol:port` 和 clash 主要端口。
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
 - `check [target]`：执行 `validate + plan`，不写文件、不操作服务。

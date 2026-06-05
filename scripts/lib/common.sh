@@ -124,7 +124,7 @@ install_os_packages() {
 		die "install_os_packages requires at least one package"
 	fi
 	if [[ -r "${os_release_path}" ]]; then
-		# shellcheck source=/etc/os-release
+		# shellcheck source=/dev/null
 		source "${os_release_path}"
 		os_id="${ID:-}"
 		os_like="${ID_LIKE:-}"
@@ -408,6 +408,134 @@ run_as_user() {
 	die "Required command not found: runuser or sudo"
 }
 
+# 计算标准输入的 sha256；兼容 Linux sha256sum 和 macOS shasum。
+checksum_stream() {
+	local output
+
+	if command -v sha256sum >/dev/null 2>&1; then
+		output="$(sha256sum)"
+	elif command -v shasum >/dev/null 2>&1; then
+		output="$(shasum -a 256)"
+	else
+		die "Required command not found: sha256sum or shasum"
+	fi
+	printf '%s' "${output%% *}"
+}
+
+# 计算单个文件的 sha256；用于生成源码树指纹。
+checksum_file() {
+	local file_path="${1:-}"
+	local output
+
+	if [[ -z "${file_path}" ]]; then
+		die "checksum_file needs a file path"
+	fi
+	if command -v sha256sum >/dev/null 2>&1; then
+		output="$(sha256sum "${file_path}")"
+	elif command -v shasum >/dev/null 2>&1; then
+		output="$(shasum -a 256 "${file_path}")"
+	else
+		die "Required command not found: sha256sum or shasum"
+	fi
+	printf '%s' "${output%% *}"
+}
+
+# 为源码目录生成稳定指纹，忽略不会参与源码安装的构建和虚拟环境目录。
+source_tree_fingerprint() {
+	local source_dir="${1:-}"
+
+	if [[ -z "${source_dir}" ]]; then
+		die "Source directory must not be empty"
+	fi
+	if [[ ! -d "${source_dir}" ]]; then
+		die "Source directory does not exist: ${source_dir}"
+	fi
+	require_cmd find
+	require_cmd sort
+
+	(
+		cd "${source_dir}"
+		find . \
+			\( -name .git -o -name .venv -o -name build -o -name dist -o -name "*.egg-info" \) -prune -o \
+			-type f -print |
+			LC_ALL=C sort |
+			while IFS= read -r file_path; do
+				printf '%s\n' "${file_path}"
+				checksum_file "${file_path}"
+				printf '\n'
+			done
+	) | checksum_stream
+}
+
+# 判断已安装 Python 包是否和当前源码指纹一致，并确认 console scripts 仍可执行。
+python_package_current() {
+	local stamp_path="${1:-}"
+	local expected_fingerprint="${2:-}"
+	local current_fingerprint
+	local command_path
+
+	shift 2 || die "python_package_current needs a stamp path and expected fingerprint"
+	if [[ -z "${stamp_path}" ]]; then
+		return 1
+	fi
+	if [[ -z "${expected_fingerprint}" ]]; then
+		return 1
+	fi
+	if [[ ! -f "${stamp_path}" ]]; then
+		return 1
+	fi
+	current_fingerprint="$(<"${stamp_path}")"
+	current_fingerprint="${current_fingerprint//$'\n'/}"
+	current_fingerprint="${current_fingerprint//$'\r'/}"
+	current_fingerprint="${current_fingerprint//$'\t'/}"
+	current_fingerprint="${current_fingerprint// /}"
+	if [[ "${current_fingerprint}" != "${expected_fingerprint}" ]]; then
+		return 1
+	fi
+	for command_path in "$@"; do
+		if [[ ! -x "${command_path}" ]]; then
+			return 1
+		fi
+	done
+	return 0
+}
+
+# 写入 Python 包源码指纹 stamp；只有安装成功后才调用。
+write_python_package_stamp() {
+	local stamp_path="${1:-}"
+	local fingerprint="${2:-}"
+	local owner_group="${3:-}"
+	local stamp_parent
+	local temp_path
+
+	if [[ -z "${stamp_path}" ]]; then
+		die "Python package stamp path must not be empty"
+	fi
+	if [[ -z "${fingerprint}" ]]; then
+		die "Python package fingerprint must not be empty"
+	fi
+	if [[ -z "${owner_group}" ]]; then
+		die "Python package stamp owner must not be empty"
+	fi
+	if is_dry_run; then
+		log "Python package stamp write skipped for dry-run"
+		return 0
+	fi
+
+	stamp_parent="${stamp_path%/*}"
+	temp_path="${stamp_path}.tmp.$$"
+	guard_managed_path "${stamp_path}" "Python package stamp"
+	guard_managed_path "${temp_path}" "Python package stamp temp file"
+	ensure_dir "${stamp_parent}" "0750" "${owner_group}" "managed"
+	printf '%s\n' "${fingerprint}" >"${temp_path}"
+	require_cmd chmod
+	require_cmd chown
+	require_cmd mv
+	run chmod 0640 "${temp_path}"
+	run chown "${owner_group}" "${temp_path}"
+	run mv "${temp_path}" "${stamp_path}"
+}
+
 # 把源码目录复制到托管 staging，避免安装用户无法读取 /root 等私有目录。
 stage_python_source() {
 	local source_dir="${1:-}"
@@ -436,13 +564,13 @@ stage_python_source() {
 	require_cmd rm
 	require_cmd tar
 
-	ensure_dir "${staging_parent}" "0750" "${owner_group}" "managed"
-	run rm -rf "${staging_dir}" "${archive_path}"
-	ensure_dir "${staging_dir}" "0750" "${owner_group}" "managed"
-	run tar --exclude .git --exclude .venv --exclude build --exclude dist --exclude "*.egg-info" -C "${source_dir}" -cf "${archive_path}" .
-	run tar -C "${staging_dir}" -xf "${archive_path}"
-	run chown -R "${owner_group}" "${staging_dir}"
-	run rm -f "${archive_path}"
+	ensure_dir "${staging_parent}" "0750" "${owner_group}" "managed" || return $?
+	run rm -rf "${staging_dir}" "${archive_path}" || return $?
+	ensure_dir "${staging_dir}" "0750" "${owner_group}" "managed" || return $?
+	run tar --exclude .git --exclude .venv --exclude build --exclude dist --exclude "*.egg-info" -C "${source_dir}" -cf "${archive_path}" . || return $?
+	run tar -C "${staging_dir}" -xf "${archive_path}" || return $?
+	run chown -R "${owner_group}" "${staging_dir}" || return $?
+	run rm -f "${archive_path}" || return $?
 	printf '%s' "${staging_dir}"
 }
 

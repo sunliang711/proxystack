@@ -247,6 +247,7 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path) -> None:
     assert "Services" in result.output
     assert "xrelay,clash" in result.output
     assert "Xrelay Ports" in result.output
+    assert "alice/socks5:24001,alice/vmess:24101" in result.output
 
 
 def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

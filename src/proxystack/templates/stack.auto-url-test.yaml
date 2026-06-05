@@ -9,16 +9,12 @@ enabled: true
 role: auto
 # 自定义标签列表；这里标记为自动代理类实例。
 labels: [auto]
+
 # Xray/xrelay 侧配置，用于暴露聚合后的入站入口。
 xrelay:
   # 是否为该 stack 启用 xrelay 服务。
   enabled: true
-  # xrelay 出站配置，决定入站流量转发到哪里。
-  outbound:
-    # 出站目标类型；clash 表示转发到本 stack 的 Clash 监听器。
-    type: clash
-    # 出站引用；指向 stack.clash.socks.listener 形式的本地 socks 监听。
-    ref: auto.clash.socks.local
+
   # xrelay 入站列表，会生成对应 Xray inbound。
   inbounds:
     # 入站名称；供客户端或其他 stack 引用。
@@ -45,18 +41,28 @@ xrelay:
       remark: auto relay socks
       # 是否导出到订阅；true 表示生成订阅节点。
       sub: true
+
+  # xrelay 出站配置，决定入站流量转发到哪里。
+  outbound:
+    # 出站目标类型；clash 表示转发到本 stack 的 Clash 监听器。
+    type: clash
+    # 出站引用；指向 stack.clash.socks.listener 形式的本地 socks 监听。
+    ref: auto.clash.socks.local
+
 # Clash/mihomo 侧配置，用于自动探测并选择可用上游。
 clash:
   # 是否为该 stack 启用 Clash 服务。
   enabled: true
   # Clash 运行模式；Rule 表示按规则分流。
   mode: Rule
+
   # Clash external-controller API 配置。
   controller:
     # 控制器监听地址；建议只监听本机。
     listen: 127.0.0.1:19150
     # 控制器访问密钥；部署前必须替换。
     secret: change-me-clash-api-secret
+
   # Clash 本地监听器配置。
   listeners:
     # socks 监听器列表，供 xrelay 或本机连接。
@@ -67,6 +73,7 @@ clash:
         listen: 127.0.0.1
         # socks 监听端口；需要避免与其他服务冲突。
         port: 17150
+
   # Clash 上游代理列表。
   upstreams:
     # 上游代理名称；供代理组引用。
@@ -75,12 +82,14 @@ clash:
       type: xrelay-socks5
       # 上游引用；指向 usa1 stack 中名为 relay 的入站。
       ref: usa1.relay
+
     # 上游代理名称；供代理组引用。
     - name: usa2-local
       # 上游类型；表示引用其他 stack 的 xrelay socks5 入站。
       type: xrelay-socks5
       # 上游引用；指向 usa2 stack 中名为 relay 的入站。
       ref: usa2.relay
+
   # Clash 代理组列表。
   groups:
     # 自动测速代理组名称；供规则或其他组引用。
@@ -93,12 +102,14 @@ clash:
       url: http://www.gstatic.com/generate_204
       # 测速间隔，单位秒。
       interval: 120
+
     # 总代理组名称；提供自动组、单节点和直连选择。
     - name: AllProxy
       # 代理组类型；select 表示手动选择节点。
       type: select
       # 代理组成员；包含自动组、单节点和直连。
       proxies: [AutoProxy, usa1-local, usa2-local, DIRECT]
+
   # Clash 规则集选择。
   rules:
     # 内置规则 profile 名称；default 表示使用默认分流规则。

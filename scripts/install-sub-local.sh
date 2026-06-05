@@ -172,11 +172,30 @@ ensure_sub_dirs() {
 # 在 venv 中安装 proxystack Python 包。
 install_python_package() {
 	local venv_python="${BASE_DIR}/.venv/bin/python"
+	local stamp_path="${BASE_DIR}/runtime/source.sha256"
+	local source_fingerprint=""
 	local staged_source
+
+	if is_dry_run; then
+		log "Python package idempotency check skipped for dry-run"
+	else
+		source_fingerprint="$(source_tree_fingerprint "${SOURCE_DIR}")"
+		if python_package_current \
+			"${stamp_path}" \
+			"${source_fingerprint}" \
+			"${BASE_DIR}/.venv/bin/proxystack-agent" \
+			"${BASE_DIR}/.venv/bin/proxystack-sub"; then
+			log "Python package already up to date; skipping pip install"
+			return 0
+		fi
+	fi
 
 	staged_source="$(stage_python_source "${SOURCE_DIR}" "${BASE_DIR}/runtime/source" "${INSTALL_USER}:${INSTALL_GROUP}")"
 	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" --upgrade pip
 	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${staged_source}"
+	if [[ -n "${source_fingerprint}" ]]; then
+		write_python_package_stamp "${stamp_path}" "${source_fingerprint}" "${INSTALL_USER}:${INSTALL_GROUP}"
+	fi
 }
 
 # 创建默认 config.yaml，已存在时保持不动。

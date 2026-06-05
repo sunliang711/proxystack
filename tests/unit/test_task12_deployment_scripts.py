@@ -126,22 +126,15 @@ def test_install_sub_local_dry_run_uses_sub_service_only() -> None:
     assert "systemctl" not in output
 
 
-def test_install_agent_auto_installs_python_venv_dependency_when_supported(tmp_path: Path) -> None:
+def test_python_venv_dependency_auto_installs_when_supported(tmp_path: Path) -> None:
     """验证 Debian/Ubuntu 上缺少 Python venv 依赖时会自动安装。"""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     ready_file = tmp_path / "venv-ready"
     apt_log = tmp_path / "apt.log"
     os_release = tmp_path / "os-release"
+    probe = tmp_path / "probe.sh"
     os_release.write_text("ID=debian\n", encoding="utf-8")
-    write_fake_command(fake_bin / "getent", "exit 2\n")
-    write_fake_command(
-        fake_bin / "id",
-        "if [[ \"$1\" == \"-u\" && \"$#\" -eq 1 ]]; then echo 0; exit 0; fi\n"
-        "if [[ \"$1\" == \"-u\" && \"$2\" == \"proxystack\" ]]; then exit 1; fi\n"
-        "if [[ \"$1\" == \"-un\" ]]; then echo root; exit 0; fi\n"
-        "exit 1\n",
-    )
     write_fake_command(
         fake_bin / "python3",
         "if [[ \"$1\" == \"-c\" ]]; then echo python3.11-venv; exit 0; fi\n"
@@ -157,8 +150,13 @@ def test_install_agent_auto_installs_python_venv_dependency_when_supported(tmp_p
         "if [[ \"$1\" == \"install\" ]]; then touch \"${FAKE_VENV_READY}\"; fi\n"
         "exit 0\n",
     )
-    for command in ["install", "chown", "groupadd", "useradd", "runuser", "ln"]:
-        write_fake_command(fake_bin / command, "exit 0\n")
+    probe.write_text(
+        """
+source scripts/lib/common.sh
+ensure_python_venv_available python3
+""".lstrip(),
+        encoding="utf-8",
+    )
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
     env["FAKE_APT_LOG"] = str(apt_log)
@@ -166,12 +164,7 @@ def test_install_agent_auto_installs_python_venv_dependency_when_supported(tmp_p
     env["OS_RELEASE_PATH"] = str(os_release)
 
     result = subprocess.run(
-        [
-            "bash",
-            "scripts/install-agent.sh",
-            "--source",
-            str(Path.cwd()),
-        ],
+        ["bash", str(probe)],
         check=False,
         capture_output=True,
         text=True,
@@ -210,6 +203,104 @@ pip_install_with_fallback proxystack /venv/bin/python proxystack
     output = call_log.read_text(encoding="utf-8")
     assert "https://pypi.org/simple" in output
     assert "https://pypi.tuna.tsinghua.edu.cn/simple" in output
+
+
+def test_source_tree_fingerprint_ignores_build_outputs(tmp_path: Path) -> None:
+    """验证源码指纹忽略构建输出，但会感知源码内容变化。"""
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "pyproject.toml").write_text("[project]\nname = \"demo\"\n", encoding="utf-8")
+    (source_dir / "pkg.py").write_text("VALUE = 1\n", encoding="utf-8")
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+first="$(source_tree_fingerprint "{source_dir}")"
+mkdir -p "{source_dir}/build"
+printf '%s\\n' ignored >"{source_dir}/build/output.txt"
+second="$(source_tree_fingerprint "{source_dir}")"
+printf '%s\\n' 'VALUE = 2' >"{source_dir}/pkg.py"
+third="$(source_tree_fingerprint "{source_dir}")"
+printf '%s\\n%s\\n%s\\n' "$first" "$second" "$third"
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    first, second, third = result.stdout.splitlines()
+    assert first == second
+    assert third != first
+
+
+def test_python_package_current_requires_matching_stamp_and_commands(tmp_path: Path) -> None:
+    """验证 Python 包幂等判断同时检查源码 stamp 和 console scripts。"""
+    stamp = tmp_path / "source.sha256"
+    bin_dir = tmp_path / "bin"
+    agent_bin = bin_dir / "proxystack-agent"
+    sub_bin = bin_dir / "proxystack-sub"
+    bin_dir.mkdir()
+    stamp.write_text("abc123\n", encoding="utf-8")
+    agent_bin.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    sub_bin.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    agent_bin.chmod(0o755)
+    sub_bin.chmod(0o755)
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+python_package_current "{stamp}" abc123 "{agent_bin}" "{sub_bin}"
+if python_package_current "{stamp}" changed "{agent_bin}" "{sub_bin}"; then
+	exit 10
+fi
+rm -f "{sub_bin}"
+if python_package_current "{stamp}" abc123 "{agent_bin}" "{sub_bin}"; then
+	exit 11
+fi
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_stage_python_source_propagates_failure_when_captured(tmp_path: Path) -> None:
+    """验证源码 stage 即使在命令替换中调用，也会传播 tar 失败。"""
+    source_dir = tmp_path / "source"
+    staging_dir = tmp_path / "stage"
+    source_dir.mkdir()
+    (source_dir / "pyproject.toml").write_text("[project]\nname = \"demo\"\n", encoding="utf-8")
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+guard_managed_path() {{
+	return 0
+}}
+ensure_dir() {{
+	mkdir -p "$1"
+}}
+run() {{
+	if [[ "$1" == "tar" && "$*" == *" -cf "* ]]; then
+		return 9
+	fi
+	"$@"
+}}
+if staged="$(stage_python_source "{source_dir}" "{staging_dir}" proxystack:proxystack)"; then
+	printf '%s\\n' "$staged"
+	exit 10
+fi
+exit 0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_run_as_user_propagates_runuser_failure(tmp_path: Path) -> None:

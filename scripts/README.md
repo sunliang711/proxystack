@@ -11,6 +11,7 @@
 - 脚本默认不删除已有配置；Docker 部署默认不覆盖同名容器。
 - `install-agent.sh` 不提供 `--install-core`，也不会下载 mihomo、xray-core 或 geo 数据。代理核心和 geo 仍通过 `proxystack-agent install/update mihomo|xray|geo|all` 显式执行。
 - 安装 Python 包时会自动尝试多个 pip index。优先使用环境变量 `PIP_INDEX_URL`，也可以用空格分隔的 `PIP_INDEX_URLS` 覆盖候选列表；未配置时依次尝试 PyPI、清华、阿里云和中科大镜像。
+- 安装脚本会记录源码目录指纹；重复运行时，如果源码未变化且 venv 内 `proxystack-agent`、`proxystack-sub` 仍可执行，会跳过 pip 安装，源码变化时会自动重新安装。
 
 ## scripts/install-agent.sh
 
