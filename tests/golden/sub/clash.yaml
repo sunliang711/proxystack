@@ -1,0 +1,8 @@
+proxies:
+  - name: Manual Relay
+    type: socks5
+    server: proxy.example.com
+    port: 24001
+    username: demo-user
+    password: demo-pass
+    udp: true

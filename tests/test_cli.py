@@ -14,6 +14,8 @@ from ruamel.yaml import YAML
 from typer.testing import CliRunner
 
 import proxystack.cli.agent as agent_module
+import proxystack.cli.lifecycle as lifecycle_module
+import proxystack.cli.sub as sub_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
 from proxystack.systemd import CommandResult
@@ -212,6 +214,21 @@ def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
     assert cloned_stack["xrelay"]["outbound"]["ref"] == "usa3.clash.socks.local"
     assert cloned_stack["xrelay"]["inbounds"][0]["port"] != source_stack["xrelay"]["inbounds"][0]["port"]
     assert cloned_stack["clash"]["listeners"]["socks"][0]["port"] != source_stack["clash"]["listeners"]["socks"][0]["port"]
+
+
+def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 add --allocate-ports 会按端口池写回监听端口。"""
+    config = init_cli_project(tmp_path)
+    monkeypatch.setattr(lifecycle_module, "is_port_available", lambda _host, _port: True)
+
+    result = runner.invoke(agent_app, ["add", "edge", "--allocate-ports", "-c", str(config)])
+
+    assert result.exit_code == 0
+    stack_data = YAML(typ="safe").load((config.parent / "stacks" / "edge.yaml").read_text(encoding="utf-8"))
+    inbound_ports = [inbound["port"] for inbound in stack_data["xrelay"]["inbounds"]]
+    assert inbound_ports == [24000, 24001]
+    assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 17000
+    assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:19000"
 
 
 def test_agent_clone_default_refuses_invalid_duplicate_ports(tmp_path: Path) -> None:
@@ -524,6 +541,14 @@ def test_sub_help_is_available() -> None:
     assert "proxystack-sub" in result.output
 
 
+def test_sub_command_help_is_available() -> None:
+    """验证 proxystack-sub P0 子命令都提供 help 输出。"""
+    for command in [["version"], ["import"], ["rebuild"], ["serve"]]:
+        result = runner.invoke(sub_app, [*command, "--help"])
+
+        assert result.exit_code == 0, command
+
+
 def test_sub_version_is_available() -> None:
     """验证 proxystack-sub 版本命令可以正常输出。"""
     result = runner.invoke(sub_app, ["version"])
@@ -548,6 +573,50 @@ def test_sub_import_rebuilds_bundle(tmp_path: Path) -> None:
     rendered_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
     assert "alice" in rendered_index["users"]
     assert rendered_index["access"]["token"] == "demo-subscription-token"
+
+
+def test_sub_import_no_rebuild_skips_current_until_rebuild(tmp_path: Path) -> None:
+    """验证 import --no-rebuild 只导入 inputs，不提前生成 current。"""
+    bundle = tmp_path / "sub-bundle.zip"
+    data_dir = tmp_path / "sub"
+    publish_result = runner.invoke(
+        agent_app,
+        ["publish", "--source", "local", "-o", str(bundle), "-c", "examples/config.yaml", "--skip-system-ports"],
+    )
+    assert publish_result.exit_code == 0
+
+    import_result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir), "--no-rebuild"])
+
+    assert import_result.exit_code == 0
+    assert (data_dir / "inputs" / "local.yaml").exists()
+    assert (data_dir / "bundles" / "access.json").exists()
+    assert not (data_dir / "current" / "index.json").exists()
+    rebuild_result = runner.invoke(sub_app, ["rebuild", "--data-dir", str(data_dir)])
+
+    assert rebuild_result.exit_code == 0
+    assert (data_dir / "current" / "index.json").exists()
+
+
+def test_sub_serve_uses_uvicorn_without_starting_network(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 serve CLI 传递 host、port 和 app，不启动真实网络服务。"""
+    captured: dict[str, object] = {}
+
+    def fake_run(app: object, host: str, port: int) -> None:
+        """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
+        captured["app"] = app
+        captured["host"] = host
+        captured["port"] = port
+
+    monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
+
+    result = runner.invoke(
+        sub_app,
+        ["serve", "--data-dir", str(tmp_path / "sub"), "--host", "0.0.0.0", "--port", "3004"],
+    )
+
+    assert result.exit_code == 0
+    assert captured["host"] == "0.0.0.0"
+    assert captured["port"] == 3004
 
 
 def test_subscription_publish_import_e2e_matches_input_merge(tmp_path: Path) -> None:
@@ -632,14 +701,28 @@ def test_release_artifacts_define_console_scripts_and_sub_container_defaults() -
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
     makefile = Path("Makefile").read_text(encoding="utf-8")
     dockerfile = Path("Dockerfile.sub").read_text(encoding="utf-8")
-    compose = Path("docker-compose.sub.yml").read_text(encoding="utf-8")
+    compose = YAML(typ="safe").load(Path("docker-compose.sub.yml").read_text(encoding="utf-8"))
+    service = compose["services"]["proxystack-sub"]
 
     assert 'proxystack-agent = "proxystack.cli.agent:run"' in pyproject
     assert 'proxystack-sub = "proxystack.cli.sub:run"' in pyproject
     assert "scripts/build_package.py" in makefile
     assert 'CMD ["proxystack-sub", "serve", "--host", "0.0.0.0", "--port", "3003", "--data-dir", "/data"]' in dockerfile
-    assert "- /opt/proxystack/sub:/data" in compose
-    assert "- /data" in compose
+    assert service["user"] == "10001:10001"
+    assert service["read_only"] is True
+    assert service["cap_drop"] == ["ALL"]
+    assert "/opt/proxystack/sub:/data" in service["volumes"]
+    assert service["healthcheck"]["test"][0] == "CMD"
+    assert service["command"] == [
+        "proxystack-sub",
+        "serve",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "3003",
+        "--data-dir",
+        "/data",
+    ]
 
 
 def test_release_build_cleanup_removes_stale_build_state(tmp_path: Path) -> None:

@@ -1,0 +1,2 @@
+[Proxy]
+Manual Relay = socks5, proxy.example.com, 24001, username=demo-user, password=demo-pass, udp-relay=true
