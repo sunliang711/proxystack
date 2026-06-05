@@ -387,25 +387,63 @@ run_as_user() {
 	fi
 	if [[ -z "${target_user}" ]]; then
 		run "$@"
-		return 0
+		return $?
 	fi
 	if ! is_dry_run && [[ "$(id -un)" == "${target_user}" ]]; then
 		run "$@"
-		return 0
+		return $?
 	fi
 	if command -v runuser >/dev/null 2>&1; then
 		run runuser -u "${target_user}" -- "$@"
-		return 0
+		return $?
 	fi
 	if command -v sudo >/dev/null 2>&1; then
 		run sudo -u "${target_user}" -- "$@"
-		return 0
+		return $?
 	fi
 	if is_dry_run; then
 		run runuser -u "${target_user}" -- "$@"
-		return 0
+		return $?
 	fi
 	die "Required command not found: runuser or sudo"
+}
+
+# 把源码目录复制到托管 staging，避免安装用户无法读取 /root 等私有目录。
+stage_python_source() {
+	local source_dir="${1:-}"
+	local staging_dir="${2:-}"
+	local owner_group="${3:-}"
+	local staging_parent
+	local archive_path
+
+	if [[ -z "${source_dir}" ]]; then
+		die "Source directory must not be empty"
+	fi
+	if [[ -z "${staging_dir}" ]]; then
+		die "Source staging directory must not be empty"
+	fi
+	if [[ -z "${owner_group}" ]]; then
+		die "Source staging owner must not be empty"
+	fi
+	if [[ ! -d "${source_dir}" && "${DRY_RUN}" != "1" ]]; then
+		die "Source directory does not exist: ${source_dir}"
+	fi
+
+	staging_parent="${staging_dir%/*}"
+	archive_path="${staging_dir}.tar"
+	guard_managed_path "${staging_dir}" "source staging directory"
+	guard_managed_path "${archive_path}" "source staging archive"
+	require_cmd rm
+	require_cmd tar
+
+	ensure_dir "${staging_parent}" "0750" "${owner_group}" "managed"
+	run rm -rf "${staging_dir}" "${archive_path}"
+	ensure_dir "${staging_dir}" "0750" "${owner_group}" "managed"
+	run tar --exclude .git --exclude .venv --exclude build --exclude dist --exclude "*.egg-info" -C "${source_dir}" -cf "${archive_path}" .
+	run tar -C "${staging_dir}" -xf "${archive_path}"
+	run chown -R "${owner_group}" "${staging_dir}"
+	run rm -f "${archive_path}"
+	printf '%s' "${staging_dir}"
 }
 
 # 输出 pip index 候选源，优先使用用户显式配置。

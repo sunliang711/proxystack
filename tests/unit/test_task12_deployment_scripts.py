@@ -212,6 +212,29 @@ pip_install_with_fallback proxystack /venv/bin/python proxystack
     assert "https://pypi.tuna.tsinghua.edu.cn/simple" in output
 
 
+def test_run_as_user_propagates_runuser_failure(tmp_path: Path) -> None:
+    """验证 run_as_user 不吞掉 runuser 的失败返回码。"""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    write_fake_command(fake_bin / "runuser", "exit 7\n")
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+PATH="{fake_bin}:$PATH"
+if run_as_user proxystack /bin/false; then
+	exit 99
+fi
+exit 0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_deploy_sub_docker_dry_run_uses_security_defaults() -> None:
     """验证 Docker dry-run 输出安全默认参数且默认不删除容器。"""
     result = run_script(

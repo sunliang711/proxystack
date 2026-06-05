@@ -171,9 +171,11 @@ ensure_agent_dirs() {
 # 在 venv 中安装 proxystack Python 包。
 install_python_package() {
 	local venv_python="${BASE_DIR}/.venv/bin/python"
+	local staged_source
 
+	staged_source="$(stage_python_source "${SOURCE_DIR}" "${BASE_DIR}/runtime/source" "${INSTALL_USER}:${INSTALL_GROUP}")"
 	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" --upgrade pip
-	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${SOURCE_DIR}"
+	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${staged_source}"
 }
 
 # 链接 console scripts 到系统 bin 目录。
