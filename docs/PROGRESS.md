@@ -22,6 +22,7 @@
 - [x] 实现 systemd unit 安装和真实服务管理 P0
 - [x] 实现发布构建、订阅包 schema 校验和订阅服务 Docker 示例 P0
 - [x] 建立测试矩阵和端到端验证 P0
+- [x] 实现首次安装和订阅服务部署脚本 P0
 
 ## 里程碑
 
@@ -31,7 +32,7 @@
 | M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
 | M2 | Xray/mihomo/sub 生成器、golden tests | 进行中 |
 | M3 | apply、manifest、systemd 管理 | 进行中 |
-| M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 进行中 |
+| M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 已完成 |
 | M5 | mihomo API、原生备份导入导出和发布增强 | 未开始 |
 
 ## 交付记录
@@ -45,6 +46,7 @@
 - [Task 09 交付记录：systemd 服务管理 P0](delivery/2026-06-05-19-54-24-feature-python-systemd-manager.md)
 - [Task 10 交付记录：发布构建与订阅包 P0](delivery/2026-06-05-20-17-11-feature-python-import-export-release.md)
 - [Task 11 交付记录：测试矩阵与端到端验证 P0](delivery/2026-06-05-20-33-29-test-python-test-matrix.md)
+- [Task 12 交付记录：部署脚本 P0](delivery/2026-06-05-20-58-01-feature-shell-deployment-scripts.md)
 
 ## 任务列表
 

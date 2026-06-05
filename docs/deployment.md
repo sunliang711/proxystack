@@ -63,7 +63,12 @@ sudo ln -sf /opt/proxystack/.venv/bin/proxystack-sub /usr/local/bin/proxystack-s
 - 首次安装由 Shell 脚本 bootstrap；后续 proxystack 代码更新、mihomo/xray-core/geo 下载和更新都由 `proxystack-agent` 子命令管理。
 - `update self` 默认以 `proxystack` 用户运行并只写 `/opt/proxystack/.venv`；普通管理员应显式使用 `sudo -u proxystack proxystack-agent update self --wheel <file>`，CLI 不自动提权。
 
-部署脚本作为独立开发任务实现，见 [Task 12](tasks/task-12-deployment-scripts.md)。脚本目标是封装首次 bootstrap：创建系统用户、目录、Python venv、安装 wheel、暴露 CLI，并可选安装 systemd unit。代理核心安装不放在 Shell 脚本中，首次安装后手动执行 `proxystack-agent install all`。`install all` 只覆盖 mihomo、xray-core 和 geo 数据；systemd unit 安装统一使用 `proxystack-agent service install [target]`。
+仓库提供首次 bootstrap 脚本，见 [scripts/README.md](../scripts/README.md) 和 [Task 12](tasks/task-12-deployment-scripts.md)。脚本只创建系统用户、目录、Python venv、安装 proxystack Python 包、暴露 CLI，并可选安装 systemd unit；代理核心安装不放在 Shell 脚本中，首次安装后手动执行 `proxystack-agent install all`。`install all` 只覆盖 mihomo、xray-core 和 geo 数据；systemd unit 安装统一使用 `proxystack-agent service install [target]`。
+
+```bash
+sudo scripts/install-agent.sh --wheel dist/proxystack-0.1.0-py3-none-any.whl
+sudo scripts/install-agent.sh --package 'proxystack==0.1.0' --install-systemd
+```
 
 常用流程：
 
@@ -113,7 +118,15 @@ proxystack-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/pro
 proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 ```
 
-本地订阅服务部署脚本同样在 [Task 12](tasks/task-12-deployment-scripts.md) 中实现，目标是封装 sub 数据目录创建、可选发布包导入、可选 systemd 安装和启动。
+本地订阅服务可使用 `scripts/install-sub-local.sh` 部署，脚本封装 sub 数据目录创建、可选发布包导入、可选 systemd 安装和启动。
+
+```bash
+sudo scripts/install-sub-local.sh \
+  --wheel dist/proxystack-0.1.0-py3-none-any.whl \
+  --import-bundle /opt/proxystack/publish/sub-bundle.zip \
+  --install-systemd \
+  --start
+```
 
 服务启动命令建议：
 
@@ -223,7 +236,14 @@ docker run -d \
   proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /data
 ```
 
-Docker 部署脚本在 [Task 12](tasks/task-12-deployment-scripts.md) 中实现，目标是封装数据目录创建、owner 设置和安全默认的容器启动参数。同名容器已存在时脚本默认失败，需要显式传入 `--replace`。
+Docker 部署可使用 `scripts/deploy-sub-docker.sh`，脚本封装数据目录创建、owner 设置和安全默认的容器启动参数。同名容器已存在时脚本默认失败，需要显式传入 `--replace`。
+
+```bash
+sudo scripts/deploy-sub-docker.sh \
+  --image proxystack-sub:latest \
+  --data-dir /opt/proxystack/sub \
+  --port 3003
+```
 
 导入发布包：
 
