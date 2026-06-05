@@ -122,7 +122,7 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 管理 CLI：
 
 - `proxystack-agent init`
-- `proxystack-agent add <name> [--template pair|auto-url-test|load-balance] [--members usa1,usa2] [--allocate-ports]`
+- `proxystack-agent add <name> [--template pair|auto-url-test|load-balance] [--members usa1,usa2] [--keep-template-ports]`
 - `proxystack-agent edit [name]`
 - `proxystack-agent list`
 - `proxystack-agent remove <name> [--purge]`
@@ -233,7 +233,7 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
 | 本机端口很多，冲突不易发现 | 服务启动失败或流量走错实例 | `validate` 必须全局扫描所有 listen 端口 |
-| 自动分配端口不稳定 | clone 后配置难以追踪 | 只在用户显式传入 `--allocate-ports` 时使用全局 `port_ranges`，并把结果写回 stack 文件 |
+| 自动分配端口不稳定 | clone 后配置难以追踪 | `add` 默认使用全局 `port_ranges` 避免模板端口冲突；`clone` 只在用户显式传入 `--allocate-ports` 时重新分配端口，并把结果写回 stack 文件 |
 | auto 引用其他 xrelay inbound 导致循环 | mihomo 和 xray 互相等待 | 依赖图检测循环，禁止运行时循环引用 |
 | socks/http 暴露不安全 | 未授权访问代理 | 默认禁用公开 socks/http；非回环监听要求 auth 或显式危险确认 |
 | mihomo/xray 配置格式变化 | 生成文件不可用 | 生成器集中封装，使用 golden tests 覆盖 |

@@ -10,7 +10,7 @@
 - 配置加载放在 `src/proxystack/config`。
 - schema 校验使用 Pydantic v2 和自定义校验函数。
 - 凭据字段统一使用明文字段，例如 `uuid`、`password`、`secret`、`token`。
-- 全局端口池使用 `port_ranges` 描述，`add/clone --allocate-ports` 才会自动分配端口并写回 stack 文件；手写端口可以在端口池之外，但必须合法、唯一且未被系统占用。
+- 全局端口池使用 `port_ranges` 描述，`add` 默认自动分配端口，`clone --allocate-ports` 才会重新分配端口；手写端口可以在端口池之外，但必须合法、唯一且未被系统占用。
 
 ## 实现步骤
 

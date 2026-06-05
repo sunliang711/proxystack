@@ -211,14 +211,62 @@ def test_agent_add_uses_template_and_refuses_overwrite(tmp_path: Path) -> None:
     """验证 add 使用模板创建 stack，且不会覆盖已有 stack。"""
     config = init_cli_project(tmp_path)
 
-    result = runner.invoke(agent_app, ["add", "new1", "-c", str(config)])
-    duplicate = runner.invoke(agent_app, ["add", "new1", "-c", str(config)])
+    result = runner.invoke(agent_app, ["add", "new1", "--keep-template-ports", "--no-edit", "-c", str(config)])
+    duplicate = runner.invoke(agent_app, ["add", "new1", "--keep-template-ports", "--no-edit", "-c", str(config)])
 
     assert result.exit_code == 0
     stack_data = YAML(typ="safe").load((config.parent / "stacks" / "new1.yaml").read_text(encoding="utf-8"))
     assert stack_data["name"] == "new1"
     assert stack_data["xrelay"]["outbound"]["ref"] == "new1.clash.socks.local"
     assert duplicate.exit_code == 1
+
+
+def test_agent_add_auto_edits_created_stack(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 add 默认创建后进入安全编辑流程。"""
+    config = init_cli_project(tmp_path)
+    monkeypatch.setattr(lifecycle_module, "is_port_available", lambda _host, _port: True)
+
+    result = runner.invoke(agent_app, ["add", "new1", "--editor", "true", "-c", str(config)])
+
+    assert result.exit_code == 0
+    assert "stack 已创建" in result.output
+    assert "编辑校验通过" in result.output
+    assert (config.parent / "stacks" / "new1.yaml").exists()
+
+
+def test_agent_list_outputs_aligned_table(tmp_path: Path) -> None:
+    """验证 list 使用对齐表格展示 stack 摘要。"""
+    config = copy_example_project(tmp_path)
+
+    result = runner.invoke(agent_app, ["list", "--skip-system-ports", "-c", str(config)])
+
+    assert result.exit_code == 0
+    assert "正在执行 proxystack-agent list" not in result.output
+    assert "Name  Enabled  Role" in result.output
+    assert "----" in result.output
+    assert "Services" in result.output
+    assert "xrelay,clash" in result.output
+    assert "Xrelay Ports" in result.output
+
+
+def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证连续 add 默认自动分配端口，避免模板端口冲突。"""
+    config = init_cli_project(tmp_path)
+    monkeypatch.setattr(lifecycle_module, "is_port_available", lambda _host, _port: True)
+
+    first = runner.invoke(agent_app, ["add", "usa1", "--no-edit", "-c", str(config)])
+    second = runner.invoke(agent_app, ["add", "usa2", "--no-edit", "-c", str(config)])
+
+    assert first.exit_code == 0, first.output
+    assert second.exit_code == 0, second.output
+    usa1 = YAML(typ="safe").load((config.parent / "stacks" / "usa1.yaml").read_text(encoding="utf-8"))
+    usa2 = YAML(typ="safe").load((config.parent / "stacks" / "usa2.yaml").read_text(encoding="utf-8"))
+    assert [inbound["port"] for inbound in usa1["xrelay"]["inbounds"]] == [24000, 24001]
+    assert [inbound["port"] for inbound in usa2["xrelay"]["inbounds"]] == [24002, 24003]
+    assert usa1["clash"]["listeners"]["socks"][0]["port"] == 17000
+    assert usa2["clash"]["listeners"]["socks"][0]["port"] == 17001
+    assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:19000"
+    assert usa2["clash"]["controller"]["listen"] == "127.0.0.1:19001"
 
 
 def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
@@ -237,11 +285,11 @@ def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
 
 
 def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 add --allocate-ports 会按端口池写回监听端口。"""
+    """验证 add 默认会按端口池写回监听端口。"""
     config = init_cli_project(tmp_path)
     monkeypatch.setattr(lifecycle_module, "is_port_available", lambda _host, _port: True)
 
-    result = runner.invoke(agent_app, ["add", "edge", "--allocate-ports", "-c", str(config)])
+    result = runner.invoke(agent_app, ["add", "edge", "--no-edit", "-c", str(config)])
 
     assert result.exit_code == 0
     stack_data = YAML(typ="safe").load((config.parent / "stacks" / "edge.yaml").read_text(encoding="utf-8"))
@@ -266,7 +314,7 @@ def test_agent_add_members_requires_existing_refs(tmp_path: Path) -> None:
     """验证 add --members 在写入前校验成员 ref 存在。"""
     config = init_cli_project(tmp_path)
 
-    result = runner.invoke(agent_app, ["add", "auto", "--template", "auto-url-test", "--members", "missing", "-c", str(config)])
+    result = runner.invoke(agent_app, ["add", "auto", "--template", "auto-url-test", "--members", "missing", "--no-edit", "-c", str(config)])
 
     assert result.exit_code == 1
     assert "ref does not exist" in result.output
@@ -305,7 +353,7 @@ def test_agent_add_sets_managed_stack_metadata_as_root(tmp_path: Path, monkeypat
     config = init_cli_project(tmp_path)
     chown_calls = use_fake_root_managed_owner(monkeypatch)
 
-    result = runner.invoke(agent_app, ["add", "owned", "-c", str(config)])
+    result = runner.invoke(agent_app, ["add", "owned", "--no-edit", "-c", str(config)])
 
     stack_path = config.parent / "stacks" / "owned.yaml"
     assert result.exit_code == 0

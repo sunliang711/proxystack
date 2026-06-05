@@ -4,7 +4,7 @@
 
 - 建立 `tests/unit`、`tests/fixtures`、`tests/e2e` 目录结构，保留原有平铺测试文件不搬动。
 - 新增订阅 fixture 和 `tests/golden/sub/` 快照，固化 subscription input、index、Clash、Premium Clash 和 Surge 输出。
-- 新增 Task11 增量单元测试，覆盖示例 stack 独立加载、必填凭据缺失、`add --allocate-ports` 写回、P0 子命令 help、`validate` 失败路径、`import --no-rebuild`、rebuild 原子替换、fake `serve`、Docker Compose 安全配置、agent/sub 写入边界和锁隔离文档。
+- 新增 Task11 增量单元测试，覆盖示例 stack 独立加载、必填凭据缺失、`add` 默认端口写回、P0 子命令 help、`validate` 失败路径、`import --no-rebuild`、rebuild 原子替换、fake `serve`、Docker Compose 安全配置、agent/sub 写入边界和锁隔离文档。
 - 新增端到端主流程测试，覆盖 `init -> add -> validate -> plan -> apply -> up -> publish -> sub import -> serve`，并通过 fake systemd runner 和 fake uvicorn 避免真实系统服务或网络监听。
 
 ## 验证

@@ -121,7 +121,7 @@ install:
 - `external_host`：订阅节点默认对外 host。
 - `subscription`：本地订阅服务和发布包默认参数。
 - `subscription.access`：订阅访问控制。P0 支持 `type: none` 和 `type: token`；公网部署必须使用 token 或由反向代理鉴权。
-- `port_ranges`：`add`、`clone --allocate-ports` 自动分配端口时使用的端口池。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；示例和模板中的 `25000`、`25001`、`26000` 都是手写端口，不要求落在示例端口池内。
+- `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。
 - `install`：二进制安装和更新默认版本。

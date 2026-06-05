@@ -89,7 +89,7 @@ app.add_typer(service_app, name="service")
 
 SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
-SCRIPTABLE_SUBCOMMANDS = {"render"}
+SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
 
 
 @app.callback()
@@ -145,7 +145,9 @@ def add(
     template: str = typer.Option("pair", "--template", help="内置模板：pair/auto-url-test/load-balance。"),
     from_file: Optional[Path] = typer.Option(None, "--from-file", help="从已有 stack YAML 创建。"),
     members: Optional[str] = typer.Option(None, "--members", help="auto 模板成员 stack，逗号分隔。"),
-    allocate_ports: bool = typer.Option(False, "--allocate-ports", help="按 config.port_ranges 自动分配监听端口。"),
+    allocate_ports: bool = typer.Option(True, "--allocate-ports/--keep-template-ports", help="按 config.port_ranges 自动分配监听端口；需要保留来源端口时使用 --keep-template-ports。"),
+    auto_edit: bool = typer.Option(True, "--edit/--no-edit", help="创建后自动编辑 stack；脚本化场景可用 --no-edit。"),
+    editor: Optional[str] = typer.Option(None, "--editor", help="创建后编辑时覆盖 EDITOR，例如 --editor true。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
     """新增 stack 配置文件，不覆盖已存在 stack。"""
@@ -155,6 +157,13 @@ def add(
         typer.echo(f"新增 stack 失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"stack 已创建：{path}")
+    if auto_edit:
+        try:
+            edit_config_or_stack(config, name, editor, check_only=False)
+        except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+            typer.echo(f"编辑失败：\n{exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"编辑校验通过：{path}")
 
 
 @app.command("clone")
@@ -184,22 +193,8 @@ def list_command(
     except (ValidationError, ConfigValidationError, ValueError) as exc:
         typer.echo(f"读取 stack 列表失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo("name enabled role xrelay clash xrelay_ports clash_socks clash_controller")
-    for row in rows:
-        typer.echo(
-            " ".join(
-                [
-                    row["name"],
-                    row["enabled"],
-                    row["role"],
-                    row["xrelay"],
-                    row["clash"],
-                    row["xrelay_ports"],
-                    row["clash_socks"],
-                    row["clash_controller"],
-                ]
-            )
-        )
+    for line in format_stack_table(rows):
+        typer.echo(line)
 
 
 @app.command()
@@ -726,6 +721,54 @@ def echo_service_lines(lines: list[str]) -> None:
     """逐行输出 service adapter 或 doctor 报告。"""
     for line in lines:
         typer.echo(line)
+
+
+def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
+    """把 stack 列表格式化为对齐表格，便于终端阅读。"""
+    if not rows:
+        return ["未找到 stack。"]
+    display_rows = [
+        {
+            "name": row["name"],
+            "enabled": row["enabled"],
+            "role": row["role"],
+            "services": format_stack_services(row),
+            "xrelay_ports": row["xrelay_ports"],
+            "clash_socks": row["clash_socks"],
+            "clash_controller": row["clash_controller"],
+        }
+        for row in rows
+    ]
+    columns = [
+        ("name", "Name"),
+        ("enabled", "Enabled"),
+        ("role", "Role"),
+        ("services", "Services"),
+        ("xrelay_ports", "Xrelay Ports"),
+        ("clash_socks", "Clash Socks"),
+        ("clash_controller", "Clash Controller"),
+    ]
+    widths = {
+        key: max(len(title), *(len(row[key]) for row in display_rows))
+        for key, title in columns
+    }
+    header = "  ".join(title.ljust(widths[key]) for key, title in columns).rstrip()
+    separator = "  ".join("-" * widths[key] for key, _title in columns).rstrip()
+    body = [
+        "  ".join(row[key].ljust(widths[key]) for key, _title in columns).rstrip()
+        for row in display_rows
+    ]
+    return [header, separator, *body]
+
+
+def format_stack_services(row: dict[str, str]) -> str:
+    """把 xrelay/clash 启用状态压缩成服务列表。"""
+    services = []
+    if row["xrelay"] == "yes":
+        services.append("xrelay")
+    if row["clash"] == "yes":
+        services.append("clash")
+    return ",".join(services) if services else "-"
 
 
 def run_artifact_operation(

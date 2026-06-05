@@ -54,7 +54,7 @@ def test_init_add_validate_plan_apply_up_publish_import_serve_main_flow(tmp_path
         agent_app,
         ["init", "-c", str(config), "--base-dir", str(config.parent), "--external-host", "proxy.example.com"],
     )
-    add_result = runner.invoke(agent_app, ["add", "edge", "--allocate-ports", "-c", str(config)])
+    add_result = runner.invoke(agent_app, ["add", "edge", "--no-edit", "-c", str(config)])
     validate_result = runner.invoke(agent_app, ["validate", "-c", str(config), "--skip-system-ports"])
     plan_result = runner.invoke(agent_app, ["plan", "-c", str(config), "--skip-system-ports"])
     generated_dir = config.parent / "runtime" / "generated"

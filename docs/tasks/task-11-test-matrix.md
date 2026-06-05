@@ -17,7 +17,7 @@
 1. [x] 建立测试目录结构：`tests/unit`、`tests/golden`、`tests/fixtures`、`tests/e2e`。
 2. [x] 覆盖 `examples/config.yaml` 和 `examples/stacks/*.yaml` 的加载与校验。
 3. [x] 覆盖非法配置：端口冲突、ref 缺失、循环依赖、危险 socks/http 暴露、必填凭据缺失、重复订阅 node id。
-4. [x] 覆盖 `add/clone --allocate-ports` 的端口池分配和写回行为。
+4. [x] 覆盖 `add` 默认端口分配和 `clone --allocate-ports` 的端口池分配写回行为。
 5. [x] 覆盖 Xray、mihomo、subscription 生成器 golden 输出。
 6. [x] 覆盖 `plan/apply/up` 的职责边界：`plan` 不写文件，`apply` 不操作服务，`up` 才启动或重启变化服务。
 7. [x] 覆盖订阅发布包 import 默认 rebuild、`--no-rebuild` 跳过 rebuild、current 原子切换。
@@ -44,7 +44,7 @@ systemd 和 Docker 在 CI 中可能不可用；需要把自动化测试和手工
 ## P0 实现状态
 
 - 已建立 `tests/unit`、`tests/golden`、`tests/fixtures`、`tests/e2e` 目录结构；现有 `tests/test_*.py` 未搬动。
-- 已补充 Task11 增量测试，覆盖示例 stack 独立加载、必填凭据缺失、`add --allocate-ports` 写回、订阅 input/index/格式 golden、`proxystack-sub import --no-rebuild` 和 rebuild 原子替换、fake `serve` 成功路径、Docker Compose 安全配置、agent/sub 目录边界和锁路径文档约束。
+- 已补充 Task11 增量测试，覆盖示例 stack 独立加载、必填凭据缺失、`add` 默认端口写回、订阅 input/index/格式 golden、`proxystack-sub import --no-rebuild` 和 rebuild 原子替换、fake `serve` 成功路径、Docker Compose 安全配置、agent/sub 目录边界和锁路径文档约束。
 - 已补充端到端主流程测试：`init -> add -> validate -> plan -> apply -> up -> publish -> sub import -> serve`，通过 fake systemd runner 和 fake uvicorn 隔离真实系统服务和网络监听。
 - 既有测试继续覆盖 Xray/mihomo golden、非法配置端口/ref/循环依赖、plan/apply/up 边界、订阅 HTTP token/无用户/空节点/三类格式、订阅发布包 schema/hash/path 安全。
 - 自动化测试不调用真实 `systemctl`、`journalctl`、真实网络下载、真实 Docker/systemd/root 权限。

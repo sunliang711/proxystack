@@ -11,7 +11,7 @@
 
 ## 关键规则
 
-- `add` 不覆盖已有 stack，支持内置模板、`--from-file`、`--members` 和 `--allocate-ports`。
+- `add` 不覆盖已有 stack，支持内置模板、`--from-file`、`--members`，并默认按端口池分配监听端口。
 - `add/clone/edit` 写入前会做全局 stack 校验，避免留下 ref、重复端口或安全策略无效的配置。
 - `clone` 默认不改端口；如果候选配置无法通过全局校验则拒绝写入。`clone --allocate-ports` 基于 `config.port_ranges` 分配当前配置未声明且系统未占用的端口。
 - `remove --purge` 删除该 stack 对应的生成文件，并从 manifest 中移除对应记录。

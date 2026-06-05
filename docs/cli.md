@@ -133,11 +133,13 @@ Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake uni
 
 ```bash
 proxystack-agent add usa1
-proxystack-agent add usa2 --allocate-ports
+proxystack-agent add usa2
 proxystack-agent add auto --template auto-url-test
 proxystack-agent add auto --template auto-url-test --members usa1,usa2
 proxystack-agent add auto-balance --template load-balance
 proxystack-agent add usa2 --from-file ./usa2.yaml
+proxystack-agent add usa3 --no-edit
+proxystack-agent add fixed --keep-template-ports
 proxystack-agent edit usa1
 proxystack-agent clone usa1 usa2
 proxystack-agent clone usa1 usa2 --allocate-ports
@@ -152,7 +154,11 @@ proxystack-agent remove usa2
 
 `add --from-file` 要求输入文件是单个 stack 配置，包含 `name`、`xrelay` 和 `clash`。写入前必须校验文件名和 `name` 一致。
 
-`add --allocate-ports` 和 `clone --allocate-ports` 会基于 `config.yaml` 的 `port_ranges` 自动分配 xrelay inbound、clash socks 和 clash controller 端口。自动分配只选择当前配置未使用且系统未占用的端口；无法分配时命令失败并提示用户修改端口池。手写端口可以在端口池之外，但仍必须合法、唯一且未被系统占用。
+`add` 创建 stack 后默认会打开编辑器并在保存后校验；自动化脚本可使用 `--no-edit` 跳过编辑。独立的 `edit` 命令仍保留，`edit <name>` 用于再次编辑已有 stack，`edit` 不带名称时编辑全局 `config.yaml`。
+
+`add` 默认会基于 `config.yaml` 的 `port_ranges` 自动分配 xrelay inbound、clash socks 和 clash controller 端口，避免连续新增 stack 时撞上模板固定端口。需要保留模板端口时使用 `--keep-template-ports`；此时端口仍必须合法、唯一且未被系统占用。
+
+`clone --allocate-ports` 会基于相同端口池重新分配克隆目标的端口。自动分配只选择当前配置未使用且系统未占用的端口；无法分配时命令失败并提示用户修改端口池。手写端口可以在端口池之外，但仍必须合法、唯一且未被系统占用。
 
 `add auto --members usa1,usa2` 会根据成员 stack 的 socks5 inbound 自动生成 `xrelay-socks5` upstream refs。未指定 `--members` 时，模板只生成占位，用户需要手动编辑。
 

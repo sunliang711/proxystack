@@ -30,7 +30,7 @@
 4. 实现 `render` 输出中间模型、Xray JSON、mihomo YAML、sub index。
 5. 实现 `plan` 对比 manifest 和将生成文件。
 6. 实现 `apply` 写文件和 manifest。
-7. 实现 `add` 使用默认模板或 `--from-file` 创建 `stacks/<name>.yaml`，支持 `--allocate-ports` 和 auto 模板的 `--members`。
+7. 实现 `add` 使用默认模板或 `--from-file` 创建 `stacks/<name>.yaml`，默认自动分配端口，并支持 auto 模板的 `--members`。
 8. 实现 `edit [name]` 打开 `config.yaml` 或指定 stack 文件，保存后校验并写回。
 9. 实现 `clone <source> <target>` 复制已有 stack 文件为新 stack，支持 `--allocate-ports` 基于端口池重分配监听端口。
 10. 实现 `list`、`remove`、`check`、`up`、`down`、`restart`、`status`、`logs`、`enable`、`disable`、`publish`、`doctor` 常用包装命令。
