@@ -37,7 +37,7 @@ quote_command() {
 		printf -v quoted_arg '%q' "$arg"
 		quoted_args+=("$quoted_arg")
 	done
-	IFS=' '
+	local IFS=' '
 	printf '%s' "${quoted_args[*]}"
 }
 
@@ -86,7 +86,7 @@ require_root() {
 	fi
 }
 
-# 保护托管目录，拒绝空路径、根目录、系统目录和路径穿越。
+# 保护托管目录，只允许生产专用目录和 dry-run 明确前缀。
 guard_managed_path() {
 	local path="${1:-}"
 	local label="${2:-managed path}"
@@ -102,13 +102,17 @@ guard_managed_path() {
 		die "${label} must be absolute: ${path}"
 	fi
 	case "${path}" in
-		/|/.|/..|/usr|/usr/*|/etc|/etc/*|/bin|/bin/*|/sbin|/sbin/*|/lib|/lib/*|/lib64|/lib64/*|/dev|/dev/*|/proc|/proc/*|/sys|/sys/*|/run|/run/*|/var|/var/*|/tmp)
+		/opt/proxystack|/opt/proxystack/*)
+			;;
+		/tmp/proxystack-*)
+			if [[ "${DRY_RUN}" != "1" ]]; then
+				die "${label} under /tmp/proxystack-* is only allowed during dry-run: ${path}"
+			fi
+			;;
+		*)
 			die "${label} is not allowed as a managed path: ${path}"
 			;;
 	esac
-	if [[ "${path}" == /tmp/* && "${DRY_RUN}" != "1" ]]; then
-		die "${label} under /tmp is only allowed during dry-run: ${path}"
-	fi
 	if [[ "${path}" == *"/../"* || "${path}" == */.. || "${path}" == *"/./"* || "${path}" == */. ]]; then
 		die "${label} must not contain dot path segments: ${path}"
 	fi
@@ -132,6 +136,94 @@ guard_managed_path() {
 			die "${label} must not cross symlink path: ${current}"
 		fi
 	done
+}
+
+# 校验安装身份，避免 root 或属性不匹配的已有用户接管托管目录。
+validate_install_identity() {
+	local install_user="${1:-}"
+	local install_group="${2:-}"
+	local home_dir="${3:-}"
+	local expected_shell="${4:-/usr/sbin/nologin}"
+	local passwd_entry
+	local group_entry
+	local user_uid
+	local user_gid
+	local user_home
+	local user_shell
+	local group_gid
+	local passwd_fields=()
+	local group_fields=()
+	local IFS=':'
+
+	if [[ -z "${install_user}" ]]; then
+		die "Install user must not be empty"
+	fi
+	if [[ -z "${install_group}" ]]; then
+		die "Install group must not be empty"
+	fi
+	if [[ "${install_user}" == -* ]]; then
+		die "Install user must not start with '-': ${install_user}"
+	fi
+	if [[ "${install_group}" == -* ]]; then
+		die "Install group must not start with '-': ${install_group}"
+	fi
+	if [[ "${install_user}" == *:* ]]; then
+		die "Install user must not contain ':': ${install_user}"
+	fi
+	if [[ "${install_group}" == *:* ]]; then
+		die "Install group must not contain ':': ${install_group}"
+	fi
+	if [[ ! "${install_user}" =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ ]]; then
+		die "Install user has invalid characters: ${install_user}"
+	fi
+	if [[ ! "${install_group}" =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ ]]; then
+		die "Install group has invalid characters: ${install_group}"
+	fi
+	if [[ "${install_user}" == "root" ]]; then
+		die "Install user must not be root"
+	fi
+	if [[ "${install_group}" == "root" ]]; then
+		die "Install group must not be root"
+	fi
+	if is_dry_run; then
+		log "Install identity validation skipped for dry-run: ${install_user}:${install_group}"
+		return 0
+	fi
+
+	require_cmd getent
+	if group_entry="$(getent group "${install_group}")"; then
+		read -r -a group_fields <<<"${group_entry}"
+		group_gid="${group_fields[2]:-}"
+		if [[ "${group_gid}" == "0" ]]; then
+			die "Install group GID must not be 0: ${install_group}"
+		fi
+	else
+		group_gid=""
+	fi
+
+	if ! passwd_entry="$(getent passwd "${install_user}")"; then
+		return 0
+	fi
+	read -r -a passwd_fields <<<"${passwd_entry}"
+	user_uid="${passwd_fields[2]:-}"
+	user_gid="${passwd_fields[3]:-}"
+	user_home="${passwd_fields[5]:-}"
+	user_shell="${passwd_fields[6]:-}"
+	if [[ "${user_uid}" == "0" ]]; then
+		die "Install user UID must not be 0: ${install_user}"
+	fi
+	if [[ -z "${group_gid}" ]]; then
+		die "Install group does not exist for existing user ${install_user}: ${install_group}"
+	fi
+	if [[ "${user_gid}" != "${group_gid}" ]]; then
+		die "Existing user primary group mismatch: ${install_user}"
+	fi
+	if [[ "${user_home}" != "${home_dir}" ]]; then
+		die "Existing user home mismatch: ${install_user}"
+	fi
+	if [[ "${user_shell}" != "${expected_shell}" ]]; then
+		die "Existing user shell mismatch: ${install_user}"
+	fi
 }
 
 # 保护系统目标目录，允许 /usr/local/bin 这类非托管输出目录但拒绝危险根路径。

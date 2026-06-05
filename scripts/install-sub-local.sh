@@ -33,6 +33,8 @@ Install source, choose exactly one:
 Options:
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
   --import-bundle FILE     Import a sub-bundle.zip after installation.
+  --user USER              System user. Default: proxystack
+  --group GROUP            System group. Default: proxystack
   --install-systemd        Run proxystack-agent service install sub.
   --start                  Run proxystack-agent service start sub.
   --dry-run                Print commands without executing writes.
@@ -94,6 +96,22 @@ parse_args() {
 				IMPORT_BUNDLE="${1#*=}"
 				shift
 				;;
+			--user)
+				INSTALL_USER="$(read_arg "$1" "${2:-}")"
+				shift 2
+				;;
+			--user=*)
+				INSTALL_USER="${1#*=}"
+				shift
+				;;
+			--group)
+				INSTALL_GROUP="$(read_arg "$1" "${2:-}")"
+				shift 2
+				;;
+			--group=*)
+				INSTALL_GROUP="${1#*=}"
+				shift
+				;;
 			--install-systemd)
 				INSTALL_SYSTEMD="1"
 				shift
@@ -128,6 +146,7 @@ validate_args() {
 		die "Choose exactly one of --wheel, --source, or --package"
 	fi
 	guard_managed_path "${BASE_DIR}" "base directory"
+	validate_install_identity "${INSTALL_USER}" "${INSTALL_GROUP}" "${BASE_DIR}" "/usr/sbin/nologin"
 	if [[ -n "${PACKAGE_SPEC}" && "${PACKAGE_SPEC}" == -* ]]; then
 		die "Package spec must not start with '-'"
 	fi

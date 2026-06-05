@@ -156,6 +156,7 @@ validate_args() {
 	fi
 	guard_managed_path "${BASE_DIR}" "base directory"
 	guard_system_dir "${BIN_DIR}" "bin directory"
+	validate_install_identity "${INSTALL_USER}" "${INSTALL_GROUP}" "${BASE_DIR}" "/usr/sbin/nologin"
 	if [[ -n "${PACKAGE_SPEC}" && "${PACKAGE_SPEC}" == -* ]]; then
 		die "Package spec must not start with '-'"
 	fi

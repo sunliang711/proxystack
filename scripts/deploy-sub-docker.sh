@@ -168,23 +168,19 @@ container_exists() {
 	docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1
 }
 
-# 根据 --replace 处理同名容器保护。
-handle_existing_container() {
+# 未指定 --replace 时，在写目录或拉镜像前拒绝同名容器。
+check_container_conflict_before_writes() {
+	if [[ "${REPLACE_CONTAINER}" == "1" ]]; then
+		return 0
+	fi
 	if is_dry_run; then
-		log "Container existence check skipped for dry-run"
-		if [[ "${REPLACE_CONTAINER}" == "1" ]]; then
-			run docker rm -f "${CONTAINER_NAME}"
-		fi
+		log "Container conflict check skipped for dry-run"
 		return 0
 	fi
 
-	if ! container_exists; then
-		return 0
-	fi
-	if [[ "${REPLACE_CONTAINER}" != "1" ]]; then
+	if container_exists; then
 		die "Container already exists: ${CONTAINER_NAME}. Use --replace to remove it."
 	fi
-	run docker rm -f "${CONTAINER_NAME}"
 }
 
 # 根据参数决定是否拉取镜像。
@@ -205,6 +201,21 @@ ensure_image_available() {
 		return 0
 	fi
 	die "Docker image not found locally: ${IMAGE}. Use --pull to fetch it before replacing containers."
+}
+
+# 指定 --replace 时，在镜像确认可用后替换旧容器。
+replace_existing_container_after_image_ready() {
+	if [[ "${REPLACE_CONTAINER}" != "1" ]]; then
+		return 0
+	fi
+	if is_dry_run; then
+		run docker rm -f "${CONTAINER_NAME}"
+		return 0
+	fi
+
+	if container_exists; then
+		run docker rm -f "${CONTAINER_NAME}"
+	fi
 }
 
 # 使用安全默认参数启动订阅服务容器。
@@ -230,10 +241,11 @@ main() {
 	validate_args
 	require_cmd docker
 
+	check_container_conflict_before_writes
 	ensure_data_dirs
 	maybe_pull_image
 	ensure_image_available
-	handle_existing_container
+	replace_existing_container_after_image_ready
 	run_container
 	log "Docker subscription deployment completed"
 }
