@@ -18,6 +18,7 @@
 - [x] 实现订阅 input/index 生成、多 inputs 合并和发布包
 - [x] 实现 `proxystack-sub import/rebuild/serve` 与 FastAPI 订阅路由
 - [x] 实现 CLI 生命周期命令、runtime 生成文件和 manifest apply
+- [x] 实现 mihomo/xray/geo 下载安装更新和 self update P0 候选版
 - [ ] 实现 systemd unit 安装和真实服务管理
 - [x] 实现订阅服务 Docker 示例
 - [ ] 建立测试矩阵和端到端验证
@@ -40,6 +41,7 @@
 - [Task 05 交付记录：mihomo 配置生成器](delivery/2026-06-05-17-18-16-feature-python-mihomo-generator.md)
 - [Task 06 交付记录：订阅生成与 HTTP 服务](delivery/2026-06-05-17-39-14-feature-python-subscription-generator-server.md)
 - [Task 07 交付记录：CLI 生命周期命令](delivery/2026-06-05-18-08-00-feature-python-cli-lifecycle.md)
+- [Task 08 交付记录：下载安装与更新 P0 候选版](delivery/2026-06-05-19-28-35-feature-python-install-update.md)
 
 ## 任务列表
 

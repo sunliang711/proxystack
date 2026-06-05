@@ -58,7 +58,8 @@ sudo ln -sf /opt/proxystack/.venv/bin/proxystack-sub /usr/local/bin/proxystack-s
 - systemd unit 不依赖 shell 的 venv activate，而是使用 `/opt/proxystack/.venv/bin/proxystack-agent`、`/opt/proxystack/.venv/bin/proxystack-sub` 或生成后的二进制路径。
 - 从源码开发安装时可以在项目目录执行 `/opt/proxystack/.venv/bin/pip install -e .`，发布部署优先使用 wheel。
 - 安装或升级 Python 包不自动下载 mihomo、xray-core 或 geo 数据；代理核心安装仍由 `proxystack-agent install ...` 显式触发。
-- `proxystack-agent install mihomo|xray` 默认把代理核心写入 `/opt/proxystack/bin`；`proxystack-agent install geo` 默认把 geo 数据写入 `/opt/proxystack/geo`。
+- `proxystack-agent install mihomo|xray` 默认把代理核心写入 `/opt/proxystack/bin`；`proxystack-agent install geo` 默认把 geo 数据写入 `/opt/proxystack/geo`；远端下载必须显式提供 sha256，本地文件也建议提供 sha256。
+- `proxystack-agent install all` 和 `proxystack-agent update all` 只展开 `config.install.mihomo/xray/geo`，不会安装 systemd unit，也不会执行 self update。需要先在 `config.yaml` 中为三个目标分别配置 `source` 和 `sha256`。
 - 首次安装由 Shell 脚本 bootstrap；后续 proxystack 代码更新、mihomo/xray-core/geo 下载和更新都由 `proxystack-agent` 子命令管理。
 - `update self` 默认以 `proxystack` 用户运行并只写 `/opt/proxystack/.venv`；普通管理员应显式使用 `sudo -u proxystack proxystack-agent update self --wheel <file>`，CLI 不自动提权。
 
@@ -86,6 +87,7 @@ proxystack-agent publish
 - `up` 等价于 `validate + apply` 并启动或重启受影响服务。
 - `publish` 默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
 - 后续 proxystack 代码更新使用 `proxystack-agent update self --wheel <file>` 或配置的包源；代理核心更新使用 `proxystack-agent update mihomo|xray|geo|all`。
+- Task08 P0 候选版在更新代理核心时只输出 service adapter 文本计划，不真实调用 `systemctl`；真实停启和 unit 管理由 Task09 提供。
 
 systemd unit 文件需要安装到 `/etc/systemd/system/`，这是 systemd 的固定约束；unit 内容必须指向 `/opt/proxystack` 内的配置、虚拟环境和生成文件。
 

@@ -218,25 +218,48 @@ proxystack-agent update xray
 proxystack-agent update geo
 proxystack-agent update all
 proxystack-agent update self --wheel proxystack-<version>-py3-none-any.whl
+proxystack-agent update self "proxystack==<version>"
 
 proxystack-agent version
 proxystack-agent version mihomo
 proxystack-agent version xray
+proxystack-agent version geo
 ```
 
-设计要求：
+P0 候选版行为：
 
-- 支持指定版本：`--version v1.19.0`。
-- 支持 sha256 校验：`--sha256 <value>`。
-- 支持下载源配置：GitHub Release、镜像源、本地文件。
+- 单个目标支持 `--version`、`--sha256`、`--source/--url`、`--archive-member` 和 `--config`。
+- `all` 只展开为 `mihomo`、`xray` 和 `geo`，不包含 `self`；`all` 使用 `config.install.<target>` 中分别配置的 `source`、`sha256` 和 `archive_member`，避免把同一个源误装到多个目标。
+- 远端 `http/https` 下载必须提供 sha256；生产下载路径会拒绝本机/私网地址、禁用 HTTP 重定向，并在 DNS 解析到私网地址时失败。
+- 本地文件也建议提供 sha256。sha256 不匹配时不会替换既有文件；多文件 geo 归档替换失败时会回滚已替换文件。
+- 归档源支持 zip/tar，并拒绝绝对路径或 `..` 路径穿越；二进制归档未能唯一识别 `mihomo` 或 `xray` 成员时，需要显式传 `--archive-member`。
 - `install/update mihomo|xray` 默认写入 `/opt/proxystack/bin`，代理核心二进制 owner 为 `proxystack:proxystack`，权限为 `0750`。
 - `install/update geo` 默认写入 `/opt/proxystack/geo`，geo 数据文件 owner 为 `proxystack:proxystack`，权限为 `0640`。
 - `update self` 只更新 proxystack Python 包，默认不更新 mihomo、xray-core 或 geo 数据。
-- `update self` 只写 `/opt/proxystack/.venv`，应以 `proxystack` 用户或具备同等写权限的管理员身份运行；CLI 不自动提权。
+- `update self` 只调用 `/opt/proxystack/.venv/bin/python -m pip install --upgrade`，支持 `--wheel <file>` 或 package spec；CLI 会校验 `.venv` 可写，不自动提权。
 - `install all` 只覆盖 mihomo、xray-core 和 geo 数据，不包含 systemd unit。
 - `update all` 默认只更新代理核心和 geo 数据，不包含 `self`，避免无意中升级管理工具本身。
 - 不在服务启动时自动下载，避免运行期副作用。
-- 更新二进制时，先停止受影响服务，替换成功后再恢复。
+- 更新二进制时，P0 只输出 service adapter 文本计划，不真实停止、启动或重启服务；真实 systemd 动作由 Task09 接入。
+
+配置示例：
+
+```yaml
+install:
+  mihomo:
+    version: v1.19.0
+    source: /opt/proxystack/downloads/mihomo-linux-amd64
+    sha256: <64-hex>
+  xray:
+    version: v25.1.1
+    source: https://example.com/xray.zip
+    sha256: <64-hex>
+    archive_member: xray
+  geo:
+    version: latest
+    source: /opt/proxystack/downloads/geo.dat
+    sha256: <64-hex>
+```
 
 ## 9. systemd 服务管理
 

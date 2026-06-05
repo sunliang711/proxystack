@@ -207,6 +207,9 @@ class InstallToolConfig(ProxystackModel):
     """单个二进制安装策略配置。"""
 
     version: str = "latest"
+    source: Optional[str] = None
+    sha256: Optional[str] = None
+    archive_member: Optional[str] = None
 
 
 class InstallConfig(ProxystackModel):
@@ -214,6 +217,7 @@ class InstallConfig(ProxystackModel):
 
     mihomo: InstallToolConfig = Field(default_factory=InstallToolConfig)
     xray: InstallToolConfig = Field(default_factory=InstallToolConfig)
+    geo: InstallToolConfig = Field(default_factory=InstallToolConfig)
 
 
 class GlobalConfig(ProxystackModel):

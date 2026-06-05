@@ -45,3 +45,15 @@ Task 01。
 ## 风险
 
 不要在服务启动时自动下载；下载安装必须由用户显式命令触发。
+
+## P0 候选版交付状态
+
+- 已新增 `src/proxystack/install`，拆分下载/本地文件读取、sha256 校验、归档抽取、原子替换、权限设置、版本检测和 self update 服务函数。
+- 已接入 `proxystack-agent install mihomo|xray|geo|all` 和 `proxystack-agent update mihomo|xray|geo|all|self`。
+- `mihomo/xray` 默认安装到 `config.paths.bin`；`geo` 默认安装到 `config.paths.geo`；远端下载缓存到 `config.paths.downloads`。
+- `install all` 与 `update all` 只展开 `mihomo/xray/geo`，不包含 systemd unit，也不包含 `self`。
+- `update self` 只调用 venv 内 `python -m pip install --upgrade`，支持 `--wheel <file>` 或 package spec；命令执行可通过 fake runner 测试。
+- P0 更新流程只输出 service adapter 文本计划，不真实调用 `systemctl`，不写 `/etc/systemd/system`。
+- 远端下载必须提供 sha256，生产下载路径拒绝本机/私网地址和 HTTP 重定向；校验失败和替换失败不会覆盖既有目标文件。
+- geo 多文件归档采用批量替换事务，任一文件失败会回滚本次已替换文件。
+- 未内置 GitHub Release 自动解析器；单目标通过 `--source/--url` 或 `config.install.<target>.source` 指定来源，`all` 使用配置中三类目标各自的来源。

@@ -43,6 +43,13 @@ from proxystack.generator.sub import write_bundle
 from proxystack.generator.xray import dumps_xray_config
 from proxystack.graph import DependencyPlan
 from proxystack.graph import ServiceNode
+from proxystack.install import InstallResult
+from proxystack.install import SelfUpdateRequest
+from proxystack.install import build_install_request
+from proxystack.install import detect_component_version
+from proxystack.install import expand_artifact_targets
+from proxystack.install import install_artifact
+from proxystack.install import run_self_update
 from proxystack.logging import configure_logging
 
 app = typer.Typer(
@@ -184,9 +191,76 @@ def edit(
 
 
 @app.command()
-def version() -> None:
-    """输出 proxystack-agent 版本，用于验证命令入口是否可用。"""
-    typer.echo(f"proxystack-agent {get_distribution_version()}")
+def version(
+    target: Optional[str] = typer.Argument(None, help="可选组件：mihomo/xray/geo。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """输出 proxystack-agent 或本地组件版本，用于验证命令入口是否可用。"""
+    if target is None:
+        typer.echo(f"proxystack-agent {get_distribution_version()}")
+        return
+    try:
+        global_config = load_config(config)
+        version_result = detect_component_version(global_config, target)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"版本检测失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if version_result.status == "missing":
+        typer.echo(f"{target} missing: {version_result.path}")
+        return
+    typer.echo(f"{target} {version_result.status}: {version_result.path}")
+    if version_result.output:
+        typer.echo(version_result.output)
+
+
+@app.command()
+def install(
+    target: str = typer.Argument(..., help="安装目标：mihomo/xray/geo/all。"),
+    component_version: Optional[str] = typer.Option(None, "--version", help="目标版本标签。"),
+    sha256: Optional[str] = typer.Option(None, "--sha256", help="源文件 sha256。"),
+    source: Optional[str] = typer.Option(None, "--source", "--url", help="源文件路径或下载 URL。"),
+    archive_member: Optional[str] = typer.Option(None, "--archive-member", help="归档内成员路径。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """安装 mihomo、xray 或 geo 数据；all 不安装 systemd unit。"""
+    try:
+        results = run_artifact_operation("install", target, component_version, sha256, source, archive_member, config)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"安装失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    echo_install_results(results)
+
+
+@app.command()
+def update(
+    target: str = typer.Argument(..., help="更新目标：mihomo/xray/geo/all/self。"),
+    package_spec: Optional[str] = typer.Argument(None, help="update self 使用的 package spec。"),
+    wheel: Optional[Path] = typer.Option(None, "--wheel", help="update self 使用的 wheel 文件。"),
+    component_version: Optional[str] = typer.Option(None, "--version", help="目标版本标签。"),
+    sha256: Optional[str] = typer.Option(None, "--sha256", help="源文件或 wheel sha256。"),
+    source: Optional[str] = typer.Option(None, "--source", "--url", help="源文件路径或下载 URL。"),
+    archive_member: Optional[str] = typer.Option(None, "--archive-member", help="归档内成员路径。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """更新代理核心、geo 数据或 proxystack 自身；all 不包含 self。"""
+    try:
+        if target == "self":
+            if source is not None or archive_member is not None or component_version is not None:
+                raise ValueError("update self only supports --wheel, package spec and --sha256")
+            global_config = load_config(config)
+            result = run_self_update(
+                global_config,
+                SelfUpdateRequest(wheel=wheel, package_spec=package_spec, sha256=sha256),
+            )
+            typer.echo(f"self update 完成：{result.args[-1]}")
+            return
+        if wheel is not None or package_spec is not None:
+            raise ValueError("--wheel and package spec are only supported by update self")
+        results = run_artifact_operation("update", target, component_version, sha256, source, archive_member, config)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"更新失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    echo_install_results(results)
 
 
 @app.command()
@@ -428,6 +502,46 @@ def echo_service_lines(lines: list[str]) -> None:
     """逐行输出 service adapter 或 doctor 报告。"""
     for line in lines:
         typer.echo(line)
+
+
+def run_artifact_operation(
+    operation: str,
+    target: str,
+    component_version: Optional[str],
+    sha256: Optional[str],
+    source: Optional[str],
+    archive_member: Optional[str],
+    config_path: Path,
+) -> list[InstallResult]:
+    """执行 install/update 代理核心和 geo 数据，all 只读取配置内分目标来源。"""
+    if target == "all" and (source is not None or sha256 is not None or archive_member is not None):
+        raise ValueError("all target uses config.install.* source, sha256 and archive_member")
+    global_config = load_config(config_path)
+    results: list[InstallResult] = []
+    for artifact_target in expand_artifact_targets(target):
+        request = build_install_request(
+            global_config,
+            artifact_target,
+            component_version,
+            source,
+            sha256,
+            archive_member,
+        )
+        results.append(install_artifact(global_config, request, operation=operation))
+    return results
+
+
+def echo_install_results(results: list[InstallResult]) -> None:
+    """输出安装或更新结果，包含 sha256 和可测试服务计划。"""
+    for result in results:
+        typer.echo(f"{result.target} {result.operation} 完成：{result.version}")
+        for path in result.installed_paths:
+            typer.echo(f"  - {path}")
+        typer.echo(f"  sha256: {result.source_sha256}")
+        if result.service_plan:
+            typer.echo("  服务计划：")
+            for line in result.service_plan:
+                typer.echo(f"    {line}")
 
 
 @render_app.command("xrelay")
