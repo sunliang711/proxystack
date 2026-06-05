@@ -260,7 +260,8 @@ stacks/*.yaml xrelay.inbounds[] where sub == true
 - `server`：默认使用 `config.yaml` 中的 `external_host`，允许 inbound 覆盖。
 - `port`：xrelay inbound 的 `port`。
 - `user`：inbound 的 `user`。
-- `name`：优先 `remark`，其次 `tag`，最后 `<instance>-<inbound.name>`。
+- `tag`：优先使用 inbound 显式 `tag`，否则生成 `<protocol>:<port>:<inbound.name>`。
+- `remark`：优先 `remark`，其次 `tag`，最后 `<stack>-<inbound.name>`。
 - 协议参数：来自 inbound 本身。
 
 不会读取：
@@ -269,12 +270,15 @@ stacks/*.yaml xrelay.inbounds[] where sub == true
 - `clash.groups`
 - `clash.rules`
 - `clash.mode`
+- `clash.controller`
 
 HTTP 路由：
 
 - `/sub/:user`：普通 Clash。
-- `/premium_sub/:user`：Premium Clash。
+- `/premium_sub/:user`：Premium Clash。P0 与普通 Clash 使用同一 YAML 输出，但渲染入口保持独立。
 - `/surge_sub/:user`：Surge。
+
+P0 的 Clash/Premium Clash 订阅只输出客户端节点列表 `proxies`，不生成 proxy-groups、rules、mode 或 controller。Surge 订阅只输出 `[Proxy]` 段。
 
 订阅访问控制：
 
@@ -282,7 +286,7 @@ HTTP 路由：
 - `subscription.access.type: none` 只允许本地监听或明确的公网风险确认。
 - token 只用于访问订阅 HTTP 服务，不写入订阅节点。
 
-用户不存在或没有 `sub: true` 节点时，建议返回 `404` 和统一错误结构；如需兼容旧行为，可通过配置改为 `200` 文本响应。
+用户不存在或没有订阅节点时返回 `404` 和统一 JSON 错误结构。
 
 ## 6. 订阅输入和多文件合并
 
@@ -329,9 +333,9 @@ nodes:
 - 按文件名排序后合并，保证结果稳定。
 - 按 `nodes[].user` 分组生成订阅。
 - `nodes[].id` 必须全局唯一；重复 id 默认报错。
-- 可选 `--on-conflict replace` 允许后读文件覆盖先读文件，但必须在日志和 status 中报告。
 - 单个输入文件校验失败时，默认整个 rebuild 失败，避免发布半新半旧订阅。
 - rebuild 成功后原子写入 `<data_dir>/current/index.json`。
+- `current/index.json` 包含 `index_version: 1`、`generated_at`、`sources`、`nodes`、按 user 分组的 `users`，以及供 HTTP 服务读取的 `access`。
 
 本地 agent 默认会从当前 stack 生成一个 input 文件，也可以打包成 bundle：
 
@@ -352,18 +356,16 @@ proxystack-agent publish --input-dir ./inputs --source merged -o sub-bundle.zip
 
 ## 7. 订阅发布包
 
-本地 `proxystack-agent publish` 将订阅索引、订阅 input 和模板元数据打包为远端可导入的发布包：
+本地 `proxystack-agent publish` 将订阅 input 和 manifest 打包为远端可导入的发布包：
 
 ```text
 sub-bundle.zip
   manifest.json
   inputs/
     <source>.yaml
-  templates/
-    clash.yaml.j2
-    premium-clash.yaml.j2
-    surge.conf.j2
 ```
+
+P0 使用内置渲染器，不需要模板目录；后续如引入模板，可以增加可选 `templates/` 目录。
 
 `manifest.json` 示例：
 
@@ -372,11 +374,14 @@ sub-bundle.zip
   "bundle_version": 1,
   "source": "usa1",
   "generated_at": "2026-06-05T12:00:00+08:00",
-  "source_stack_hash": "...",
   "inputs_sha256": {
     "usa1.yaml": "..."
   },
-  "template_version": "builtin-v1"
+  "template_version": "builtin-v1",
+  "access": {
+    "type": "token",
+    "token": "<subscription-token>"
+  }
 }
 ```
 

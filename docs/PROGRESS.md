@@ -15,8 +15,10 @@
 - [x] 实现 Xray 配置生成器和 `render xrelay`
 - [x] 扩展 Xray API、Stats、Policy 生成
 - [x] 实现 mihomo 配置生成器和 `render clash`
+- [x] 实现订阅 input/index 生成、多 inputs 合并和发布包
+- [x] 实现 `proxystack-sub import/rebuild/serve` 与 FastAPI 订阅路由
 - [ ] 实现 CLI 和 systemd 管理
-- [ ] 实现订阅发布包、多输入合并和订阅服务本地/Docker部署
+- [x] 实现订阅服务 Docker 示例
 - [ ] 建立测试矩阵和端到端验证
 
 ## 里程碑
@@ -27,7 +29,7 @@
 | M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
 | M2 | Xray/mihomo/sub 生成器、golden tests | 进行中 |
 | M3 | apply、manifest、systemd 管理 | 未开始 |
-| M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 未开始 |
+| M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 进行中 |
 | M5 | mihomo API、原生备份导入导出和发布增强 | 未开始 |
 
 ## 交付记录
@@ -35,6 +37,7 @@
 - [Task 04 交付记录：Xray 配置生成器](delivery/2026-06-05-16-40-32-feature-python-xray-generator.md)
 - [Task 04 扩展交付记录：Xray API、Stats、Policy](delivery/2026-06-05-17-01-47-feature-python-xray-api-stats-policy.md)
 - [Task 05 交付记录：mihomo 配置生成器](delivery/2026-06-05-17-18-16-feature-python-mihomo-generator.md)
+- [Task 06 交付记录：订阅生成与 HTTP 服务](delivery/2026-06-05-17-39-14-feature-python-subscription-generator-server.md)
 
 ## 任务列表
 

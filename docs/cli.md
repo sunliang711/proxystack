@@ -126,6 +126,8 @@ proxystack-agent up sub          # 只操作本地订阅服务
 
 `sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取 `config.yaml` 和 `stacks/`。
 
+上述生命周期命令属于后续 systemd 管理任务；Task06 P0 已实现的订阅服务命令是 `proxystack-sub import/rebuild/serve`。
+
 ## 5. add/edit/clone/remove
 
 ```bash
@@ -275,9 +277,7 @@ proxystack-agent render sub --input-dir ./inputs
 proxystack-sub import sub-bundle.zip
 proxystack-sub import sub-bundle.zip --no-rebuild
 proxystack-sub rebuild
-proxystack-sub serve
-proxystack-sub routes
-proxystack-sub status
+proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 ```
 
 HTTP 路由：
@@ -297,7 +297,7 @@ GET /surge_sub/:user
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。
 - `render sub`：只输出订阅索引，不写文件；加 `--input-dir` 时输出多 input 合并后的结果。
 
-订阅服务启动时只读取合并后的 `current/index.json`，不直接解析 `config.yaml` 或 stack 文件。`proxystack-sub import` 默认校验发布包、解包 inputs 并自动 rebuild；只有传 `--no-rebuild` 时才需要手动执行 `rebuild`。这样 `up + publish + sub import` 是订阅内容变更的主流程。
+订阅服务启动和请求处理只读取合并后的 `current/index.json`，不直接解析 `config.yaml` 或 stack 文件。`proxystack-sub import` 默认校验发布包、解包 inputs 并自动 rebuild；只有传 `--no-rebuild` 时才需要手动执行 `rebuild`。P0 不实现 systemd 生命周期管理，订阅内容变更的主流程是 `publish + sub import`。
 
 ## 11. mihomo 辅助命令
 

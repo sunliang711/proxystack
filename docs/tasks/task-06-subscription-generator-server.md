@@ -50,6 +50,21 @@
 - 同机部署测试覆盖 agent publish 后 sub import 默认 rebuild，不允许 agent 直接写 `sub/current`。
 - 未携带有效 token 的订阅请求返回 401 或 403。
 
+## P0 实现状态
+
+已完成：
+
+- `src/proxystack/generator/sub` 支持从 enabled stack 的 `sub: true` inbound 生成 subscription input、扫描合并 inputs、生成 index、渲染 Clash/Premium Clash/Surge，并生成/校验 `sub-bundle.zip`。
+- `proxystack-agent render sub`、`sub export-input`、`sub validate-inputs`、`publish` 已接入。
+- `proxystack-sub import`、`rebuild`、`serve` 已接入；服务只读取 `<data_dir>/current/index.json`。
+- FastAPI 路由 `/health`、`/sub/{user}`、`/premium_sub/{user}`、`/surge_sub/{user}` 已实现 token query 鉴权和统一 JSON 错误。
+- 已新增 Dockerfile 和 Docker Compose 示例，容器不包含 mihomo/xray-core。
+
+后续任务：
+
+- systemd 生命周期管理不在本次实现范围内。
+- agent/sub 分离锁和更完整的运行状态命令留到后续生命周期管理任务中实现。
+
 ## 依赖
 
 Task 02、Task 04。

@@ -1,0 +1,32 @@
+services:
+  proxystack-sub:
+    build:
+      context: .
+      dockerfile: Dockerfile.sub
+    image: proxystack-sub:latest
+    container_name: proxystack-sub
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    volumes:
+      - /opt/proxystack/sub:/data
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3003/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    command:
+      - proxystack-sub
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "3003"
+      - --data-dir
+      - /data

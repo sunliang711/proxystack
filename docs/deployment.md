@@ -108,7 +108,7 @@ systemd unit 文件需要安装到 `/etc/systemd/system/`，这是 systemd 的�
 ```bash
 proxystack-agent publish
 proxystack-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/proxystack/sub
-proxystack-agent up sub
+proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 ```
 
 本地订阅服务部署脚本同样在 [Task 12](tasks/task-12-deployment-scripts.md) 中实现，目标是封装 sub 数据目录创建、可选发布包导入、可选 systemd 安装和启动。
@@ -121,7 +121,7 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 
 本地部署要求：
 
-- `proxystack-sub.service` 只运行订阅 HTTP 服务。
+- `proxystack-sub.service` 只运行订阅 HTTP 服务；P0 不实现 systemd 生命周期管理，unit 安装和启停命令留给后续任务。
 - 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认自动 rebuild。多个输入文件也可以直接放入 `/opt/proxystack/sub/inputs/` 后执行 `proxystack-sub rebuild`。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
 - 服务进程只读取 `/opt/proxystack/sub/current`，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
@@ -220,7 +220,7 @@ Docker 部署脚本在 [Task 12](tasks/task-12-deployment-scripts.md) 中实现�
 ```bash
 docker cp sub-bundle.zip proxystack-sub:/tmp/sub-bundle.zip
 docker exec proxystack-sub proxystack-sub import /tmp/sub-bundle.zip --data-dir /data
-docker exec proxystack-sub proxystack-sub status --data-dir /data
+docker exec proxystack-sub python -c "import json; print(json.load(open('/data/current/index.json'))['index_version'])"
 ```
 
 Docker Compose 示例：
@@ -228,6 +228,9 @@ Docker Compose 示例：
 ```yaml
 services:
   proxystack-sub:
+    build:
+      context: .
+      dockerfile: Dockerfile.sub
     image: proxystack-sub:latest
     container_name: proxystack-sub
     restart: unless-stopped
@@ -235,7 +238,7 @@ services:
       - "3003:3003"
     volumes:
       - /opt/proxystack/sub:/data
-    user: "1000:1000"
+    user: "10001:10001"
     read_only: true
     cap_drop:
       - ALL
@@ -256,6 +259,8 @@ services:
       - --data-dir
       - /data
 ```
+
+仓库提供了可直接参考的 [Dockerfile.sub](../Dockerfile.sub) 和 [docker-compose.sub.yml](../docker-compose.sub.yml)。镜像只安装 proxystack Python 包和订阅服务依赖，不包含 mihomo 或 xray-core。
 
 Docker 部署安全要求：
 
