@@ -15,6 +15,7 @@ from proxystack.config import load_config
 from proxystack.install import CommandResult
 from proxystack.install import InstallRequest
 from proxystack.install import SelfUpdateRequest
+from proxystack.install import detect_component_version
 from proxystack.install import install_artifact
 from proxystack.install import run_self_update
 from proxystack.install.service import atomic_replace_file
@@ -205,6 +206,27 @@ def test_self_update_uses_fake_runner(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert calls == [(str(venv_python), "-m", "pip", "install", "--upgrade", str(wheel))]
+
+
+def test_detect_mihomo_version_uses_short_version_flag(tmp_path: Path) -> None:
+    """验证 mihomo 版本检测使用 -v，避免误触发核心启动。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    mihomo = config.parent / "bin" / "mihomo"
+    mihomo.parent.mkdir(parents=True)
+    mihomo.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    calls: list[tuple[str, ...]] = []
+
+    def fake_runner(args: Sequence[str]) -> CommandResult:
+        """记录版本检测命令并返回成功结果。"""
+        calls.append(tuple(args))
+        return CommandResult(args=tuple(args), returncode=0, stdout="Mihomo Meta v1")
+
+    result = detect_component_version(global_config, "mihomo", runner=fake_runner)
+
+    assert result.status == "ok"
+    assert result.output == "Mihomo Meta v1"
+    assert calls == [(str(mihomo), "-v")]
 
 
 def test_install_all_does_not_include_self(tmp_path: Path) -> None:

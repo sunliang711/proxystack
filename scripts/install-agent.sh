@@ -15,6 +15,7 @@ INSTALL_USER="proxystack"
 INSTALL_GROUP="proxystack"
 RUN_INIT="1"
 INSTALL_SYSTEMD="0"
+INSTALL_DEPS="0"
 
 # 展示 install-agent 用法。
 usage() {
@@ -38,6 +39,7 @@ Options:
   --group GROUP            System group. Default: proxystack
   --no-init                Do not run proxystack-agent init.
   --install-systemd        Run proxystack-agent service install.
+  --install-deps           Install missing native dependencies when supported.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -127,6 +129,10 @@ parse_args() {
 				;;
 			--install-systemd)
 				INSTALL_SYSTEMD="1"
+				shift
+				;;
+			--install-deps)
+				INSTALL_DEPS="1"
 				shift
 				;;
 			--dry-run)
@@ -247,6 +253,7 @@ main() {
 	validate_args
 	require_root
 	require_cmd ln
+	ensure_python_venv_available "${PYTHON_BIN}" "${INSTALL_DEPS}"
 
 	ensure_group
 	ensure_user

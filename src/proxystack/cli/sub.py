@@ -28,10 +28,19 @@ app = typer.Typer(
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     verbose: bool = typer.Option(False, "--verbose", "-v", help="输出调试级日志。"),
 ) -> None:
     """初始化 sub CLI 的通用选项。"""
     configure_logging("DEBUG" if verbose else "INFO")
+    echo_command_progress(ctx.invoked_subcommand)
+
+
+def echo_command_progress(subcommand: str | None) -> None:
+    """统一输出 proxystack-sub 子命令执行过程提示。"""
+    if subcommand is None:
+        return
+    typer.echo(f"正在执行 proxystack-sub {subcommand} ...", err=True)
 
 
 @app.command()

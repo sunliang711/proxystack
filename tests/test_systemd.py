@@ -56,7 +56,7 @@ def test_unit_content_contains_hardening_and_generated_exec_start(tmp_path: Path
     assert "stacks" not in xray_unit
 
     assert f"ReadWritePaths={tmp_path / 'project' / 'runtime'} {tmp_path / 'project' / 'runtime' / 'generated'}" in clash_unit
-    assert f"ExecStart={tmp_path / 'project' / 'bin' / 'mihomo'} -f {tmp_path / 'project' / 'runtime' / 'generated' / 'mihomo' / '%i.yaml'}" in clash_unit
+    assert f"ExecStart={tmp_path / 'project' / 'bin' / 'mihomo'} -d {tmp_path / 'project' / 'runtime' / 'mihomo' / '%i'} -f {tmp_path / 'project' / 'runtime' / 'generated' / 'mihomo' / '%i.yaml'}" in clash_unit
     assert "config.yaml" not in clash_unit
     assert "stacks" not in clash_unit
 

@@ -110,6 +110,7 @@ class SystemdManager:
         bin_dir = self.config.resolve_path(self.config.paths.bin)
         generated_dir = self.config.resolve_path(self.config.paths.generated)
         config_path = generated_dir / "mihomo" / "%i.yaml"
+        data_dir = self.config.resolve_path(self.config.paths.runtime) / "mihomo" / "%i"
         read_write_paths = self.agent_runtime_write_paths()
         content = "\n".join(
             [
@@ -127,7 +128,7 @@ class SystemdManager:
                 "ProtectHome=true",
                 "PrivateTmp=true",
                 f"ReadWritePaths={read_write_paths}",
-                f"ExecStart={systemd_join_args([bin_dir / 'mihomo', '-f', config_path])}",
+                f"ExecStart={systemd_join_args([bin_dir / 'mihomo', '-d', data_dir, '-f', config_path])}",
                 "Restart=on-failure",
                 "RestartSec=3s",
                 "",

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import grp
 from importlib import resources
 import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import shlex
 import subprocess
 import tempfile
@@ -44,6 +46,10 @@ MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 BUILTIN_TEMPLATES = {"pair", "auto-url-test", "load-balance"}
 SUB_SERVICE_NAME = "proxystack-sub.service"
+MANAGED_USER = "proxystack"
+MANAGED_GROUP = "proxystack"
+MANAGED_DIR_MODE = 0o750
+MANAGED_FILE_MODE = 0o640
 SYSTEMD_UNIT_PATHS = [
     Path("/etc/systemd/system/proxystack-xray@.service"),
     Path("/etc/systemd/system/proxystack-clash@.service"),
@@ -122,7 +128,7 @@ def init_project(config_path: Path, base_dir: Optional[Path], external_host: str
     """创建 base_dir、标准目录和默认 config.yaml，适用于首次初始化。"""
     actual_base_dir = base_dir or config_path.parent
     created_paths: list[Path] = []
-    actual_base_dir.mkdir(parents=True, exist_ok=True)
+    ensure_managed_directory(actual_base_dir)
     created_paths.append(actual_base_dir)
     if config_path.exists() and not force:
         config = load_config(config_path)
@@ -166,6 +172,38 @@ port_ranges:
 """
 
 
+def managed_owner_ids() -> Optional[tuple[int, int]]:
+    """root 执行且 proxystack 用户组存在时返回托管 owner。"""
+    if os.geteuid() != 0:
+        return None
+    try:
+        return pwd.getpwnam(MANAGED_USER).pw_uid, grp.getgrnam(MANAGED_GROUP).gr_gid
+    except KeyError:
+        return None
+
+
+def ensure_managed_metadata(path: Path, mode: int) -> None:
+    """校正托管文件或目录权限，root 下同步 owner。"""
+    if not path.exists():
+        return
+    os.chmod(path, mode)
+    owner_ids = managed_owner_ids()
+    if owner_ids is None:
+        return
+    os.chown(path, *owner_ids)
+
+
+def ensure_managed_directory(path: Path) -> None:
+    """创建目录并应用托管目录权限。"""
+    path.mkdir(parents=True, exist_ok=True)
+    ensure_managed_metadata(path, MANAGED_DIR_MODE)
+
+
+def ensure_managed_file_metadata(path: Path, mode: int = MANAGED_FILE_MODE) -> None:
+    """应用托管文件权限，内容未变时也用于修复旧 owner。"""
+    ensure_managed_metadata(path, mode)
+
+
 def ensure_project_dirs(config: GlobalConfig) -> list[Path]:
     """按全局配置创建 agent 生命周期命令需要的目录。"""
     paths = [
@@ -181,8 +219,17 @@ def ensure_project_dirs(config: GlobalConfig) -> list[Path]:
         config.resolve_path(config.paths.sub) / "current",
     ]
     for path in paths:
-        path.mkdir(parents=True, exist_ok=True)
+        ensure_managed_directory(path)
     return paths
+
+
+def ensure_existing_stack_metadata(config: GlobalConfig) -> None:
+    """修复既有 stack 文件权限，兼容旧版本 root 执行留下的文件。"""
+    ensure_managed_directory(config.stacks_dir)
+    for pattern in ("*.yaml", "*.yml"):
+        for path in config.stacks_dir.glob(pattern):
+            if path.is_file():
+                ensure_managed_file_metadata(path)
 
 
 def add_stack(
@@ -196,7 +243,7 @@ def add_stack(
     """从内置模板或外部文件创建新的 stack YAML，默认不覆盖既有文件。"""
     validate_identifier(name, "stack name")
     config = load_config(config_path)
-    config.stacks_dir.mkdir(parents=True, exist_ok=True)
+    ensure_managed_directory(config.stacks_dir)
     target_path = config.stacks_dir / f"{name}.yaml"
     if target_path.exists():
         raise ValueError(f"stack already exists: {name}")
@@ -469,8 +516,9 @@ def render_model_json(config_path: Path, target: Optional[str], check_system_por
 
 
 def build_runtime_plan(config_path: Path, target: Optional[str], check_system_ports: bool) -> RuntimePlan:
-    """编译目标范围内的生成文件变化，不写入任何运行目录文件。"""
+    """编译目标范围内的生成文件变化，不写入生成文件内容。"""
     config = load_config(config_path)
+    ensure_existing_stack_metadata(config)
     stack_set = load_stacks(config, check_system_ports=check_system_ports)
     scope = resolve_target_scope(stack_set, target)
     generated_dir = config.resolve_path(config.paths.generated)
@@ -491,12 +539,15 @@ def build_runtime_plan(config_path: Path, target: Optional[str], check_system_po
 def apply_runtime_plan(plan: RuntimePlan) -> list[FileChange]:
     """按 plan 写入变化文件和 manifest，未变化文件保持原 mtime。"""
     generated_dir = plan.config.resolve_path(plan.config.paths.generated)
-    generated_dir.mkdir(parents=True, exist_ok=True)
+    ensure_managed_directory(generated_dir)
     desired_by_path = {generated_file.relative_path: generated_file for generated_file in plan.generated_files}
     for change in plan.changes:
         if change.action in {"create", "update"}:
             generated_file = desired_by_path[change.relative_path]
             write_bytes_if_changed(change.path, generated_file.content)
+        if change.action == "unchanged" and change.path.exists():
+            ensure_managed_directory(change.path.parent)
+            ensure_managed_file_metadata(change.path)
         if change.action == "delete" and change.path.exists():
             change.path.unlink()
     manifest = update_manifest_for_scope(load_manifest(generated_dir / MANIFEST_NAME), plan)
@@ -936,6 +987,7 @@ def write_manifest_if_changed(path: Path, manifest: dict[str, Any]) -> bool:
 def write_text_if_changed(path: Path, content: str, force: bool = True) -> bool:
     """按内容比较后原子写入文本文件，避免无意义更新时间。"""
     if path.exists() and not force:
+        ensure_managed_file_metadata(path)
         return False
     return write_bytes_if_changed(path, content.encode("utf-8"))
 
@@ -943,12 +995,21 @@ def write_text_if_changed(path: Path, content: str, force: bool = True) -> bool:
 def write_bytes_if_changed(path: Path, content: bytes) -> bool:
     """按内容比较后原子写入二进制文件。"""
     if path.exists() and path.read_bytes() == content:
+        ensure_managed_directory(path.parent)
+        ensure_managed_file_metadata(path)
         return False
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_managed_directory(path.parent)
     with tempfile.NamedTemporaryFile("wb", delete=False, dir=path.parent) as temp_file:
         temp_path = Path(temp_file.name)
-        temp_file.write(content)
-    temp_path.replace(path)
+        try:
+            temp_file.write(content)
+            temp_file.flush()
+            ensure_managed_file_metadata(temp_path)
+            temp_path.replace(path)
+        except BaseException:
+            temp_path.unlink(missing_ok=True)
+            raise
+    ensure_managed_file_metadata(path)
     return True
 
 

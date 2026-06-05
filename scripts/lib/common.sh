@@ -86,6 +86,86 @@ require_root() {
 	fi
 }
 
+# 探测指定 Python 是否能真实创建 venv，覆盖 Debian 缺少 ensurepip 的场景。
+python_venv_probe() {
+	local python_bin="${1:-python3}"
+	local temp_dir
+
+	require_cmd mktemp
+	temp_dir="$(mktemp -d)"
+	if "${python_bin}" -m venv "${temp_dir}/venv" >/dev/null 2>&1; then
+		rm -rf "${temp_dir}"
+		return 0
+	fi
+	rm -rf "${temp_dir}"
+	return 1
+}
+
+# 根据当前 Python 主次版本推导 Debian/Ubuntu venv 包名。
+python_venv_package_name() {
+	local python_bin="${1:-python3}"
+	local package_name
+
+	if package_name="$("${python_bin}" -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}-venv")' 2>/dev/null)"; then
+		printf '%s' "${package_name}"
+		return 0
+	fi
+	printf '%s' "python3-venv"
+}
+
+# 使用系统包管理器安装原生部署依赖，目前支持 Debian/Ubuntu。
+install_os_packages() {
+	local packages=("$@")
+	local os_id=""
+	local os_like=""
+	local os_release_path="${OS_RELEASE_PATH:-/etc/os-release}"
+
+	if [[ "${#packages[@]}" -eq 0 ]]; then
+		die "install_os_packages requires at least one package"
+	fi
+	if [[ -r "${os_release_path}" ]]; then
+		# shellcheck source=/etc/os-release
+		source "${os_release_path}"
+		os_id="${ID:-}"
+		os_like="${ID_LIKE:-}"
+	fi
+	case " ${os_id} ${os_like} " in
+		*" debian "*|*" ubuntu "*)
+			require_cmd apt-get
+			run env DEBIAN_FRONTEND=noninteractive apt-get update
+			run env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
+			;;
+		*)
+			die "Unsupported OS for automatic dependency installation; install manually: ${packages[*]}"
+			;;
+	esac
+}
+
+# 预检查 Python venv 依赖；必要时可由 --install-deps 触发自动安装。
+ensure_python_venv_available() {
+	local python_bin="${1:-python3}"
+	local install_deps="${2:-0}"
+	local package_name
+
+	require_cmd "${python_bin}"
+	if is_dry_run; then
+		log "Python venv dependency check skipped for dry-run"
+		return 0
+	fi
+	if python_venv_probe "${python_bin}"; then
+		return 0
+	fi
+	package_name="$(python_venv_package_name "${python_bin}")"
+	if [[ "${install_deps}" != "1" ]]; then
+		die "Python venv support is unavailable for ${python_bin}. Install ${package_name} or rerun with --install-deps."
+	fi
+	install_os_packages "${package_name}"
+	if python_venv_probe "${python_bin}"; then
+		return 0
+	fi
+	die "Python venv support is still unavailable after installing ${package_name}"
+}
+
 # 保护托管目录，只允许生产专用目录和 dry-run 明确前缀。
 guard_managed_path() {
 	local path="${1:-}"

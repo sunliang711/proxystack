@@ -28,7 +28,6 @@ DEFAULT_RULE_PROFILE = [
     "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve",
     "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
     "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve",
-    "GEOIP,CN,DIRECT",
 ]
 LOOPBACK_LISTEN_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
@@ -104,6 +103,10 @@ def render_raw_proxy(upstream: ClashUpstream) -> dict[str, Any]:
     """复制 raw upstream 配置，并强制使用 upstream.name 作为 mihomo proxy name。"""
     proxy_config = {"name": upstream.name}
     proxy_config.update(deepcopy(upstream.config))
+    if proxy_config.get("type") == "vmess":
+        # mihomo 新版本要求 raw vmess 显式包含 alterId 和 cipher。
+        proxy_config.setdefault("alterId", 0)
+        proxy_config.setdefault("cipher", "auto")
     proxy_config["name"] = upstream.name
     return proxy_config
 

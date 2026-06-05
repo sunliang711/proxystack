@@ -15,6 +15,7 @@ START_SERVICE="0"
 INSTALL_USER="proxystack"
 INSTALL_GROUP="proxystack"
 PYTHON_BIN="python3"
+INSTALL_DEPS="0"
 
 # 展示 install-sub-local 用法。
 usage() {
@@ -33,10 +34,12 @@ Install source, choose exactly one:
 Options:
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
   --import-bundle FILE     Import a sub-bundle.zip after installation.
+  --python CMD             Python command used to create the venv. Default: python3
   --user USER              System user. Default: proxystack
   --group GROUP            System group. Default: proxystack
   --install-systemd        Run proxystack-agent service install sub.
   --start                  Run proxystack-agent service start sub.
+  --install-deps           Install missing native dependencies when supported.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -96,6 +99,14 @@ parse_args() {
 				IMPORT_BUNDLE="${1#*=}"
 				shift
 				;;
+			--python)
+				PYTHON_BIN="$(read_arg "$1" "${2:-}")"
+				shift 2
+				;;
+			--python=*)
+				PYTHON_BIN="${1#*=}"
+				shift
+				;;
 			--user)
 				INSTALL_USER="$(read_arg "$1" "${2:-}")"
 				shift 2
@@ -118,6 +129,10 @@ parse_args() {
 				;;
 			--start)
 				START_SERVICE="1"
+				shift
+				;;
+			--install-deps)
+				INSTALL_DEPS="1"
 				shift
 				;;
 			--dry-run)
@@ -249,6 +264,7 @@ main() {
 	parse_args "$@"
 	validate_args
 	require_root
+	ensure_python_venv_available "${PYTHON_BIN}" "${INSTALL_DEPS}"
 
 	ensure_group
 	ensure_user

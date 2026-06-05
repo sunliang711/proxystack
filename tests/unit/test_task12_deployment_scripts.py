@@ -40,6 +40,11 @@ def test_task12_entrypoints_have_help_output() -> None:
 
         assert result.returncode == 0, script
         assert "--dry-run" in result.stdout
+    for script in SCRIPT_PATHS[:2]:
+        result = run_script(["bash", str(script), "--help"])
+
+        assert result.returncode == 0, script
+        assert "--install-deps" in result.stdout
 
 
 def test_install_agent_dry_run_stays_inside_bootstrap_boundary() -> None:
@@ -90,6 +95,104 @@ def test_install_sub_local_dry_run_uses_sub_service_only() -> None:
     assert "proxystack-agent service install sub" in output
     assert "proxystack-agent service start sub" in output
     assert "systemctl" not in output
+
+
+def test_install_agent_preflights_missing_python_venv_dependency(tmp_path: Path) -> None:
+    """验证原生安装会提前检测 Python venv 依赖缺失并给出明确提示。"""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    write_fake_command(fake_bin / "getent", "exit 2\n")
+    write_fake_command(
+        fake_bin / "id",
+        "if [[ \"$1\" == \"-u\" && \"$#\" -eq 1 ]]; then echo 0; exit 0; fi\n"
+        "if [[ \"$1\" == \"-un\" ]]; then echo root; exit 0; fi\n"
+        "exit 1\n",
+    )
+    write_fake_command(
+        fake_bin / "python3",
+        "if [[ \"$1\" == \"-c\" ]]; then echo python3.11-venv; exit 0; fi\n"
+        "if [[ \"$1\" == \"-m\" && \"$2\" == \"venv\" ]]; then exit 1; fi\n"
+        "exit 0\n",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/install-agent.sh",
+            "--source",
+            str(Path.cwd()),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert "Python venv support is unavailable" in result.stderr
+    assert "python3.11-venv" in result.stderr
+    assert "--install-deps" in result.stderr
+
+
+def test_install_agent_install_deps_uses_apt_when_supported(tmp_path: Path) -> None:
+    """验证 --install-deps 会在 Debian/Ubuntu 上安装 Python venv 依赖。"""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    ready_file = tmp_path / "venv-ready"
+    apt_log = tmp_path / "apt.log"
+    os_release = tmp_path / "os-release"
+    os_release.write_text("ID=debian\n", encoding="utf-8")
+    write_fake_command(fake_bin / "getent", "exit 2\n")
+    write_fake_command(
+        fake_bin / "id",
+        "if [[ \"$1\" == \"-u\" && \"$#\" -eq 1 ]]; then echo 0; exit 0; fi\n"
+        "if [[ \"$1\" == \"-u\" && \"$2\" == \"proxystack\" ]]; then exit 1; fi\n"
+        "if [[ \"$1\" == \"-un\" ]]; then echo root; exit 0; fi\n"
+        "exit 1\n",
+    )
+    write_fake_command(
+        fake_bin / "python3",
+        "if [[ \"$1\" == \"-c\" ]]; then echo python3.11-venv; exit 0; fi\n"
+        "if [[ \"$1\" == \"-m\" && \"$2\" == \"venv\" ]]; then\n"
+        "  if [[ -f \"${FAKE_VENV_READY}\" ]]; then mkdir -p \"$3\"; touch \"$3/pyvenv.cfg\"; exit 0; fi\n"
+        "  exit 1\n"
+        "fi\n"
+        "exit 0\n",
+    )
+    write_fake_command(
+        fake_bin / "apt-get",
+        "printf '%s\\n' \"$*\" >>\"${FAKE_APT_LOG}\"\n"
+        "if [[ \"$1\" == \"install\" ]]; then touch \"${FAKE_VENV_READY}\"; fi\n"
+        "exit 0\n",
+    )
+    for command in ["install", "chown", "groupadd", "useradd", "runuser", "ln"]:
+        write_fake_command(fake_bin / command, "exit 0\n")
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["FAKE_APT_LOG"] = str(apt_log)
+    env["FAKE_VENV_READY"] = str(ready_file)
+    env["OS_RELEASE_PATH"] = str(os_release)
+
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/install-agent.sh",
+            "--source",
+            str(Path.cwd()),
+            "--install-deps",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    apt_output = apt_log.read_text(encoding="utf-8")
+    assert "update" in apt_output
+    assert "install -y python3.11-venv" in apt_output
 
 
 def test_deploy_sub_docker_dry_run_uses_security_defaults() -> None:

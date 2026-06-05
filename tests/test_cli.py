@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import socket
 import sys
+from types import SimpleNamespace
 from typing import Sequence
 from zipfile import ZipFile
 
@@ -108,6 +109,25 @@ def test_agent_validate_examples() -> None:
 
     assert result.exit_code == 0
     assert "配置校验通过" in result.output
+
+
+def test_cli_subcommands_print_progress_messages(tmp_path: Path) -> None:
+    """验证子命令执行时会输出过程提示，便于观察执行进度。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_cli_input(input_dir / "manual.yaml")
+
+    validate_result = runner.invoke(agent_app, ["validate", "-c", "examples/config.yaml", "--skip-system-ports"])
+    agent_sub_result = runner.invoke(agent_app, ["sub", "validate-inputs", "--input-dir", str(input_dir)])
+    sub_result = runner.invoke(sub_app, ["version"])
+
+    assert validate_result.exit_code == 0
+    assert "正在执行 proxystack-agent validate ..." in validate_result.output
+    assert agent_sub_result.exit_code == 0
+    assert "正在执行 proxystack-agent sub ..." in agent_sub_result.output
+    assert "正在执行 proxystack-agent sub validate-inputs ..." in agent_sub_result.output
+    assert sub_result.exit_code == 0
+    assert "正在执行 proxystack-sub version ..." in sub_result.output
 
 
 def test_agent_plan_examples() -> None:
@@ -280,6 +300,44 @@ def test_agent_apply_is_idempotent(tmp_path: Path) -> None:
     assert manifest.stat().st_mtime_ns == 1_000_000_000_000
 
 
+def test_agent_add_sets_managed_stack_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 root 新增 stack 时会修正为服务用户可读的托管权限。"""
+    config = init_cli_project(tmp_path)
+    chown_calls = use_fake_root_managed_owner(monkeypatch)
+
+    result = runner.invoke(agent_app, ["add", "owned", "-c", str(config)])
+
+    stack_path = config.parent / "stacks" / "owned.yaml"
+    assert result.exit_code == 0
+    assert stack_path.exists()
+    assert stack_path.stat().st_mode & 0o777 == 0o640
+    assert (stack_path, 123, 456) in chown_calls
+
+
+def test_agent_apply_repairs_unchanged_generated_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 apply 内容未变化时仍会修复生成文件权限且保持 mtime 幂等。"""
+    config = copy_example_project(tmp_path)
+    chown_calls = use_fake_root_managed_owner(monkeypatch)
+    manifest = config.parent / "runtime" / "generated" / "manifest.json"
+    generated_file = config.parent / "runtime" / "generated" / "xray" / "usa1.json"
+    stack_file = config.parent / "stacks" / "usa1.yaml"
+
+    first = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+    os.utime(manifest, (1000, 1000))
+    chown_calls.clear()
+    second = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    assert "apply 完成：0 个文件变化" in second.output
+    assert manifest.stat().st_mtime_ns == 1_000_000_000_000
+    assert generated_file.stat().st_mode & 0o777 == 0o640
+    assert stack_file.stat().st_mode & 0o777 == 0o640
+    assert (stack_file, 123, 456) in chown_calls
+    assert (generated_file, 123, 456) in chown_calls
+    assert (manifest, 123, 456) in chown_calls
+
+
 def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 up 写入生成文件，并只报告目标范围内受影响服务。"""
     config = copy_example_project(tmp_path)
@@ -293,8 +351,11 @@ def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path, mo
     assert "proxystack-clash@usa1.service" not in first.output
     assert (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
     assert second.exit_code == 0
-    assert "restart: no services selected" in second.output
-    assert fake_runner.calls == [("systemctl", "restart", "proxystack-xray@usa1.service")]
+    assert "start: proxystack-xray@usa1.service" in second.output
+    assert fake_runner.calls == [
+        ("systemctl", "restart", "proxystack-xray@usa1.service"),
+        ("systemctl", "start", "proxystack-xray@usa1.service"),
+    ]
 
 
 def test_agent_service_target_selection(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -531,6 +592,21 @@ def test_agent_publish_example(tmp_path: Path) -> None:
     assert manifest["bundle_version"] == 1
     assert "local.yaml" in manifest["inputs_sha256"]
     assert bundled_input["input_schema"] == "proxystack.subscription-input"
+
+
+def test_agent_publish_sets_managed_bundle_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 root 发布订阅包时会修正 zip 文件权限和 owner。"""
+    output = tmp_path / "sub-bundle.zip"
+    chown_calls = use_fake_root_managed_owner(monkeypatch)
+
+    result = runner.invoke(
+        agent_app,
+        ["publish", "--source", "local", "-o", str(output), "-c", "examples/config.yaml", "--skip-system-ports"],
+    )
+
+    assert result.exit_code == 0
+    assert output.stat().st_mode & 0o777 == 0o640
+    assert (output, 123, 456) in chown_calls
 
 
 def test_sub_help_is_available() -> None:
@@ -803,6 +879,20 @@ def use_fake_systemd(monkeypatch: MonkeyPatch, tmp_path: Path) -> FakeSystemdRun
     monkeypatch.setattr(agent_module, "SYSTEMD_RUNNER", fake_runner)
     monkeypatch.setattr(agent_module, "SYSTEMD_UNIT_DIR_OVERRIDE", tmp_path / "systemd")
     return fake_runner
+
+
+def use_fake_root_managed_owner(monkeypatch: MonkeyPatch) -> list[tuple[Path, int, int]]:
+    """模拟 root 下存在 proxystack 用户组，并记录 chown 调用。"""
+    chown_calls: list[tuple[Path, int, int]] = []
+
+    def fake_chown(path, user_id: int, group_id: int) -> None:
+        chown_calls.append((Path(path), user_id, group_id))
+
+    monkeypatch.setattr(lifecycle_module.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(lifecycle_module.pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=123))
+    monkeypatch.setattr(lifecycle_module.grp, "getgrnam", lambda name: SimpleNamespace(gr_gid=456))
+    monkeypatch.setattr(lifecycle_module.os, "chown", fake_chown)
+    return chown_calls
 
 
 def write_cli_config_without_valid_stacks(tmp_path: Path) -> Path:

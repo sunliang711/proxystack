@@ -32,6 +32,10 @@ BINARY_NAMES = {
     "mihomo": "mihomo",
     "xray": "xray",
 }
+VERSION_ARGS = {
+    "mihomo": ("-v",),
+    "xray": ("version",),
+}
 GEO_SUFFIXES = {".dat", ".mmdb"}
 DOWNLOAD_TIMEOUT = 30
 
@@ -609,7 +613,7 @@ def detect_component_version(
     binary_path = config.resolve_path(config.paths.bin) / BINARY_NAMES[target]
     if not binary_path.exists():
         return VersionResult(target=target, path=binary_path, status="missing", output="")
-    result = (runner or run_command)([str(binary_path), "version"])
+    result = (runner or run_command)([str(binary_path), *VERSION_ARGS[target]])
     output = (result.stdout or result.stderr).strip()
     status = "ok" if result.returncode == 0 else "error"
     return VersionResult(target=target, path=binary_path, status=status, output=output)

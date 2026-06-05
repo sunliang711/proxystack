@@ -18,6 +18,8 @@ from proxystack.cli.lifecycle import build_runtime_plan
 from proxystack.cli.lifecycle import clone_stack
 from proxystack.cli.lifecycle import doctor_report
 from proxystack.cli.lifecycle import edit_config_or_stack
+from proxystack.cli.lifecycle import ensure_managed_directory
+from proxystack.cli.lifecycle import ensure_managed_file_metadata
 from proxystack.cli.lifecycle import init_project
 from proxystack.cli.lifecycle import list_stacks
 from proxystack.cli.lifecycle import normalize_target
@@ -87,14 +89,36 @@ app.add_typer(service_app, name="service")
 
 SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
+SCRIPTABLE_SUBCOMMANDS = {"render"}
 
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     verbose: bool = typer.Option(False, "--verbose", "-v", help="输出调试级日志。"),
 ) -> None:
     """初始化 agent CLI 的通用选项。"""
     configure_logging("DEBUG" if verbose else "INFO")
+    echo_command_progress("proxystack-agent", ctx.invoked_subcommand)
+
+
+@sub_app.callback()
+def sub_main(ctx: typer.Context) -> None:
+    """输出 agent sub 命令组的执行提示。"""
+    echo_command_progress("proxystack-agent sub", ctx.invoked_subcommand)
+
+
+@service_app.callback()
+def service_main(ctx: typer.Context) -> None:
+    """输出 agent service 命令组的执行提示。"""
+    echo_command_progress("proxystack-agent service", ctx.invoked_subcommand)
+
+
+def echo_command_progress(command_prefix: str, subcommand: Optional[str]) -> None:
+    """统一输出 CLI 执行过程提示，机器可读子命令保持 stdout 干净。"""
+    if subcommand is None or subcommand in SCRIPTABLE_SUBCOMMANDS:
+        return
+    typer.echo(f"正在执行 {command_prefix} {subcommand} ...", err=True)
 
 
 @app.command()
@@ -359,7 +383,7 @@ def up(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """先 apply 普通代理配置，再重启本次变化影响到的 systemd 服务。"""
+    """先 apply 普通代理配置；有变化则重启，无变化则启动目标服务。"""
     try:
         if dry_run:
             scope = resolve_service_scope(config, target, check_system_ports=False)
@@ -377,11 +401,13 @@ def up(
         raise typer.Exit(code=1) from exc
     service_names = set(service_scope.service_names)
     services = [service_name for service_name in runtime_plan.changed_services if service_name in service_names]
+    action = "restart" if services else "start"
+    services = services or list(service_scope.service_names)
     if not services:
-        typer.echo("restart: no services selected")
+        typer.echo(f"{action}: no services selected")
         return
     try:
-        echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl("restart", services))
+        echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl(action, services))
     except (OSError, SystemdCommandError) as exc:
         typer.echo(f"up 失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -880,7 +906,9 @@ def publish(
         else:
             output_path = output
         write_bundle(output_path, bundle_source, input_files, access=access)
-    except (ValidationError, ConfigValidationError, ValueError, SubscriptionGeneratorError) as exc:
+        ensure_managed_directory(output_path.parent)
+        ensure_managed_file_metadata(output_path)
+    except (ValidationError, ConfigValidationError, ValueError, SubscriptionGeneratorError, OSError) as exc:
         typer.echo(f"订阅发布包生成失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"订阅发布包已生成：{output_path}")
