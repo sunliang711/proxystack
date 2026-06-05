@@ -94,21 +94,21 @@ proxystack-agent doctor
 
 命令语义：
 
-- `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和示例 stack；已存在文件默认不覆盖。
-- `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，然后打开编辑器。
+- `init`：创建 `/opt/proxystack` 目录结构和默认 `config.yaml`；已存在文件默认不覆盖。
+- `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
 - `edit`：编辑 `/opt/proxystack/config.yaml`。
 - `edit <name>`：编辑 `/opt/proxystack/stacks/<name>.yaml`。
-- `list`：列出 stack 文件、enabled 状态、主要端口和服务状态。
-- `remove <name>`：停止并禁用该 stack 的服务，然后删除或归档 `stacks/<name>.yaml`。
-- `clone <source> <target>`：复制已有 stack 文件为新 stack，改名后打开编辑器。
+- `list`：列出 stack 文件、enabled 状态、角色和主要端口。
+- `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
+- `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
 - `check [target]`：执行 `validate + plan`，不写文件、不操作服务。
-- `up [target]`：执行 `validate + apply`，并启动或重启目标范围内受影响的服务。
-- `down [target]`：停止目标范围内的服务，不删除配置和生成文件。
-- `restart [target]`：强制重启目标范围内的服务。
-- `status [target]`：查看目标范围内的服务状态。
-- `logs [target]`：查看目标范围内的服务日志。
-- `enable [target]`：设置目标范围内服务开机自启。
-- `disable [target]`：取消目标范围内服务开机自启。
+- `up [target]`：执行 `validate + apply`，通过 service adapter 输出目标范围内受影响服务；Task09 再接入真实 systemd。
+- `down [target]`：通过 service adapter 输出停止目标范围内服务的动作，不删除配置和生成文件。
+- `restart [target]`：通过 service adapter 输出重启目标范围内服务的动作。
+- `status [target]`：通过 service adapter 输出查询目标范围内服务状态的动作。
+- `logs [target]`：通过 service adapter 输出查看目标范围内服务日志的动作。
+- `enable [target]`：通过 service adapter 输出设置目标范围内服务开机自启的动作。
+- `disable [target]`：通过 service adapter 输出取消目标范围内服务开机自启的动作。
 - `publish`：生成订阅发布包，默认输出到 `/opt/proxystack/publish/sub-bundle.zip`。
 - `doctor`：检查目录权限、二进制版本、systemd unit、端口占用和配置引用。
 
@@ -126,7 +126,9 @@ proxystack-agent up sub          # 只操作本地订阅服务
 
 `sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取 `config.yaml` 和 `stacks/`。
 
-上述生命周期命令属于后续 systemd 管理任务；Task06 P0 已实现的订阅服务命令是 `proxystack-sub import/rebuild/serve`。
+Task07 已实现生命周期目标解析、生成文件写入和 service adapter 输出；真实 systemd unit 安装、启停和日志读取由 Task09 接入。Task06 P0 已实现的订阅服务命令是 `proxystack-sub import/rebuild/serve`。
+
+service adapter 命令默认跳过系统端口占用检查，避免在服务已经运行并占用自身监听端口时阻断 `status/restart/up` 等操作；配置结构、ref 和重复端口仍会校验。
 
 ## 5. add/edit/clone/remove
 
@@ -162,7 +164,7 @@ proxystack-agent remove usa2
 - 顶层 `name` 改为 `<target>`。
 - ref 第一段等于 `<source>` 且指向自身资源时，自动改为 `<target>`；指向其他 stack 的 ref 保持不变。
 - 当前 stack 内的明文凭据默认保持不变；用户需要新密码时可编辑生成后的 stack 文件。
-- 默认不自动改端口；使用 `--allocate-ports` 时按端口池重新分配本 stack 内端口，用户仍需执行 `check/up`。
+- 默认不自动改端口；如果原端口会导致全局校验失败，命令拒绝写入目标文件。使用 `--allocate-ports` 时按端口池重新分配本 stack 内端口，用户仍需执行 `check/up`。
 
 `remove` 默认不删除生成文件，只删除或归档 stack 配置。需要清理生成文件时使用 `--purge`。
 
@@ -181,7 +183,7 @@ proxystack-agent apply usa1
 - `plan`：执行完整编译，对比 manifest，展示将生成/修改/删除的文件和建议重启的服务，不写文件。
 - `apply`：生成配置并写 manifest，不启动、不停止、不重启服务。
 
-`check` 是 `validate + plan` 的常用包装；`up` 是 `validate + apply + service start/restart changed` 的常用包装。
+`check` 是 `validate + plan` 的常用包装；`up` 是 `validate + apply + service adapter restart changed` 的常用包装。Task07 阶段不调用 `systemctl`，只输出将由 Task09 执行的服务动作。
 
 ## 7. render
 

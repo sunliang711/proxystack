@@ -11,6 +11,16 @@
 - `apply` 只写入生成文件和 manifest，不启动、不停止、不重启服务。
 - 常用命令作为高级命令的安全包装，默认覆盖全部启用实例，传入目标时只操作指定实例或组件。
 - `up` 是 `validate + apply + service start/restart changed` 的常用包装。
+- Task07 阶段只接入可测试的 service adapter 输出，不调用 `systemctl`，真实 systemd 安装和执行留给 Task09。
+
+## 实现状态
+
+- 已实现 `init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`up`、`down`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor`。
+- 已实现 `validate [target]`、`plan [target]`、`apply [target]`、`render model`、`render xrelay`、`render clash`、`render sub`。
+- `plan` 只展示文件变更和依赖顺序，不写运行目录。
+- `apply` 写入 `runtime/generated` 下的生成文件和 `manifest.json`，内容未变化时不改写文件。
+- `up` 默认执行 `apply`，然后通过 service adapter 输出本次受文件变化影响的目标服务；`--dry-run` 只展示目标服务动作。
+- `up/down/restart/status/logs/enable/disable` 默认跳过系统端口占用检查，避免运行中的自身服务阻断生命周期命令；这些命令只输出 service adapter 动作，不执行真实 systemd 命令。
 
 ## 实现步骤
 
