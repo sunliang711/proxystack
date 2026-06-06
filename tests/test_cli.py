@@ -28,15 +28,17 @@ runner = CliRunner()
 class FakeSystemdRunner:
     """记录 CLI 触发的 systemd 命令，避免调用真实 systemctl。"""
 
-    def __init__(self, stdout: str = "") -> None:
+    def __init__(self, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
         """初始化 fake runner 输出。"""
         self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
         self.calls: list[tuple[str, ...]] = []
 
     def __call__(self, args: Sequence[str]) -> CommandResult:
-        """记录参数数组并返回成功结果。"""
+        """记录参数数组并返回预设结果。"""
         self.calls.append(tuple(args))
-        return CommandResult(args=tuple(args), returncode=0, stdout=self.stdout)
+        return CommandResult(args=tuple(args), returncode=self.returncode, stdout=self.stdout, stderr=self.stderr)
 
 
 def test_agent_help_is_available() -> None:
@@ -424,6 +426,24 @@ def test_agent_start_applies_and_reports_changed_target_services(tmp_path: Path,
         ("systemctl", "restart", "proxystack-xray@usa1.service"),
         ("systemctl", "start", "proxystack-xray@usa1.service"),
     ]
+
+
+def test_agent_start_reports_install_hint_when_unit_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start 遇到 systemd unit 缺失时提示先安装 unit。"""
+    config = copy_example_project(tmp_path)
+    fake_runner = FakeSystemdRunner(
+        returncode=5,
+        stderr="Failed to restart proxystack-clash@usa1.service: Unit proxystack-clash@usa1.service not found.\n",
+    )
+    monkeypatch.setattr(agent_module, "SYSTEMD_RUNNER", fake_runner)
+    monkeypatch.setattr(agent_module, "SYSTEMD_UNIT_DIR_OVERRIDE", tmp_path / "systemd")
+
+    result = runner.invoke(agent_app, ["start", "usa1", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "systemd unit 未安装，请先执行" in result.output
+    assert f"ps-agent service install usa1 -c {config}" in result.output
+    assert fake_runner.calls == [("systemctl", "restart", "proxystack-clash@usa1.service")]
 
 
 def test_agent_service_target_selection(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

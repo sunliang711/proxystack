@@ -291,6 +291,8 @@ proxystack-agent service log [target] --follow
 
 systemd unit 安装入口统一为 `service install [target]`，不在 `install` 分组中提供 unit 相关子命令，避免和代理核心下载安装命令混用。
 
+如果 `start`、`restart`、`status`、`logs`、`enable` 或 `disable` 提示 `Unit ... not found`，表示 unit 文件尚未安装，需要先执行 `ps-agent service install [target]`。
+
 目标规则：
 
 - 不传目标或传 `all`：`service install|uninstall` 管理三个 unit 文件；`service start|stop|restart|status|log|enable|disable` 作用于全部 enabled stack 和 `proxystack-sub.service`。

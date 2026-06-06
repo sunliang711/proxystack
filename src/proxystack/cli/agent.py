@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shlex
 from typing import Optional
 
 from pydantic import ValidationError
@@ -351,7 +352,10 @@ def start(
         runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
         apply_runtime_plan(runtime_plan)
         service_scope = resolve_service_scope(config, target, check_system_ports=False)
-    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+    except SystemdCommandError as exc:
+        typer.echo(f"启动失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        raise typer.Exit(code=1) from exc
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
         typer.echo(f"启动失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     service_names = set(service_scope.service_names)
@@ -366,7 +370,10 @@ def start(
             echo_service_lines(manager.systemctl("restart", restart_services))
         if start_services:
             echo_service_lines(manager.systemctl("start", start_services))
-    except (OSError, SystemdCommandError) as exc:
+    except SystemdCommandError as exc:
+        typer.echo(f"启动失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        raise typer.Exit(code=1) from exc
+    except OSError as exc:
         typer.echo(f"启动失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
 
@@ -397,7 +404,10 @@ def restart(
         apply_runtime_plan(runtime_plan)
         service_scope = resolve_service_scope(config, target, check_system_ports=False)
         echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl("restart", service_scope.service_names))
-    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+    except SystemdCommandError as exc:
+        typer.echo(f"重启失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        raise typer.Exit(code=1) from exc
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
         typer.echo(f"重启失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
 
@@ -585,6 +595,33 @@ def echo_dependency_plan(dependency_plan: Optional[DependencyPlan]) -> None:
         typer.echo(f"  {node_index}. {format_service_node(node)}")
 
 
+def format_systemd_command_error(exc: SystemdCommandError, target: Optional[str], config: Path) -> str:
+    """为 systemd unit 缺失错误补充下一步安装命令。"""
+    message = str(exc)
+    if "Unit " not in message or " not found" not in message:
+        return message
+    return "\n".join(
+        [
+            message,
+            "",
+            "systemd unit 未安装，请先执行：",
+            f"  {format_service_install_hint(target, config)}",
+            "然后重新执行当前命令。",
+        ]
+    )
+
+
+def format_service_install_hint(target: Optional[str], config: Path) -> str:
+    """生成和当前目标匹配的 service install 命令提示。"""
+    normalized_target = normalize_target(target)
+    command_parts = ["ps-agent", "service", "install"]
+    if normalized_target is not None:
+        command_parts.append(normalized_target)
+    if config != DEFAULT_CONFIG_PATH:
+        command_parts.extend(["-c", str(config)])
+    return " ".join(shlex.quote(part) for part in command_parts)
+
+
 def run_service_adapter(
     action: str,
     target: Optional[str],
@@ -601,7 +638,10 @@ def run_service_adapter(
             lines = manager.journalctl(scope.service_names, follow=follow)
         else:
             lines = manager.systemctl(action, scope.service_names)
-    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+    except SystemdCommandError as exc:
+        typer.echo(f"服务操作失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        raise typer.Exit(code=1) from exc
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
         typer.echo(f"服务操作失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     echo_service_lines(lines)
@@ -638,7 +678,10 @@ def run_service_group_action(
             lines = manager.journalctl(scope.service_names, follow=follow)
         else:
             lines = manager.systemctl(action, scope.service_names)
-    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+    except SystemdCommandError as exc:
+        typer.echo(f"服务操作失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        raise typer.Exit(code=1) from exc
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
         typer.echo(f"服务操作失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     echo_service_lines(lines)
