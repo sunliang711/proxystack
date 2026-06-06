@@ -265,6 +265,7 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert xrelay_defaults["policy"]["levels"]["0"]["statsUserUplink"] is True
     assert xrelay_defaults["policy"]["system"]["statsInboundUplink"] is True
     assert config_data["install"]["mihomo"]["source"] == "auto"
+    assert config_data["install"]["geo"]["source"] == "auto"
     for relative_path in [
         "stacks",
         "runtime",

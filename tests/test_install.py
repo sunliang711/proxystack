@@ -170,17 +170,52 @@ def test_install_mihomo_defaults_to_auto_source(tmp_path: Path) -> None:
     assert built_request.version == "v1.2.3"
 
 
-def test_install_geo_missing_source_has_actionable_message(tmp_path: Path) -> None:
-    """验证 geo 未配置 source 时提示可用来源形式和示例命令。"""
+def test_install_geo_defaults_to_auto_source(tmp_path: Path) -> None:
+    """验证 geo 未配置 source 时默认使用托管自动源。"""
+    config = write_install_config(tmp_path, {"geo": {"version": "latest"}})
+    global_config = load_config(config)
+
+    built_request = build_install_request(
+        global_config,
+        "geo",
+        None,
+        None,
+        None,
+        None,
+    )
+
+    assert built_request.source == "auto"
+    assert built_request.version == "latest"
+
+
+def test_install_geo_auto_source_falls_back_to_r2_and_installs_metadb(tmp_path: Path) -> None:
+    """验证 geo 托管源沿用 clash 的 geoip.metadb 规则，并可回退到 R2。"""
     config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    payload = b"geoip-metadb"
+    downloaded_sources: list[str] = []
 
-    result = runner.invoke(agent_app, ["install", "geo", "-c", str(config)])
+    def fake_downloader(source: str, destination: Path) -> Path:
+        """模拟 GitHub 失败、R2 成功下载 geoip.metadb。"""
+        downloaded_sources.append(source)
+        if "github.com" in source:
+            raise OSError("github failed")
+        destination.write_bytes(payload)
+        return destination
 
-    assert result.exit_code == 1
-    assert "source is required for geo" in result.output
-    assert "local .dat/.mmdb/zip/tar file" in result.output
-    assert "http(s) URL plus --sha256" in result.output
-    assert "ps-agent install geo --source" in result.output
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="geo", version="latest", source="auto"),
+        downloader=fake_downloader,
+    )
+
+    assert result.installed_paths == (config.parent / "geo" / "geoip.metadb",)
+    assert result.installed_paths[0].read_bytes() == payload
+    assert result.installed_paths[0].stat().st_mode & 0o777 == 0o640
+    assert downloaded_sources == [
+        "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb",
+        "https://pub-06197a088952412f8ff879716ee84855.r2.dev/mmdb/latest/geoip.metadb",
+    ]
 
 
 def test_download_url_rejects_private_ip() -> None:
@@ -407,8 +442,9 @@ def test_install_help_describes_source_choices() -> None:
 
     assert result.exit_code == 0
     assert "auto/github/r2" in result.output
-    assert "本地 .dat/.mmdb/zip/tar" in result.output
-    assert "远端 URL 需要 --sha256" in result.output
+    assert "MetaCubeX geoip.metadb" in result.output
+    assert "普通远端" in result.output
+    assert "URL 需要 --sha256" in result.output
 
 
 def write_config_with_sources(tmp_path: Path) -> Path:

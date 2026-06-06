@@ -50,12 +50,20 @@ MANAGED_PROJECTS = {
         "r2_path": "xray",
         "r2_latest": False,
     },
+    "geo": {
+        "repo": "MetaCubeX/meta-rules-dat",
+        "filename_tpl": "geoip.metadb",
+        "r2_path": "mmdb",
+        "r2_latest": True,
+        "latest_only": True,
+        "github_latest_tag": "latest",
+    },
 }
 VERSION_ARGS = {
     "mihomo": ("-v",),
     "xray": ("version",),
 }
-GEO_SUFFIXES = {".dat", ".mmdb"}
+GEO_SUFFIXES = {".dat", ".mmdb", ".metadb"}
 DOWNLOAD_TIMEOUT = 30
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 DOWNLOAD_PROGRESS_STEP = 5 * 1024 * 1024
@@ -151,7 +159,7 @@ def build_install_request(
         raise ValueError(f"unsupported install target: {target}")
     target_config = getattr(config.install, target)
     resolved_source = source or target_config.source
-    if resolved_source is None and target in BINARY_NAMES:
+    if resolved_source is None and target in MANAGED_PROJECTS:
         resolved_source = "auto"
     if not resolved_source:
         if target == "geo":
@@ -261,7 +269,7 @@ def fetch_managed_source(
     downloader: Optional[Downloader],
     progress: Optional[DownloadProgress] = None,
 ) -> Path:
-    """按内置 GitHub/R2 候选源下载 mihomo 或 xray。"""
+    """按内置 GitHub/R2 候选源下载 mihomo、xray 或 geo。"""
     ensure_private_directory(downloads_dir)
     emit_progress(progress, f"download: resolve {request.target} {request.version} via {request.source}")
     sources = build_managed_sources(request.target, request.version, request.source)
@@ -290,6 +298,8 @@ def build_managed_sources(target: str, version: str, source_mode: str) -> list[M
     if source_mode not in MANAGED_SOURCE_ALIASES:
         raise ValueError(f"unsupported managed source: {source_mode}")
     normalized_version = normalize_managed_version(version)
+    if MANAGED_PROJECTS[target].get("latest_only") and normalized_version != "latest":
+        raise ValueError(f"{target} managed download only supports latest")
     if normalized_version == "latest":
         return build_latest_managed_sources(target, source_mode)
     sources: list[ManagedDownloadSource] = []
@@ -306,7 +316,10 @@ def build_latest_managed_sources(target: str, source_mode: str) -> list[ManagedD
     failures: list[str] = []
     builders = []
     if source_mode in {"auto", "github"}:
-        builders.append(lambda: build_github_managed_source(target, github_latest_version(target)))
+        if MANAGED_PROJECTS[target].get("latest_only"):
+            builders.append(lambda: build_github_managed_source(target, "latest"))
+        else:
+            builders.append(lambda: build_github_managed_source(target, github_latest_version(target)))
     if source_mode in {"auto", "r2"}:
         builders.append(lambda: build_r2_latest_managed_source(target))
     for builder in builders:
@@ -353,6 +366,10 @@ def build_github_managed_source(target: str, version: str) -> ManagedDownloadSou
     """构造 GitHub Release 资产下载源。"""
     project = MANAGED_PROJECTS[target]
     filename = managed_filename(project, version)
+    if project.get("latest_only"):
+        github_tag = str(project.get("github_latest_tag", "latest"))
+        url = f"https://github.com/{project['repo']}/releases/download/{github_tag}/{filename}"
+        return ManagedDownloadSource("GitHub Release", url, filename, version)
     url = f"https://github.com/{project['repo']}/releases/download/v{version}/{filename}"
     return ManagedDownloadSource("GitHub Release", url, filename, version)
 
@@ -373,6 +390,8 @@ def build_r2_latest_managed_source(target: str) -> ManagedDownloadSource:
 def build_r2_versioned_managed_source(target: str, version: str) -> ManagedDownloadSource:
     """构造 Cloudflare R2 指定版本镜像源。"""
     project = MANAGED_PROJECTS[target]
+    if project.get("latest_only"):
+        raise ValueError(f"{target} managed download only supports latest")
     filename = managed_filename(project, version)
     url = f"{MANAGED_DOWNLOAD_ROOT}/{project['r2_path']}/v{version}/{filename}"
     return ManagedDownloadSource("Cloudflare R2 (versioned)", url, filename, version)

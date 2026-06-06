@@ -100,7 +100,7 @@ app.add_typer(service_app, name="service", rich_help_panel=SERVICE_HELP_PANEL)
 SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
 SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
-INSTALL_SOURCE_HELP = "安装源。mihomo/xray 可用 auto/github/r2、本地文件或 http(s) URL；geo 只支持本地 .dat/.mmdb/zip/tar 或 http(s) URL，远端 URL 需要 --sha256。"
+INSTALL_SOURCE_HELP = "安装源。mihomo/xray/geo 可用 auto/github/r2、本地文件或 http(s) URL；geo 默认下载 MetaCubeX geoip.metadb，普通远端 URL 需要 --sha256。"
 
 
 @app.callback()

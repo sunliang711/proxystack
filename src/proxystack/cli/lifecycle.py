@@ -209,6 +209,7 @@ install:
     source: auto
   geo:
     version: latest
+    source: auto
 """
 
 
