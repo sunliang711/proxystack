@@ -21,6 +21,7 @@ from proxystack.cli.lifecycle import doctor_report
 from proxystack.cli.lifecycle import edit_config_or_stack
 from proxystack.cli.lifecycle import ensure_managed_directory
 from proxystack.cli.lifecycle import ensure_managed_file_metadata
+from proxystack.cli.lifecycle import ensure_project_dirs
 from proxystack.cli.lifecycle import init_project
 from proxystack.cli.lifecycle import list_stacks
 from proxystack.cli.lifecycle import normalize_target
@@ -28,6 +29,7 @@ from proxystack.cli.lifecycle import remove_stack
 from proxystack.cli.lifecycle import render_model_json
 from proxystack.cli.lifecycle import resolve_service_scope
 from proxystack.cli.lifecycle import resolve_target_scope
+from proxystack.cli.lifecycle import write_bytes_if_changed
 from proxystack.config import DEFAULT_CONFIG_PATH
 from proxystack.config import load_config
 from proxystack.config import load_stacks
@@ -36,6 +38,10 @@ from proxystack.diagnostics.ipinfo import format_ipinfo_report
 from proxystack.diagnostics.ipinfo import query_ipinfo
 from proxystack.domain import ConfigValidationError
 from proxystack.domain.models import GlobalConfig
+from proxystack.generator.backup import NativeBackupError
+from proxystack.generator.backup import NativeBackupPlan
+from proxystack.generator.backup import read_native_backup
+from proxystack.generator.backup import write_native_backup
 from proxystack.generator.mihomo import dumps_mihomo_config
 from proxystack.generator.sub import SubscriptionAccess
 from proxystack.generator.sub import SubscriptionGeneratorError
@@ -239,6 +245,44 @@ def edit(
         typer.echo(f"编辑失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"编辑校验通过：{path}")
+
+
+@app.command("export", rich_help_panel=CONFIG_HELP_PANEL)
+def export_backup(
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="原生配置备份包输出路径。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """导出 agent 原生配置备份包，仅包含 config.yaml 和 stacks/*.yaml。"""
+    try:
+        global_config = load_config(config)
+        output_path = output or global_config.resolve_path(global_config.paths.publish) / "proxystack-backup.zip"
+        ensure_managed_directory(output_path.parent)
+        write_native_backup(output_path, config)
+        ensure_managed_file_metadata(output_path)
+    except (ValidationError, ConfigValidationError, ValueError, NativeBackupError, OSError) as exc:
+        typer.echo(f"原生配置备份包导出失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"原生配置备份包已导出：{output_path}")
+
+
+@app.command("import", rich_help_panel=CONFIG_HELP_PANEL)
+def import_backup(
+    backup_path: Path = typer.Argument(..., help="原生配置备份包 zip 路径。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="导入目标全局配置文件路径。"),
+    base_dir: Optional[Path] = typer.Option(None, "--base-dir", help="导入后的 base_dir；缺省使用 config.yaml 所在目录。"),
+    force: bool = typer.Option(False, "--force", help="允许覆盖已存在的 config.yaml 或同名 stack。"),
+) -> None:
+    """导入 agent 原生配置备份包，默认拒绝覆盖既有配置。"""
+    try:
+        target_base_dir = base_dir or config.parent
+        plan = read_native_backup(backup_path, target_base_dir)
+        imported_paths = write_native_backup_plan(plan, config, force)
+    except (ValidationError, ConfigValidationError, ValueError, NativeBackupError, OSError) as exc:
+        typer.echo(f"原生配置备份包导入失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"原生配置备份包已导入：{backup_path}")
+    for path in imported_paths:
+        typer.echo(f"  - {path}")
 
 
 @app.command(rich_help_panel=INSTALL_HELP_PANEL)
@@ -1061,6 +1105,33 @@ def publish(
         typer.echo(f"订阅发布包生成失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"订阅发布包已生成：{output_path}")
+
+
+def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: bool) -> list[Path]:
+    """把已校验的原生备份计划写入目标 agent 目录。"""
+    ensure_import_stacks_dir_inside_base_dir(plan)
+    target_files = [(config_path, plan.config_content)]
+    target_files.extend((plan.config.stacks_dir / stack_file.name, stack_file.content) for stack_file in plan.stack_files)
+    if not force:
+        existing_paths = [path for path, _content in target_files if path.exists()]
+        if existing_paths:
+            raise ValueError(f"target file already exists: {existing_paths[0]}")
+    ensure_project_dirs(plan.config)
+    written_paths: list[Path] = []
+    for path, content in target_files:
+        write_bytes_if_changed(path, content)
+        written_paths.append(path)
+    return written_paths
+
+
+def ensure_import_stacks_dir_inside_base_dir(plan: NativeBackupPlan) -> None:
+    """限制导入写入的 stacks 目录位于目标 base_dir 下，避免备份包改写任意路径。"""
+    base_dir = plan.config.base_dir.resolve()
+    stacks_dir = plan.config.stacks_dir.resolve()
+    try:
+        stacks_dir.relative_to(base_dir)
+    except ValueError as exc:
+        raise ValueError(f"import stacks directory must be inside base_dir: {stacks_dir}") from exc
 
 
 def format_service_node(node: ServiceNode) -> str:

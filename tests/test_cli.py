@@ -1,5 +1,6 @@
 """CLI 骨架测试。"""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -77,6 +78,8 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["list"],
         ["remove"],
         ["clone"],
+        ["export"],
+        ["import"],
         ["check"],
         ["start"],
         ["stop"],
@@ -872,6 +875,161 @@ def test_agent_publish_sets_managed_bundle_metadata_as_root(tmp_path: Path, monk
     assert result.exit_code == 0
     assert output.stat().st_mode & 0o777 == 0o640
     assert (output, 123, 456) in chown_calls
+
+
+def test_agent_native_backup_export_import_roundtrip(tmp_path: Path) -> None:
+    """验证原生备份包只携带 config/stacks，并可导入到新的 base_dir。"""
+    source_config = copy_example_project(tmp_path / "source")
+    runtime_dir = source_config.parent / "runtime"
+    runtime_dir.mkdir()
+    (runtime_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    backup = tmp_path / "proxystack-backup.zip"
+
+    export_result = runner.invoke(agent_app, ["export", "-o", str(backup), "-c", str(source_config)])
+
+    assert export_result.exit_code == 0
+    with ZipFile(backup) as zip_file:
+        names = sorted(zip_file.namelist())
+        manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
+    assert "runtime/manifest.json" not in names
+    assert names == [
+        "config/config.yaml",
+        "manifest.json",
+        "stacks/auto.yaml",
+        "stacks/usa1.yaml",
+        "stacks/usa2.yaml",
+    ]
+    assert manifest["backup_schema"] == "proxystack.native-backup"
+    assert "config/config.yaml" in manifest["files_sha256"]
+
+    target_config = tmp_path / "target" / "config.yaml"
+    import_result = runner.invoke(agent_app, ["import", str(backup), "-c", str(target_config)])
+
+    assert import_result.exit_code == 0
+    imported_config = YAML(typ="safe").load(target_config.read_text(encoding="utf-8"))
+    assert imported_config["base_dir"] == str(target_config.parent)
+    assert (target_config.parent / "stacks" / "usa1.yaml").exists()
+    assert not (target_config.parent / "runtime" / "manifest.json").exists()
+    validate_result = runner.invoke(agent_app, ["validate", "-c", str(target_config), "--skip-system-ports"])
+    assert validate_result.exit_code == 0
+
+
+def test_agent_native_backup_import_refuses_existing_files_without_force(tmp_path: Path) -> None:
+    """验证导入原生备份包默认不覆盖目标 agent 既有配置。"""
+    source_config = copy_example_project(tmp_path / "source")
+    backup = tmp_path / "proxystack-backup.zip"
+    export_result = runner.invoke(agent_app, ["export", "-o", str(backup), "-c", str(source_config)])
+    assert export_result.exit_code == 0
+
+    result = runner.invoke(agent_app, ["import", str(backup), "-c", str(source_config)])
+
+    assert result.exit_code == 1
+    assert "target file already exists" in result.output
+
+
+def test_agent_native_backup_import_rejects_subscription_bundle(tmp_path: Path) -> None:
+    """验证 agent 原生导入拒绝误导入 sub-bundle.zip。"""
+    sub_bundle = tmp_path / "sub-bundle.zip"
+    publish_result = runner.invoke(
+        agent_app,
+        ["publish", "--source", "local", "-o", str(sub_bundle), "-c", "examples/config.yaml", "--skip-system-ports"],
+    )
+    assert publish_result.exit_code == 0
+
+    result = runner.invoke(agent_app, ["import", str(sub_bundle), "-c", str(tmp_path / "target" / "config.yaml")])
+
+    assert result.exit_code == 1
+    assert "unexpected native backup path: inputs/local.yaml" in result.output
+
+
+def test_agent_native_backup_import_rejects_unsafe_member_path(tmp_path: Path) -> None:
+    """验证原生备份导入拒绝 zip 路径穿越。"""
+    backup = tmp_path / "unsafe-backup.zip"
+    with ZipFile(backup, "w") as zip_file:
+        zip_file.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "backup_schema": "proxystack.native-backup",
+                    "backup_version": 1,
+                    "created_at": "2026-06-06T12:00:00+08:00",
+                    "files_sha256": {"../bad.yaml": "0" * 64},
+                }
+            ),
+        )
+        zip_file.writestr("../bad.yaml", "bad")
+
+    result = runner.invoke(agent_app, ["import", str(backup), "-c", str(tmp_path / "target" / "config.yaml")])
+
+    assert result.exit_code == 1
+    assert "unsafe native backup path" in result.output
+
+
+def test_agent_native_backup_import_rejects_hash_mismatch(tmp_path: Path) -> None:
+    """验证原生备份导入会校验每个文件的 sha256。"""
+    source_config = copy_example_project(tmp_path / "source")
+    backup = tmp_path / "proxystack-backup.zip"
+    bad_backup = tmp_path / "bad-proxystack-backup.zip"
+    export_result = runner.invoke(agent_app, ["export", "-o", str(backup), "-c", str(source_config)])
+    assert export_result.exit_code == 0
+    with ZipFile(backup) as source_zip:
+        names = source_zip.namelist()
+        member_contents = {name: source_zip.read(name) for name in names if name != "manifest.json"}
+        manifest = source_zip.read("manifest.json")
+    member_contents["config/config.yaml"] = b"version: 1\n"
+    with ZipFile(bad_backup, "w") as zip_file:
+        zip_file.writestr("manifest.json", manifest)
+        for name, content in member_contents.items():
+            zip_file.writestr(name, content)
+
+    result = runner.invoke(agent_app, ["import", str(bad_backup), "-c", str(tmp_path / "target" / "config.yaml")])
+
+    assert result.exit_code == 1
+    assert "file hash mismatch: config/config.yaml" in result.output
+
+
+def test_agent_native_backup_import_rejects_stack_path_outside_base_dir(tmp_path: Path) -> None:
+    """验证导入时拒绝备份配置把 stacks 目录指向 base_dir 外部。"""
+    outside_stacks = tmp_path / "outside-stacks"
+    config_content = f"""version: 1
+base_dir: /tmp/original
+paths:
+  stacks: {outside_stacks}
+external_host: proxy.example.com
+subscription:
+  access:
+    type: token
+    token: demo-token
+port_ranges:
+  xrelay_inbound: 24000-24999
+  clash_socks: 17000-17999
+  clash_controller: 19000-19999
+"""
+    stack_content = Path("examples/stacks/usa1.yaml").read_bytes()
+    backup = tmp_path / "outside-stack-backup.zip"
+    files_sha256 = {
+        "config/config.yaml": hashlib.sha256(config_content.encode("utf-8")).hexdigest(),
+        "stacks/usa1.yaml": hashlib.sha256(stack_content).hexdigest(),
+    }
+    with ZipFile(backup, "w") as zip_file:
+        zip_file.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "backup_schema": "proxystack.native-backup",
+                    "backup_version": 1,
+                    "created_at": "2026-06-06T12:00:00+08:00",
+                    "files_sha256": files_sha256,
+                }
+            ),
+        )
+        zip_file.writestr("config/config.yaml", config_content)
+        zip_file.writestr("stacks/usa1.yaml", stack_content)
+
+    result = runner.invoke(agent_app, ["import", str(backup), "-c", str(tmp_path / "target" / "config.yaml")])
+
+    assert result.exit_code == 1
+    assert "import stacks directory must be inside base_dir" in result.output
 
 
 def test_sub_help_is_available() -> None:

@@ -86,6 +86,8 @@ proxystack-agent edit
 proxystack-agent edit usa1
 proxystack-agent list
 proxystack-agent clone usa1 usa2
+proxystack-agent export
+proxystack-agent import proxystack-backup.zip
 proxystack-agent check
 proxystack-agent start
 proxystack-agent start usa1
@@ -107,6 +109,8 @@ proxystack-agent doctor
 - `list`：列出 stack 文件、enabled 状态、角色、生成文件状态、运行状态、xrelay `user/protocol:port` 和 clash 主要端口；默认不做系统端口占用检查，需要严格检查时使用 `--check-system-ports`。
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
+- `export`：导出 agent 原生配置备份包，默认输出到 `/opt/proxystack/publish/proxystack-backup.zip`。
+- `import <backup.zip>`：导入 agent 原生配置备份包，默认拒绝覆盖既有 `config.yaml` 或同名 stack。
 - `check [target]`：校验配置并展示生成变更预览，不写文件、不操作服务。
 - `start [target]`：先检查目标服务需要的 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写 manifest；配置有变化时重启受影响服务，并启动目标范围内未变化的服务；`start sub` 只启动 `proxystack-sub.service`。
 - `stop [target]`：通过 systemd 停止目标范围内服务，不删除配置和生成文件。
@@ -222,7 +226,7 @@ proxystack-agent render sub --input-dir ./inputs
 - `render sub`：基于当前 enabled stack 生成订阅索引。
 - `render sub --input-dir <dir>`：读取已有 inputs 目录并输出合并后的订阅索引。
 
-通用 `export/import` 备份恢复推迟到 M5。P0 不支持从旧 `clash`、`xrelay`、`clashsub` 或旧 `proxy-stack` 目录自动导入；这些目录只作为人工参考，不进入实现范围。
+原生 `export/import` 只用于当前 proxystack agent 配置备份恢复，不支持从旧 `clash`、`xrelay`、`clashsub` 或旧 `proxy-stack` 目录自动导入；这些目录只作为人工参考，不进入实现范围。
 
 ## 8. 下载安装
 
@@ -331,7 +335,33 @@ unit 内容约束：
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
 - `proxystack-sub.service` 只执行 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，`ReadWritePaths` 仅包含 `config.paths.sub`。
 
-## 10. 订阅发布与远端服务
+## 10. 原生配置备份与恢复
+
+```bash
+proxystack-agent export
+proxystack-agent export -o /opt/proxystack/publish/proxystack-backup.zip
+proxystack-agent import proxystack-backup.zip
+proxystack-agent import proxystack-backup.zip -c /opt/proxystack/config.yaml --base-dir /opt/proxystack
+proxystack-agent import proxystack-backup.zip --force
+```
+
+原生备份包用于 agent 到另一个 agent 的配置迁移。包内只包含：
+
+- `manifest.json`：备份包 schema、版本和文件 sha256。
+- `config/config.yaml`：全局配置。
+- `stacks/*.yaml`：stack 配置。
+
+备份包不包含 `runtime/`、`runtime/generated/`、`sub/current/`、`publish/`、`downloads/`、`.venv/`、`bin/`、`geo/` 或 systemd unit。`runtime` 和生成配置都可以由 `check/start/render` 根据 config 和 stacks 重新生成，导入旧 runtime 反而可能携带过期 hash、旧路径或旧机器状态。
+
+导入规则：
+
+- 导入前校验 `backup_schema: proxystack.native-backup`、`backup_version: 1`、zip 成员路径、文件 sha256、config schema、stack schema 和跨 stack 引用。
+- `--base-dir` 缺省使用 `-c/--config` 指向的 `config.yaml` 所在目录，并会写回导入后的 `config.yaml`。
+- 默认不覆盖已存在的目标 `config.yaml` 或同名 stack；需要覆盖时显式传 `--force`。
+- 导入写入的 stacks 目录必须位于目标 `base_dir` 内，避免备份包把文件写到任意系统路径。
+- `sub-bundle.zip` 不能用 `proxystack-agent import` 导入；订阅发布包仍使用 `proxystack-sub import`。
+
+## 11. 订阅发布与远端服务
 
 ```bash
 proxystack-agent publish
@@ -366,7 +396,7 @@ GET /surge_sub/:user
 
 订阅服务启动和请求处理只读取合并后的 `current/index.json`，不直接解析 `config.yaml` 或 stack 文件。`proxystack-sub import` 默认校验发布包、解包 inputs 并自动 rebuild；只有传 `--no-rebuild` 时才需要手动执行 `rebuild`。本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程仍是 `publish + sub import`。
 
-## 11. mihomo 辅助命令
+## 12. mihomo 辅助命令
 
 P1 实现：
 

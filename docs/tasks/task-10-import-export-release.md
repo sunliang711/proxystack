@@ -2,7 +2,7 @@
 
 ## 目标
 
-实现订阅发布包、Python 包和订阅服务 Docker 镜像发布；原生配置备份、恢复作为 M5 后续能力。
+实现订阅发布包、Python 包、订阅服务 Docker 镜像发布，以及 agent 原生配置备份恢复。
 
 ## 技术方案
 
@@ -10,7 +10,7 @@
 - `publish` 生成远端订阅服务可导入的发布包。
 - `proxystack-agent` 可直接读取 inputs 目录并重新导出发布包。
 - `proxystack-sub` Docker 镜像只包含订阅服务运行依赖。
-- 原生备份 `export/import` 推迟到 M5，不能阻塞 P0 发布。
+- 原生备份 `export/import` 使用独立 `proxystack.native-backup` schema，只包含 config 和 stacks，不包含 runtime。
 - P0 不支持旧 `clash`、`xrelay`、`clashsub` 或旧 `proxy-stack` 目录自动导入。
 
 ## 实现步骤
@@ -21,7 +21,7 @@
 4. [x] 增加 Python wheel/sdist 构建脚本。
 5. [x] 增加 `proxystack-sub` Dockerfile 和 Compose 示例。
 6. [x] 增加端到端示例测试。
-7. [x] 预留 M5 备份包结构设计文档，但不在 P0 实现 `export/import`。
+7. [x] 实现原生备份包 `export/import`，并明确不同于订阅发布包。
 
 ## 验收标准
 
@@ -31,7 +31,7 @@
 - 构建产物包含 `proxystack-agent` 和 `proxystack-sub` console scripts。
 - Docker 镜像默认命令为 `proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /data`。
 - Docker 镜像文档明确 `/data` 必须挂载持久化 volume。
-- P0 命令清单中不出现通用 `export/import`。
+- agent 原生 `export/import` 只处理当前 proxystack 配置备份恢复，不接收订阅发布包。
 
 ## 依赖
 
@@ -39,7 +39,7 @@ Task 07、Task 08、Task 09。
 
 ## 风险
 
-订阅发布包版本需要写入元数据；后续 schema 升级时要能给出清晰兼容性错误。原生备份包不能和订阅发布包混用。
+订阅发布包和原生备份包都需要写入版本元数据；后续 schema 升级时要能给出清晰兼容性错误。原生备份包不能和订阅发布包混用。
 
 ## P0 实现状态
 
@@ -48,4 +48,4 @@ Task 07、Task 08、Task 09。
 - `publish --input-dir` 与 `proxystack-sub rebuild/import` 复用同一套 input 合并逻辑。
 - `scripts/build_package.py` 和 `make build` 生成 wheel 与 sdist；wheel 包含 `proxystack-agent` 和 `proxystack-sub` console scripts。
 - Dockerfile 与 Compose 示例保留 `/data` volume 和订阅服务默认命令。
-- M5 原生备份包结构记录在 `docs/m5-native-backup-package.md`，P0 不实现通用 `export/import`。
+- 原生备份包结构记录在 `docs/m5-native-backup-package.md`，`proxystack-agent export/import` 已实现 config 和 stacks 迁移；runtime 由目标 agent 动态生成。
