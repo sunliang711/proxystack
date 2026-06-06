@@ -902,6 +902,11 @@ def echo_install_progress(message: str) -> None:
 def echo_install_results(results: list[InstallResult]) -> None:
     """输出安装或更新结果，包含 sha256 和可测试服务计划。"""
     for result in results:
+        if result.skipped:
+            typer.echo(f"{result.target} {result.operation} 跳过：已存在")
+            for path in result.installed_paths:
+                typer.echo(f"  - {path}")
+            continue
         typer.echo(f"{result.target} {result.operation} 完成：{result.version}")
         for path in result.installed_paths:
             typer.echo(f"  - {path}")

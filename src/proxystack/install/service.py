@@ -106,6 +106,7 @@ class InstallResult:
     source_sha256: str
     installed_paths: tuple[Path, ...]
     service_plan: tuple[str, ...]
+    skipped: bool = False
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,19 @@ def install_artifact(
     target = normalize_artifact_target(request.target)
     downloads_dir = config.resolve_path(config.paths.downloads)
     emit_progress(progress, f"{operation}: prepare {target}")
+    existing_paths = installed_artifact_paths(config, target)
+    if operation == "install" and existing_paths:
+        emit_progress(progress, f"{operation}: skip {target} already installed")
+        return InstallResult(
+            operation=operation,
+            target=target,
+            version=request.version,
+            source=request.source,
+            source_sha256="",
+            installed_paths=existing_paths,
+            service_plan=tuple(),
+            skipped=True,
+        )
     require_download_hash(request.source, request.sha256)
     source_path = fetch_source(request, downloads_dir, downloader, progress)
     emit_progress(progress, f"{operation}: verify {source_path.name}")
@@ -213,6 +227,17 @@ def install_artifact(
         installed_paths=tuple(installed_paths),
         service_plan=service_plan_for_target(target) if operation == "update" else tuple(),
     )
+
+
+def installed_artifact_paths(config: GlobalConfig, target: str) -> tuple[Path, ...]:
+    """返回已安装目标路径；install 用它判断是否可跳过下载。"""
+    target_dir = install_target_dir(config, target)
+    if target in BINARY_NAMES:
+        binary_path = target_dir / BINARY_NAMES[target]
+        return (binary_path,) if binary_path.is_file() else tuple()
+    if not target_dir.is_dir():
+        return tuple()
+    return tuple(sorted(path for path in target_dir.iterdir() if path.is_file() and path.suffix in GEO_SUFFIXES))
 
 
 def is_managed_source_alias(target: str, source: str) -> bool:

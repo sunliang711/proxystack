@@ -258,6 +258,7 @@ P0 候选版行为：
 - 归档源支持 zip/tar，并拒绝绝对路径或 `..` 路径穿越；二进制归档未能唯一识别 `mihomo` 或 `xray` 成员时，需要显式传 `--archive-member`。
 - `install/update mihomo|xray` 默认写入 `/opt/proxystack/bin`，代理核心二进制 owner 为 `proxystack:proxystack`，权限为 `0750`。
 - `install/update geo` 默认写入 `/opt/proxystack/geo`，geo 数据文件 owner 为 `proxystack:proxystack`，权限为 `0640`。
+- `install` 是幂等安装：目标二进制或 geo 数据已存在时会跳过下载和替换；需要强制重新下载时使用 `update`。
 - `update self` 只更新 proxystack Python 包，默认不更新 mihomo、xray-core 或 geo 数据。
 - `update self` 只调用 `/opt/proxystack/.venv/bin/python -m pip install --upgrade`，支持 `--wheel <file>` 或 package spec；CLI 会校验 `.venv` 可写，不自动提权。
 - `install all` 只覆盖 mihomo、xray-core 和 geo 数据，不包含 systemd unit。

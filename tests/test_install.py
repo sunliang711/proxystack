@@ -62,6 +62,22 @@ def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
     assert "install: complete mihomo" in result.output
 
 
+def test_install_cli_skips_existing_binary_without_download(tmp_path: Path) -> None:
+    """验证 install CLI 遇到已安装二进制时跳过下载流程。"""
+    config = write_install_config(tmp_path)
+    installed = config.parent / "bin" / "mihomo"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"existing-mihomo")
+
+    result = runner.invoke(agent_app, ["install", "mihomo", "-c", str(config)])
+
+    assert result.exit_code == 0
+    assert installed.read_bytes() == b"existing-mihomo"
+    assert "install: skip mihomo already installed" in result.output
+    assert "mihomo install 跳过：已存在" in result.output
+    assert "download:" not in result.output
+
+
 def test_install_xray_uses_fake_downloader(tmp_path: Path) -> None:
     """验证服务层支持 fake downloader，不依赖真实网络。"""
     config = write_install_config(tmp_path)
@@ -114,6 +130,63 @@ def test_install_auto_source_falls_back_to_r2_and_extracts_gzip(tmp_path: Path) 
     assert downloaded_sources == [
         "https://github.com/MetaCubeX/mihomo/releases/download/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
         "https://pub-06197a088952412f8ff879716ee84855.r2.dev/mihomo/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
+    ]
+
+
+def test_install_mihomo_skips_existing_binary_without_downloader(tmp_path: Path) -> None:
+    """验证服务层 install 遇到已安装二进制时不调用下载器。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    installed = config.parent / "bin" / "mihomo"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"existing")
+
+    def failing_downloader(_source: str, _destination: Path) -> Path:
+        """如果被调用则说明 install 跳过逻辑失效。"""
+        raise AssertionError("downloader should not run")
+
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="mihomo", version="latest", source="auto"),
+        downloader=failing_downloader,
+    )
+
+    assert result.skipped is True
+    assert result.installed_paths == (installed,)
+    assert result.source_sha256 == ""
+    assert installed.read_bytes() == b"existing"
+    assert not (config.parent / "downloads").exists()
+
+
+def test_update_mihomo_downloads_even_when_binary_exists(tmp_path: Path) -> None:
+    """验证 update 即使目标二进制已存在也会重新下载并替换。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    installed = config.parent / "bin" / "mihomo"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"old")
+    payload = b"new-mihomo"
+    compressed_payload = gzip.compress(payload)
+    downloaded_sources: list[str] = []
+
+    def fake_downloader(source: str, destination: Path) -> Path:
+        """记录 update 下载源并写入新的 gzip 内容。"""
+        downloaded_sources.append(source)
+        destination.write_bytes(compressed_payload)
+        return destination
+
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="mihomo", version="v1.2.3", source="github"),
+        operation="update",
+        downloader=fake_downloader,
+    )
+
+    assert result.skipped is False
+    assert result.installed_paths == (installed,)
+    assert installed.read_bytes() == payload
+    assert downloaded_sources == [
+        "https://github.com/MetaCubeX/mihomo/releases/download/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
     ]
 
 
@@ -218,6 +291,29 @@ def test_install_geo_auto_source_falls_back_to_r2_and_installs_metadb(tmp_path: 
     ]
 
 
+def test_install_geo_skips_existing_data_without_downloader(tmp_path: Path) -> None:
+    """验证 install geo 遇到既有 geo 数据时跳过下载。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    installed = config.parent / "geo" / "geoip.metadb"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"existing-geo")
+
+    def failing_downloader(_source: str, _destination: Path) -> Path:
+        """如果被调用则说明 geo 跳过逻辑失效。"""
+        raise AssertionError("downloader should not run")
+
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="geo", version="latest", source="auto"),
+        downloader=failing_downloader,
+    )
+
+    assert result.skipped is True
+    assert result.installed_paths == (installed,)
+    assert installed.read_bytes() == b"existing-geo"
+
+
 def test_download_url_rejects_private_ip() -> None:
     """验证下载 URL 拒绝本机和私网 IP。"""
     with pytest.raises(ValueError, match="private or local"):
@@ -270,7 +366,7 @@ def test_download_requires_sha256_before_downloader_runs(tmp_path: Path) -> None
 
 
 def test_geo_archive_replace_failure_restores_previous_files(tmp_path: Path) -> None:
-    """验证 geo 多文件归档替换失败时恢复所有既有文件。"""
+    """验证 update geo 多文件归档替换失败时恢复所有既有文件。"""
     config = write_install_config(tmp_path)
     global_config = load_config(config)
     geo_dir = config.parent / "geo"
@@ -293,6 +389,7 @@ def test_geo_archive_replace_failure_restores_previous_files(tmp_path: Path) -> 
         install_artifact(
             global_config,
             InstallRequest(target="geo", version="latest", source=str(archive), sha256=file_sha256(archive)),
+            operation="update",
             replacer=failing_second_replacer,
         )
 
@@ -332,8 +429,8 @@ def test_install_sha256_failure_does_not_write_target(tmp_path: Path) -> None:
     assert not (config.parent / "bin" / "mihomo").exists()
 
 
-def test_replace_failure_keeps_existing_binary(tmp_path: Path) -> None:
-    """验证替换异常时不会破坏已有二进制。"""
+def test_update_replace_failure_keeps_existing_binary(tmp_path: Path) -> None:
+    """验证 update 替换异常时不会破坏已有二进制。"""
     config = write_install_config(tmp_path)
     global_config = load_config(config)
     source = write_source(tmp_path / "sources" / "mihomo.bin", b"new")
@@ -349,6 +446,7 @@ def test_replace_failure_keeps_existing_binary(tmp_path: Path) -> None:
         install_artifact(
             global_config,
             InstallRequest(target="mihomo", version="v1.0.0", source=str(source), sha256=file_sha256(source)),
+            operation="update",
             replacer=failing_replacer,
         )
 

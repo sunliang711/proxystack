@@ -61,6 +61,7 @@ sudo ln -sf /opt/proxystack/.venv/bin/proxystack-sub /usr/local/bin/proxystack-s
 - 安装或升级 Python 包不自动下载 mihomo、xray-core 或 geo 数据；代理核心安装仍由 `proxystack-agent install ...` 显式触发。
 - `proxystack-agent install mihomo|xray` 默认把代理核心写入 `/opt/proxystack/bin`；`proxystack-agent install geo` 默认下载 `MetaCubeX/meta-rules-dat` 的 `geoip.metadb` 并写入 `/opt/proxystack/geo`；普通远端 URL 必须显式提供 sha256，本地文件也建议提供 sha256。
 - `proxystack-agent install all` 和 `proxystack-agent update all` 只展开 `config.install.mihomo/xray/geo`，不会安装 systemd unit，也不会执行 self update。默认配置下三个目标都使用托管 `auto` 源。
+- `install` 遇到已存在的目标二进制或 geo 数据会跳过下载；`update` 会强制重新下载并替换目标文件。
 - 首次安装由 Shell 脚本 bootstrap；后续 proxystack 代码更新、mihomo/xray-core/geo 下载和更新都由 `proxystack-agent` 子命令管理。
 - `update self` 默认以 `proxystack` 用户运行并只写 `/opt/proxystack/.venv`；普通管理员应显式使用 `sudo -u proxystack proxystack-agent update self --wheel <file>`，CLI 不自动提权。
 
