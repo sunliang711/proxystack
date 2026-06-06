@@ -192,7 +192,7 @@ install_python_package() {
 	fi
 
 	staged_source="$(stage_python_source "${SOURCE_DIR}" "${BASE_DIR}/runtime/source" "${INSTALL_USER}:${INSTALL_GROUP}")"
-	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" --upgrade pip
+	ensure_pip_available "${INSTALL_USER}" "${venv_python}"
 	pip_install_with_fallback "${INSTALL_USER}" "${venv_python}" "${staged_source}"
 	if [[ -n "${source_fingerprint}" ]]; then
 		write_python_package_stamp "${stamp_path}" "${source_fingerprint}" "${INSTALL_USER}:${INSTALL_GROUP}"

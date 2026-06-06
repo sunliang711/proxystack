@@ -593,6 +593,39 @@ python_package_current() {
 	return 0
 }
 
+# 判断指定 Python 模块是否已经可用，供幂等安装前置检查复用。
+python_module_installed() {
+	local target_user="${1:-}"
+	local python_bin="${2:-}"
+	local module_name="${3:-}"
+
+	if [[ -z "${python_bin}" ]]; then
+		die "python_module_installed needs a python binary"
+	fi
+	if [[ -z "${module_name}" ]]; then
+		die "python_module_installed needs a module name"
+	fi
+	if is_dry_run; then
+		return 1
+	fi
+	run_as_user "${target_user}" "${python_bin}" -c 'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)' "${module_name}"
+}
+
+# 确保 venv 内 pip 可用；已存在时不访问外部 pip index。
+ensure_pip_available() {
+	local target_user="${1:-}"
+	local python_bin="${2:-}"
+
+	if [[ -z "${python_bin}" ]]; then
+		die "ensure_pip_available needs a python binary"
+	fi
+	if python_module_installed "${target_user}" "${python_bin}" pip; then
+		log "SKIP: Python package already installed: pip"
+		return 0
+	fi
+	run_as_user "${target_user}" "${python_bin}" -m ensurepip --upgrade
+}
+
 # 写入 Python 包源码指纹 stamp；只有安装成功后才调用。
 write_python_package_stamp() {
 	local stamp_path="${1:-}"

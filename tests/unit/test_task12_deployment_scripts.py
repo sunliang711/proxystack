@@ -256,6 +256,59 @@ pip_install_with_fallback proxystack /venv/bin/python proxystack
     assert "https://pypi.tuna.tsinghua.edu.cn/simple" in output
 
 
+def test_ensure_pip_available_skips_existing_pip(tmp_path: Path) -> None:
+    """验证 pip 模块已存在时不会执行 ensurepip。"""
+    call_log = tmp_path / "pip-check.log"
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+run_as_user() {{
+	printf '%s\\n' "$*" >>"{call_log}"
+	return 0
+}}
+ensure_pip_available proxystack /venv/bin/python
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    output = call_log.read_text(encoding="utf-8")
+    assert "find_spec" in output
+    assert "ensurepip" not in output
+    assert "SKIP: Python package already installed: pip" in result.stderr
+
+
+def test_ensure_pip_available_installs_missing_pip(tmp_path: Path) -> None:
+    """验证 pip 模块缺失时才调用 ensurepip。"""
+    call_log = tmp_path / "pip-check.log"
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+run_as_user() {{
+	printf '%s\\n' "$*" >>"{call_log}"
+	case "$*" in
+		*find_spec*) return 1 ;;
+		*ensurepip*) return 0 ;;
+	esac
+	return 1
+}}
+ensure_pip_available proxystack /venv/bin/python
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    output = call_log.read_text(encoding="utf-8")
+    assert "find_spec" in output
+    assert "-m ensurepip --upgrade" in output
+
+
 def test_source_tree_fingerprint_ignores_build_outputs(tmp_path: Path) -> None:
     """验证源码指纹忽略构建输出，但会感知源码内容变化。"""
     source_dir = tmp_path / "source"
