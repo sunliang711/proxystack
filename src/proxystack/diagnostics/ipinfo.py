@@ -15,13 +15,19 @@ from proxystack.config import load_config
 from proxystack.config import load_stacks
 from proxystack.domain.models import SocksListener
 
-DEFAULT_SOURCES = (
+DEFAULT_IPV4_SOURCES = (
     "https://ipinfo.io/json",
     "https://myip.ipip.net",
+)
+DEFAULT_IPV6_SOURCES = (
     "https://ifconfig.me/all.json",
     "https://ifconfig.co/json",
     "https://api64.ipify.org?format=json",
 )
+DEFAULT_SOURCES_BY_FAMILY = {
+    "ipv4": DEFAULT_IPV4_SOURCES,
+    "ipv6": DEFAULT_IPV6_SOURCES,
+}
 FAMILY_LABELS = {
     "ipv4": "IPv4",
     "ipv6": "IPv6",
@@ -83,7 +89,7 @@ def query_ipinfo(
     stack_name: str,
     family: str = "all",
     timeout: float = 8.0,
-    sources: tuple[str, ...] = DEFAULT_SOURCES,
+    sources: Optional[tuple[str, ...]] = None,
     curl_runner: Optional[CurlRunner] = None,
 ) -> IpInfoReport:
     """查询指定 stack 的 mihomo 出口 IP，默认同时检查 IPv4 和 IPv6。"""
@@ -92,17 +98,23 @@ def query_ipinfo(
         raise IpInfoError("family must be one of: all, ipv4, ipv6")
     if timeout <= 0:
         raise IpInfoError("timeout must be greater than 0")
-    if not sources:
-        raise IpInfoError("at least one ipinfo source is required")
 
     runner = curl_runner or run_curl
     proxy_url = resolve_proxy_url(config_path, stack_name)
     families = ("ipv4", "ipv6") if normalized_family == "all" else (normalized_family,)
     family_results = tuple(
-        query_family(proxy_url, query_family_name, sources, timeout, runner)
+        query_family(proxy_url, query_family_name, sources_for_family(query_family_name, sources), timeout, runner)
         for query_family_name in families
     )
     return IpInfoReport(stack_name=stack_name, proxy_url=proxy_url, families=family_results)
+
+
+def sources_for_family(family: str, override_sources: Optional[tuple[str, ...]] = None) -> tuple[str, ...]:
+    """返回指定 family 默认来源；显式传入来源时不做过滤。"""
+    sources = override_sources if override_sources is not None else DEFAULT_SOURCES_BY_FAMILY[family]
+    if not sources:
+        raise IpInfoError("at least one ipinfo source is required")
+    return sources
 
 
 def resolve_proxy_url(config_path: Path, stack_name: str) -> str:

@@ -12,6 +12,7 @@ from proxystack.diagnostics.ipinfo import listener_proxy_url
 from proxystack.diagnostics.ipinfo import parse_source_response
 from proxystack.diagnostics.ipinfo import query_ipinfo
 from proxystack.diagnostics.ipinfo import run_curl
+from proxystack.diagnostics.ipinfo import sources_for_family
 from proxystack.domain.models import SocksListener
 
 
@@ -42,6 +43,36 @@ def test_query_ipinfo_uses_stack_clash_socks_listener() -> None:
     assert report.families[0].region == "Tokyo / JP / AS64500"
     assert calls == [("socks5://127.0.0.1:17091", "https://ipinfo.io/json", "ipv4", 3.0)]
     assert "IP: 198.51.100.10" in "\n".join(format_ipinfo_report(report))
+
+
+def test_query_ipinfo_filters_default_sources_by_family() -> None:
+    """验证默认来源按 IPv4/IPv6 分组，避免输出已知测不出的来源。"""
+    calls: list[tuple[str, str]] = []
+
+    def fake_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResult:
+        """记录 family 和来源 URL，并返回匹配 family 的响应。"""
+        calls.append((family, url))
+        if family == "ipv4":
+            return CurlResult(returncode=0, stdout='{"ip": "198.51.100.10"}', stderr="")
+        return CurlResult(returncode=0, stdout='{"ip": "2001:db8::10"}', stderr="")
+
+    report = query_ipinfo(
+        Path("examples/config.yaml"),
+        "usa1",
+        family="all",
+        curl_runner=fake_curl,
+    )
+
+    assert [family.family for family in report.families] == ["ipv4", "ipv6"]
+    assert calls == [
+        ("ipv4", "https://ipinfo.io/json"),
+        ("ipv4", "https://myip.ipip.net"),
+        ("ipv6", "https://ifconfig.me/all.json"),
+        ("ipv6", "https://ifconfig.co/json"),
+        ("ipv6", "https://api64.ipify.org?format=json"),
+    ]
+    assert "https://ifconfig.me/all.json" not in sources_for_family("ipv4")
+    assert "https://ipinfo.io/json" not in sources_for_family("ipv6")
 
 
 def test_listener_proxy_url_normalizes_wildcard_and_ipv6_hosts() -> None:
