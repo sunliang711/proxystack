@@ -104,6 +104,10 @@ install:
   xray:
     version: latest
     source: auto
+  geo:
+    version: latest
+    source: /opt/proxystack/downloads/geo.dat
+    sha256: <64-hex>
 ```
 
 全局配置只放跨 stack 生效的默认值：
@@ -116,6 +120,7 @@ install:
 - `paths.generated`：生成的 Xray JSON、mihomo YAML、订阅索引目录。
 - `paths.publish`：订阅发布包输出目录。
 - `install.mihomo.source` / `install.xray.source`：可填 `auto`、`github`、`r2` 或普通文件/URL；`auto` 按 GitHub Release 优先、Cloudflare R2 回退下载。
+- `install.geo.source`：必须填写本地 `.dat`、`.mmdb`、zip/tar 文件或普通 URL；geo 不支持 `auto`、`github`、`r2` 托管源别名。
 - `paths.downloads`：mihomo、xray-core 和 geo 数据下载缓存。
 - `paths.sub`：本地非 Docker 订阅服务数据目录，默认 `/opt/proxystack/sub`。
 - `external_host`：订阅节点默认对外 host。

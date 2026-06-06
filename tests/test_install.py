@@ -152,6 +152,19 @@ def test_install_mihomo_defaults_to_auto_source(tmp_path: Path) -> None:
     assert built_request.version == "v1.2.3"
 
 
+def test_install_geo_missing_source_has_actionable_message(tmp_path: Path) -> None:
+    """验证 geo 未配置 source 时提示可用来源形式和示例命令。"""
+    config = write_install_config(tmp_path)
+
+    result = runner.invoke(agent_app, ["install", "geo", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "source is required for geo" in result.output
+    assert "local .dat/.mmdb/zip/tar file" in result.output
+    assert "http(s) URL plus --sha256" in result.output
+    assert "ps-agent install geo --source" in result.output
+
+
 def test_download_url_rejects_private_ip() -> None:
     """验证下载 URL 拒绝本机和私网 IP。"""
     with pytest.raises(ValueError, match="private or local"):
@@ -347,6 +360,16 @@ def test_install_update_help_is_available() -> None:
         result = runner.invoke(agent_app, [*command, "--help"])
 
         assert result.exit_code == 0, command
+
+
+def test_install_help_describes_source_choices() -> None:
+    """验证 install help 展示 mihomo/xray 和 geo 的 source 可选形式。"""
+    result = runner.invoke(agent_app, ["install", "--help"])
+
+    assert result.exit_code == 0
+    assert "auto/github/r2" in result.output
+    assert "本地 .dat/.mmdb/zip/tar" in result.output
+    assert "远端 URL 需要 --sha256" in result.output
 
 
 def write_config_with_sources(tmp_path: Path) -> Path:

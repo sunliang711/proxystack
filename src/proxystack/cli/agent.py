@@ -90,6 +90,7 @@ app.add_typer(service_app, name="service")
 SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
 SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
+INSTALL_SOURCE_HELP = "安装源。mihomo/xray 可用 auto/github/r2、本地文件或 http(s) URL；geo 只支持本地 .dat/.mmdb/zip/tar 或 http(s) URL，远端 URL 需要 --sha256。"
 
 
 @app.callback()
@@ -258,7 +259,7 @@ def install(
     target: str = typer.Argument(..., help="安装目标：mihomo/xray/geo/all。"),
     component_version: Optional[str] = typer.Option(None, "--version", help="目标版本标签。"),
     sha256: Optional[str] = typer.Option(None, "--sha256", help="源文件 sha256。"),
-    source: Optional[str] = typer.Option(None, "--source", "--url", help="源文件路径或下载 URL。"),
+    source: Optional[str] = typer.Option(None, "--source", "--url", help=INSTALL_SOURCE_HELP),
     archive_member: Optional[str] = typer.Option(None, "--archive-member", help="归档内成员路径。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
@@ -278,7 +279,7 @@ def update(
     wheel: Optional[Path] = typer.Option(None, "--wheel", help="update self 使用的 wheel 文件。"),
     component_version: Optional[str] = typer.Option(None, "--version", help="目标版本标签。"),
     sha256: Optional[str] = typer.Option(None, "--sha256", help="源文件或 wheel sha256。"),
-    source: Optional[str] = typer.Option(None, "--source", "--url", help="源文件路径或下载 URL。"),
+    source: Optional[str] = typer.Option(None, "--source", "--url", help=INSTALL_SOURCE_HELP),
     archive_member: Optional[str] = typer.Option(None, "--archive-member", help="归档内成员路径。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:

@@ -151,6 +151,12 @@ def build_install_request(
     if resolved_source is None and target in BINARY_NAMES:
         resolved_source = "auto"
     if not resolved_source:
+        if target == "geo":
+            raise ValueError(
+                "source is required for geo; use --source with a local .dat/.mmdb/zip/tar file "
+                "or an http(s) URL plus --sha256, for example: "
+                "ps-agent install geo --source /opt/proxystack/downloads/geo.dat"
+            )
         raise ValueError(f"source is required for {target}")
     return InstallRequest(
         target=target,
