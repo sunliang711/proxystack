@@ -44,6 +44,15 @@ defaults:
       enabled: false
     policy:
       enabled: false
+      levels:
+        "0":
+          statsUserUplink: true
+          statsUserDownlink: true
+      system:
+        statsInboundUplink: true
+        statsInboundDownlink: true
+        statsOutboundUplink: true
+        statsOutboundDownlink: true
 
 security:
   require_auth_for_public_socks_http: true

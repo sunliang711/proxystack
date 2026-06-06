@@ -173,10 +173,30 @@ class XrelayPolicySystemConfig(ProxystackModel):
     stats_outbound_downlink: Optional[bool] = Field(default=None, alias="statsOutboundDownlink")
 
 
+class XrelayPolicyLevelConfig(ProxystackModel):
+    """Xray level policy 中与用户流量统计相关的配置。"""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True, str_strip_whitespace=True)
+
+    stats_user_uplink: Optional[bool] = Field(default=None, alias="statsUserUplink")
+    stats_user_downlink: Optional[bool] = Field(default=None, alias="statsUserDownlink")
+
+
+def default_xrelay_policy_levels() -> dict[str, XrelayPolicyLevelConfig]:
+    """返回默认 level 0 用户流量统计配置。"""
+    return {
+        "0": XrelayPolicyLevelConfig(
+            statsUserUplink=True,
+            statsUserDownlink=True,
+        ),
+    }
+
+
 class XrelayPolicyConfig(ProxystackModel):
-    """Xray policy 配置，当前支持 system 统计字段。"""
+    """Xray policy 配置，支持 system 和 levels 统计字段。"""
 
     enabled: bool = False
+    levels: dict[str, XrelayPolicyLevelConfig] = Field(default_factory=default_xrelay_policy_levels)
     system: XrelayPolicySystemConfig = Field(default_factory=XrelayPolicySystemConfig)
 
 
@@ -321,7 +341,7 @@ class XrelayOutbound(ProxystackModel):
     def validate_outbound_target(self) -> "XrelayOutbound":
         """校验不同 outbound 类型所需目标字段。"""
         if self.type == "clash":
-            validate_ref(self.ref, 4, "clash outbound ref is required")
+            validate_ref(self.ref, 3, "clash outbound ref is required")
         if self.type in {"socks5", "http"} and (not self.server or not self.port):
             raise ValueError("server and port are required for socks5/http outbound")
         return self
@@ -396,9 +416,34 @@ def merge_xrelay_policy_config(
                 default_config.system,
                 override_config.system,
             )
+        elif field_name == "levels":
+            values[field_name] = merge_xrelay_policy_levels(default_config.levels, override_config.levels)
         else:
             values[field_name] = getattr(override_config, field_name)
     return XrelayPolicyConfig.model_validate(values)
+
+
+def merge_xrelay_policy_levels(
+    default_levels: dict[str, XrelayPolicyLevelConfig],
+    override_levels: dict[str, XrelayPolicyLevelConfig],
+) -> dict[str, XrelayPolicyLevelConfig]:
+    """按 level 编号合并 Xray policy levels 配置。"""
+    merged_levels = {level: config.model_copy(deep=True) for level, config in default_levels.items()}
+    for level, override_config in override_levels.items():
+        default_config = merged_levels.get(level, XrelayPolicyLevelConfig())
+        merged_levels[level] = merge_xrelay_policy_level_config(default_config, override_config)
+    return merged_levels
+
+
+def merge_xrelay_policy_level_config(
+    default_config: XrelayPolicyLevelConfig,
+    override_config: XrelayPolicyLevelConfig,
+) -> XrelayPolicyLevelConfig:
+    """按显式配置字段合并单个 Xray policy level。"""
+    values = default_config.model_dump()
+    for field_name in override_config.model_fields_set:
+        values[field_name] = getattr(override_config, field_name)
+    return XrelayPolicyLevelConfig.model_validate(values)
 
 
 def merge_xrelay_policy_system_config(

@@ -96,7 +96,7 @@ def test_render_xray_clash_wildcard_listener_matches_golden() -> None:
     stack_set = make_stack_set(
         make_stack(
             "wildcard",
-            {"type": "clash", "ref": "wildcard.clash.socks.local"},
+            {"type": "clash", "ref": "wildcard.clash.socks"},
             [socks_noauth_inbound()],
             clash_enabled=True,
             listener_listen="0.0.0.0",
@@ -197,6 +197,11 @@ def test_render_xray_api_and_policy_overrides() -> None:
                     "enabled": True,
                 },
                 "policy": {
+                    "levels": {
+                        "0": {
+                            "statsUserDownlink": False,
+                        },
+                    },
                     "system": {
                         "statsOutboundDownlink": False,
                     },
@@ -211,6 +216,12 @@ def test_render_xray_api_and_policy_overrides() -> None:
         "tag": "metrics-api",
         "listen": "127.0.0.1:11085",
         "services": ["StatsService", "LoggerService"],
+    }
+    assert parsed_config["policy"]["levels"] == {
+        "0": {
+            "statsUserUplink": True,
+            "statsUserDownlink": False,
+        },
     }
     assert parsed_config["policy"]["system"] == {
         "statsInboundUplink": True,

@@ -170,6 +170,45 @@ port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 17000-17999
   clash_controller: 19000-19999
+
+defaults:
+  clash:
+    mode: Rule
+    rule_profile: default
+  xrelay:
+    loglevel: warning
+    api:
+      enabled: false
+      tag: api
+      listen: 127.0.0.1:10085
+      services: [StatsService]
+    stats:
+      enabled: false
+    policy:
+      enabled: false
+      levels:
+        "0":
+          statsUserUplink: true
+          statsUserDownlink: true
+      system:
+        statsInboundUplink: true
+        statsInboundDownlink: true
+        statsOutboundUplink: true
+        statsOutboundDownlink: true
+
+security:
+  require_auth_for_public_socks_http: true
+  allow_noauth_public: false
+
+install:
+  mihomo:
+    version: latest
+    source: auto
+  xray:
+    version: latest
+    source: auto
+  geo:
+    version: latest
 """
 
 
@@ -358,7 +397,7 @@ def rewrite_self_refs(value: Any, source: str, target: str) -> None:
 def rewrite_ref_string(value: str, source: str, target: str) -> str:
     """在 ref 形态字符串中把第一段 source 改为 target。"""
     parts = value.split(".")
-    if len(parts) in {2, 4} and parts[0] == source and all(parts):
+    if len(parts) in {2, 3} and parts[0] == source and all(parts):
         return ".".join([target, *parts[1:]])
     return value
 

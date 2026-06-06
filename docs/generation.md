@@ -46,6 +46,12 @@ API listen 必须是 loopback 地址，避免把 Xray API 暴露到公网。
 {
   "stats": {},
   "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
     "system": {
       "statsInboundUplink": true,
       "statsInboundDownlink": true,
@@ -56,7 +62,7 @@ API listen 必须是 loopback 地址，避免把 Xray API 暴露到公网。
 }
 ```
 
-如果用户显式配置 `policy.system` 中的统计字段，生成器使用显式配置覆盖 Stats 默认值。
+如果用户显式配置 `policy.levels` 或 `policy.system` 中的统计字段，生成器使用显式配置覆盖 Stats 默认值。
 
 ### inbounds
 
@@ -102,7 +108,7 @@ xrelay outbound 生成 Xray `outbounds`：
 xrelay:
   outbound:
     type: clash
-    ref: usa1.clash.socks.local
+    ref: usa1.clash.socks
 ```
 
 生成时解析到：

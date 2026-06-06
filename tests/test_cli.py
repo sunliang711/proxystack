@@ -193,6 +193,13 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert config.exists()
+    config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
+    xrelay_defaults = config_data["defaults"]["xrelay"]
+    assert xrelay_defaults["api"]["services"] == ["StatsService"]
+    assert xrelay_defaults["stats"]["enabled"] is False
+    assert xrelay_defaults["policy"]["levels"]["0"]["statsUserUplink"] is True
+    assert xrelay_defaults["policy"]["system"]["statsInboundUplink"] is True
+    assert config_data["install"]["mihomo"]["source"] == "auto"
     for relative_path in [
         "stacks",
         "runtime",
@@ -217,7 +224,7 @@ def test_agent_add_uses_template_and_refuses_overwrite(tmp_path: Path) -> None:
     assert result.exit_code == 0
     stack_data = YAML(typ="safe").load((config.parent / "stacks" / "new1.yaml").read_text(encoding="utf-8"))
     assert stack_data["name"] == "new1"
-    assert stack_data["xrelay"]["outbound"]["ref"] == "new1.clash.socks.local"
+    assert stack_data["xrelay"]["outbound"]["ref"] == "new1.clash.socks"
     assert duplicate.exit_code == 1
 
 
@@ -280,7 +287,7 @@ def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
     cloned_stack = YAML(typ="safe").load((config.parent / "stacks" / "usa3.yaml").read_text(encoding="utf-8"))
     source_stack = YAML(typ="safe").load((config.parent / "stacks" / "usa1.yaml").read_text(encoding="utf-8"))
     assert cloned_stack["name"] == "usa3"
-    assert cloned_stack["xrelay"]["outbound"]["ref"] == "usa3.clash.socks.local"
+    assert cloned_stack["xrelay"]["outbound"]["ref"] == "usa3.clash.socks"
     assert cloned_stack["xrelay"]["inbounds"][0]["port"] != source_stack["xrelay"]["inbounds"][0]["port"]
     assert cloned_stack["clash"]["listeners"]["socks"][0]["port"] != source_stack["clash"]["listeners"]["socks"][0]["port"]
 
@@ -548,7 +555,7 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-path.write_text(text.replace("usa1.clash.socks.local", "missing.clash.socks.local"), encoding="utf-8")
+path.write_text(text.replace("usa1.clash.socks", "missing.clash.socks"), encoding="utf-8")
 """.lstrip(),
         encoding="utf-8",
     )

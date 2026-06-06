@@ -10,7 +10,7 @@
 ## 当前 ref 规则
 
 - `clash.upstreams[].type: xrelay-socks5` 使用两段 ref：`<stack>.<inbound_name>`，例如 `usa1.relay`。
-- `xrelay.outbound.type: clash` 使用四段 ref：`<stack>.clash.<listener_type>.<listener_name>`，例如 `usa1.clash.socks.local`。
+- `xrelay.outbound.type: clash` 使用三段 ref：`<stack>.clash.socks`，例如 `usa1.clash.socks`。
 
 ## 验证命令
 

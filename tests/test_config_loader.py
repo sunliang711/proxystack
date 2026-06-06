@@ -41,7 +41,7 @@ def test_reference_graph_indexes_examples() -> None:
 
     graph = build_reference_graph(stack_set)
     inbound = graph.index.resolve_xrelay_inbound("usa1.relay")
-    listener = graph.index.resolve_clash_listener("usa1.clash.socks.local")
+    listener = graph.index.resolve_clash_listener("usa1.clash.socks")
 
     assert inbound is not None
     assert inbound.kind == "socks5"
@@ -229,7 +229,7 @@ def test_validate_rejects_missing_clash_listener_ref(tmp_path: Path) -> None:
     """验证 xrelay outbound 指向不存在的 clash listener 会失败。"""
     project_dir = write_project(
         tmp_path,
-        valid_stack_yaml("edge").replace("edge.clash.socks.local", "edge.clash.socks.missing"),
+        valid_stack_yaml("edge").replace("edge.clash.socks", "missing.clash.socks"),
     )
     config = load_config(project_dir / "config.yaml")
 
@@ -237,11 +237,23 @@ def test_validate_rejects_missing_clash_listener_ref(tmp_path: Path) -> None:
         load_stacks(config, check_system_ports=False)
 
 
+def test_load_stack_rejects_verbose_xrelay_clash_ref(tmp_path: Path) -> None:
+    """验证 xrelay clash outbound 不再接受旧的四段 listener ref。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace("edge.clash.socks", "edge.clash.socks.local"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="3 dot-separated segments"):
+        load_stack(stack_path)
+
+
 def test_validate_rejects_wrong_xrelay_outbound_component(tmp_path: Path) -> None:
     """验证 xrelay outbound type 为 clash 时不能指向其他组件。"""
     project_dir = write_project(
         tmp_path,
-        valid_stack_yaml("edge").replace("edge.clash.socks.local", "edge.xrelay.socks.local"),
+        valid_stack_yaml("edge").replace("edge.clash.socks", "edge.xrelay.socks"),
     )
     config = load_config(project_dir / "config.yaml")
 
@@ -253,7 +265,7 @@ def test_validate_rejects_wrong_xrelay_outbound_listener_kind(tmp_path: Path) ->
     """验证 xrelay outbound type 为 clash 时必须指向 socks listener。"""
     project_dir = write_project(
         tmp_path,
-        valid_stack_yaml("edge").replace("edge.clash.socks.local", "edge.clash.mixed.local"),
+        valid_stack_yaml("edge").replace("edge.clash.socks", "edge.clash.mixed"),
     )
     config = load_config(project_dir / "config.yaml")
 
@@ -319,7 +331,7 @@ def test_validate_skips_disabled_xrelay_source_ref(tmp_path: Path) -> None:
         tmp_path,
         valid_stack_yaml("edge")
         .replace("xrelay:\n  enabled: true", "xrelay:\n  enabled: false")
-        .replace("edge.clash.socks.local", "missing.clash.socks.local"),
+        .replace("edge.clash.socks", "missing.clash.socks"),
     )
     config = load_config(project_dir / "config.yaml")
 
@@ -422,7 +434,7 @@ xrelay:
   enabled: true
   outbound:
     type: clash
-    ref: {name}.clash.socks.local
+    ref: {name}.clash.socks
   inbounds:
     - name: relay
       protocol: socks5

@@ -12,9 +12,9 @@
 
 ## 实现步骤
 
-1. 实现 `ParseRef`，支持 xrelay inbound 两段 `instance.inbound_name` 和通用四段 `instance.component.kind.name`。
+1. 实现 `ParseRef`，支持 xrelay inbound 两段 `instance.inbound_name` 和 clash listener 三段 `instance.clash.socks`。
 2. 实现 xrelay inbound 索引：`instance + inbound_name -> endpoint`，endpoint 的 `kind` 表示 inbound protocol。
-3. 实现 clash listener 索引：`instance + listener_type + listener_name -> endpoint`。
+3. 实现 clash listener 索引：`instance + listener_type -> endpoint`。
 4. 校验 `xrelay.outbound.type: clash` 的 ref。
 5. 校验 `clash.upstreams.type: xrelay-socks5` 的两段 ref。
 6. 校验 `proxy-groups[].proxies[]` 和 rules 目标。
@@ -24,7 +24,7 @@
 ## 验收标准
 
 - `usa1.relay` 能解析到 xrelay inbound 端口，其中 `kind` 表示 inbound protocol。
-- `usa1.clash.socks.local` 能解析到 clash socks listener，其中 `kind` 表示 listener type。
+- `usa1.clash.socks` 能解析到 clash socks listener，其中 `kind` 表示 listener type。
 - ref 不存在、组件不匹配、协议不匹配时失败。
 - auto 场景无循环时通过，有循环时失败。
 - `plan` 能展示目标 stack 的依赖服务和建议操作顺序。

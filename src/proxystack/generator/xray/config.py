@@ -12,6 +12,7 @@ from proxystack.domain.models import StackSet
 from proxystack.domain.models import XrelayApiConfig
 from proxystack.domain.models import XrelayOutbound
 from proxystack.domain.models import XrelayPolicyConfig
+from proxystack.domain.models import XrelayPolicyLevelConfig
 from proxystack.domain.models import XrelayPolicySystemConfig
 from proxystack.domain.models import XrelayStatsConfig
 from proxystack.domain.models import resolve_xrelay_api_config
@@ -26,6 +27,10 @@ XRAY_POLICY_STATS_FIELDS = {
     "statsInboundDownlink": "stats_inbound_downlink",
     "statsOutboundUplink": "stats_outbound_uplink",
     "statsOutboundDownlink": "stats_outbound_downlink",
+}
+XRAY_POLICY_LEVEL_STATS_FIELDS = {
+    "statsUserUplink": "stats_user_uplink",
+    "statsUserDownlink": "stats_user_downlink",
 }
 
 
@@ -77,10 +82,33 @@ def render_xray_stats(stats_config: XrelayStatsConfig) -> dict[str, Any]:
 
 
 def render_xray_policy(policy_config: XrelayPolicyConfig, stats_enabled: bool) -> dict[str, Any]:
-    """生成 Xray policy 配置，stats 开启时默认启用系统流量统计项。"""
-    return {
-        "system": render_xray_policy_system(policy_config.system, stats_enabled),
-    }
+    """生成 Xray policy 配置，stats 开启时默认启用流量统计项。"""
+    policy: dict[str, Any] = {}
+    levels = render_xray_policy_levels(policy_config.levels)
+    if levels:
+        policy["levels"] = levels
+    policy["system"] = render_xray_policy_system(policy_config.system, stats_enabled)
+    return policy
+
+
+def render_xray_policy_levels(levels_config: dict[str, XrelayPolicyLevelConfig]) -> dict[str, dict[str, bool]]:
+    """生成 Xray policy levels 的用户流量统计开关。"""
+    levels: dict[str, dict[str, bool]] = {}
+    for level in sorted(levels_config):
+        level_config = render_xray_policy_level(levels_config[level])
+        if level_config:
+            levels[level] = level_config
+    return levels
+
+
+def render_xray_policy_level(level_config: XrelayPolicyLevelConfig) -> dict[str, bool]:
+    """生成单个 Xray policy level 的用户流量统计开关。"""
+    rendered_level: dict[str, bool] = {}
+    for xray_field, model_field in XRAY_POLICY_LEVEL_STATS_FIELDS.items():
+        value = getattr(level_config, model_field)
+        if value is not None:
+            rendered_level[xray_field] = value
+    return rendered_level
 
 
 def render_xray_policy_system(

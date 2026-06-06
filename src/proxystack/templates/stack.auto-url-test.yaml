@@ -46,8 +46,8 @@ xrelay:
   outbound:
     # 出站目标类型；clash 表示转发到本 stack 的 Clash 监听器。
     type: clash
-    # 出站引用；指向 stack.clash.socks.listener 形式的本地 socks 监听。
-    ref: auto.clash.socks.local
+    # 出站引用；指向 stack.clash.socks 形式的唯一本地 socks 监听。
+    ref: auto.clash.socks
 
 # Clash/mihomo 侧配置，用于自动探测并选择可用上游。
 clash:

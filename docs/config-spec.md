@@ -166,7 +166,7 @@ xrelay:
   enabled: true
   outbound:
     type: clash
-    ref: usa1.clash.socks.local
+    ref: usa1.clash.socks
   inbounds:
     - name: relay
       protocol: socks5
@@ -237,6 +237,10 @@ xrelay:
   stats:
     enabled: true
   policy:
+    levels:
+      "0":
+        statsUserUplink: true
+        statsUserDownlink: true
     system:
       statsInboundUplink: true
       statsInboundDownlink: true
@@ -249,7 +253,7 @@ xrelay:
 - `api.enabled` 默认 `false`；开启时默认 `tag: api`、`listen: 127.0.0.1:10085`、`services: [StatsService]`。
 - API listen 只能使用 `127.0.0.1`、`::1` 或 `localhost`，不能配置公网监听地址。
 - `stats.enabled` 默认 `false`；开启时生成 `stats: {}`。
-- 开启 Stats 时，四个 `policy.system` 流量统计开关默认生成 `true`，显式配置值可以覆盖。
+- 开启 Stats 时，两个 `policy.levels."0"` 用户统计开关和四个 `policy.system` 流量统计开关默认生成 `true`，显式配置值可以覆盖。
 
 ### inbound 字段
 
@@ -307,19 +311,18 @@ xrelay 的 `outbound.type` 支持：
 ```yaml
 outbound:
   type: clash
-  ref: usa1.clash.socks.local
+  ref: usa1.clash.socks
 ```
 
-ref 两段含义：
+ref 三段含义：
 
 ```text
-<stack>.clash.<listener_type>.<listener_name>
+<stack>.clash.socks
 ```
 
 - 第一段 `usa1`：目标 stack 名称。
 - 第二段 `clash`：目标组件类型。
-- 第三段 `socks`：目标 listener 类型，P0 只支持 `socks`；`mixed` 作为 P1 扩展预留。
-- 第四段 `local`：目标 listener 的 `name` 字段。
+- 第三段 `socks`：目标 listener 类型，当前只支持唯一 socks listener。
 
 这样 xrelay 不需要重复填写 clash 的 socks 端口；端口只在目标 stack 的 `clash.listeners` 中声明一次。
 

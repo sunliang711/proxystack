@@ -38,9 +38,9 @@ class ParsedRef:
 
     @classmethod
     def parse_component(cls, value: Optional[str], path: str) -> "ParsedRef":
-        """解析 `<stack>.<component>.<kind>.<name>` 形式的组件 ref。"""
-        parts = split_ref(value, 4, path)
-        return cls(raw=value or "", stack=parts[0], component=parts[1], kind=parts[2], name=parts[3])
+        """解析 `<stack>.<component>.<kind>` 形式的组件 ref。"""
+        parts = split_ref(value, 3, path)
+        return cls(raw=value or "", stack=parts[0], component=parts[1], kind=parts[2], name="")
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class ReferenceIndex:
         return self.xrelay_inbounds.get(ref)
 
     def resolve_clash_listener(self, ref: str) -> Optional[Endpoint]:
-        """按四段 ref 查询 clash listener endpoint。"""
+        """按三段 ref 查询 clash listener endpoint。"""
         return self.clash_listeners.get(ref)
 
 
@@ -105,7 +105,7 @@ def parse_xrelay_inbound_ref(value: Optional[str], path: str) -> ParsedRef:
 
 
 def parse_component_ref(value: Optional[str], path: str) -> ParsedRef:
-    """解析 xrelay outbound 使用的四段组件 ref。"""
+    """解析 xrelay outbound 使用的三段组件 ref。"""
     return ParsedRef.parse_component(value, path)
 
 
@@ -128,10 +128,10 @@ def index_xrelay_inbounds(stack: Stack) -> dict[str, Endpoint]:
 
 
 def index_clash_listeners(stack: Stack) -> dict[str, Endpoint]:
-    """建立单个 stack 的 clash listener 四段 ref 索引。"""
+    """建立单个 stack 的唯一 clash socks listener 三段 ref 索引。"""
     endpoints: dict[str, Endpoint] = {}
     for listener_index, listener in enumerate(stack.clash.listeners.socks):
-        ref = f"{stack.name}.clash.socks.{listener.name}"
+        ref = f"{stack.name}.clash.socks"
         endpoints[ref] = Endpoint(
             ref=ref,
             stack=stack.name,

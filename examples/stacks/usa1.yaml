@@ -7,7 +7,7 @@ xrelay:
   enabled: true
   outbound:
     type: clash
-    ref: usa1.clash.socks.local
+    ref: usa1.clash.socks
   inbounds:
     - name: relay
       protocol: socks5
