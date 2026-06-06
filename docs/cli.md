@@ -18,6 +18,7 @@ proxystack-agent
   restart
   status
   logs
+  ipinfo
   enable
   disable
   publish
@@ -92,6 +93,7 @@ proxystack-agent stop usa1
 proxystack-agent restart usa1
 proxystack-agent status
 proxystack-agent logs usa1 --follow
+proxystack-agent ipinfo usa1
 proxystack-agent publish
 proxystack-agent doctor
 ```
@@ -111,6 +113,7 @@ proxystack-agent doctor
 - `restart [target]`：先检查目标服务需要的 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写 manifest，然后通过 systemd 重启目标范围内服务；`restart sub` 不读取 stack。
 - `status [target]`：通过 systemd 查询目标范围内服务状态。
 - `logs [target]`：通过 `journalctl` 查看目标范围内服务日志；`logs <stack> -f` 会在一次 `journalctl` 调用中同时订阅该 stack 的 mihomo 和 xray unit。
+- `ipinfo <stack>`：通过该 stack 的 mihomo socks listener 查询出口 IPv4/IPv6 和地域信息；需要系统已安装 `curl`。
 - `enable [target]`：通过 systemd 设置目标范围内服务开机自启。
 - `disable [target]`：通过 systemd 取消目标范围内服务开机自启。
 - `publish`：生成订阅发布包，默认输出到 `/opt/proxystack/publish/sub-bundle.zip`。

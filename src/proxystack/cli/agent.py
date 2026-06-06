@@ -31,6 +31,9 @@ from proxystack.cli.lifecycle import resolve_target_scope
 from proxystack.config import DEFAULT_CONFIG_PATH
 from proxystack.config import load_config
 from proxystack.config import load_stacks
+from proxystack.diagnostics.ipinfo import IpInfoError
+from proxystack.diagnostics.ipinfo import format_ipinfo_report
+from proxystack.diagnostics.ipinfo import query_ipinfo
 from proxystack.domain import ConfigValidationError
 from proxystack.domain.models import GlobalConfig
 from proxystack.generator.mihomo import dumps_mihomo_config
@@ -72,6 +75,7 @@ INSTALL_HELP_PANEL = "安装更新"
 VALIDATE_HELP_PANEL = "校验与渲染"
 SERVICE_HELP_PANEL = "服务控制"
 SUBSCRIPTION_HELP_PANEL = "订阅发布"
+DIAGNOSTIC_HELP_PANEL = "诊断工具"
 
 app = typer.Typer(
     help="本地代理栈管理命令。",
@@ -440,6 +444,23 @@ def logs(
 ) -> None:
     """读取目标 systemd 服务日志。"""
     run_service_adapter("log", target, config, skip_system_ports, follow=follow)
+
+
+@app.command(rich_help_panel=DIAGNOSTIC_HELP_PANEL)
+def ipinfo(
+    name: str = typer.Argument(..., help="要查询出口 IP 的 stack 名称。"),
+    family: str = typer.Option("all", "--family", help="查询 IP 类型：all/ipv4/ipv6。"),
+    timeout: float = typer.Option(8.0, "--timeout", help="单个来源请求超时时间，单位秒。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """通过 stack 的 mihomo socks listener 查询出口 IP。"""
+    try:
+        report = query_ipinfo(config, name, family=family, timeout=timeout)
+    except (ValidationError, ConfigValidationError, IpInfoError, ValueError, OSError) as exc:
+        typer.echo(f"查询出口 IP 失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    for line in format_ipinfo_report(report):
+        typer.echo(line)
 
 
 @app.command(rich_help_panel=SERVICE_HELP_PANEL)

@@ -20,6 +20,9 @@ import proxystack.cli.sub as sub_module
 import proxystack.domain.validation as validation_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
+from proxystack.diagnostics.ipinfo import FamilyResult
+from proxystack.diagnostics.ipinfo import IpInfoReport
+from proxystack.diagnostics.ipinfo import SourceResult
 from proxystack.systemd import CommandResult
 from scripts.build_package import clean_build_state
 
@@ -79,6 +82,7 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["restart"],
         ["status"],
         ["logs"],
+        ["ipinfo"],
         ["enable"],
         ["disable"],
         ["publish"],
@@ -121,6 +125,47 @@ def test_agent_version_is_available() -> None:
 
     assert result.exit_code == 0
     assert "proxystack-agent" in result.output
+
+
+def test_agent_ipinfo_outputs_report(monkeypatch: MonkeyPatch) -> None:
+    """验证 ipinfo 命令会输出指定 stack 的出口 IP 报告。"""
+    calls: list[tuple[Path, str, str, float]] = []
+
+    def fake_query_ipinfo(config: Path, name: str, family: str, timeout: float) -> IpInfoReport:
+        """记录 CLI 入参并返回固定报告，避免测试访问外网。"""
+        calls.append((config, name, family, timeout))
+        return IpInfoReport(
+            stack_name=name,
+            proxy_url="socks5://127.0.0.1:17091",
+            families=(
+                FamilyResult(
+                    family="ipv4",
+                    label="IPv4",
+                    sources=(
+                        SourceResult(
+                            url="https://ipinfo.io/json",
+                            status="ok",
+                            ip="198.51.100.10",
+                            region="Tokyo / JP",
+                            body="",
+                            error="",
+                        ),
+                    ),
+                    ip="198.51.100.10",
+                    region="Tokyo / JP",
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(agent_module, "query_ipinfo", fake_query_ipinfo)
+
+    result = runner.invoke(agent_app, ["ipinfo", "usa1", "--family", "ipv4", "--timeout", "2", "-c", "examples/config.yaml"])
+
+    assert result.exit_code == 0
+    assert "Stack: usa1" in result.output
+    assert "Proxy: socks5://127.0.0.1:17091" in result.output
+    assert "IP: 198.51.100.10" in result.output
+    assert calls == [(Path("examples/config.yaml"), "usa1", "ipv4", 2.0)]
 
 
 def test_agent_validate_examples() -> None:
