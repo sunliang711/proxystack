@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 import proxystack.cli.agent as agent_module
 import proxystack.cli.lifecycle as lifecycle_module
 import proxystack.cli.sub as sub_module
+import proxystack.domain.validation as validation_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
 from proxystack.systemd import CommandResult
@@ -270,7 +271,7 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     (generated_dir / "mihomo" / "usa1.yaml").write_text("{}\n", encoding="utf-8")
     monkeypatch.setattr(lifecycle_module, "is_service_active", lambda service_name: service_name == "proxystack-xray@usa1.service")
 
-    result = runner.invoke(agent_app, ["list", "--skip-system-ports", "-c", str(config)])
+    result = runner.invoke(agent_app, ["list", "-c", str(config)])
 
     assert result.exit_code == 0
     assert "正在执行 proxystack-agent list" not in result.output
@@ -283,6 +284,21 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     assert "xrelay,clash  xrelay" in result.output
     assert "Xrelay Ports" in result.output
     assert "alice/socks5:24001,alice/vmess:24101" in result.output
+
+
+def test_agent_list_skips_system_port_check_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 list 默认不因运行中的自身端口占用而失败。"""
+    config = copy_example_project(tmp_path)
+    monkeypatch.setattr(validation_module, "is_port_available", lambda _host, _port: False)
+
+    result = runner.invoke(agent_app, ["list", "-c", str(config)])
+    strict_result = runner.invoke(agent_app, ["list", "--check-system-ports", "-c", str(config)])
+
+    assert result.exit_code == 0
+    assert "usa1" in result.output
+    assert strict_result.exit_code == 1
+    assert "listen port" in strict_result.output
+    assert "already in use" in strict_result.output
 
 
 def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

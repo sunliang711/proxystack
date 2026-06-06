@@ -192,11 +192,11 @@ def clone_command(
 @app.command("list", rich_help_panel=CONFIG_HELP_PANEL)
 def list_command(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
+    check_system_ports: bool = typer.Option(False, "--check-system-ports/--skip-system-ports", help="额外检查系统端口占用；默认跳过，避免运行中的服务阻断列表展示。"),
 ) -> None:
     """列出 stack 名称、启用状态、角色和主要监听端口。"""
     try:
-        rows = list_stacks(config, check_system_ports=not skip_system_ports)
+        rows = list_stacks(config, check_system_ports=check_system_ports)
     except (ValidationError, ConfigValidationError, ValueError) as exc:
         typer.echo(f"读取 stack 列表失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
