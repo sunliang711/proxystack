@@ -17,6 +17,27 @@ xrelay:
   # 是否为该 stack 启用 xrelay 服务。
   enabled: true
 
+  # Xray API 配置；默认开启并只监听本机，供 stats 查询使用。
+  api:
+    # 是否启用 Xray API。
+    enabled: true
+    # API 出站标识。
+    tag: api
+    # API 监听地址；add 默认会自动分配端口。
+    listen: 127.0.0.1:10085
+    # 启用的 API 服务列表。
+    services: [StatsService]
+
+  # Xray stats 配置；默认开启以采集流量统计。
+  stats:
+    # 是否启用 stats。
+    enabled: true
+
+  # Xray policy 配置；默认开启并继承全局统计开关。
+  policy:
+    # 是否生成 policy 配置。
+    enabled: true
+
   # xrelay 入站列表，会生成对应 Xray inbound。
   inbounds:
     # 入站名称；供其他 stack 通过 ref 引用。

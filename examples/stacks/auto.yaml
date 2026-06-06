@@ -5,6 +5,13 @@ labels: [auto]
 
 xrelay:
   enabled: true
+  api:
+    enabled: true
+    listen: 127.0.0.1:10150
+  stats:
+    enabled: true
+  policy:
+    enabled: true
   outbound:
     type: clash
     ref: auto.clash.socks

@@ -26,7 +26,7 @@
 
 ### api、stats 和 policy
 
-默认不生成 `api`、`stats`、`policy`。当 `api.enabled: true` 时生成 Xray 简化 API 配置：
+默认生成 `api`、`stats`、`policy`。`api.enabled: true` 时生成 Xray 简化 API 配置：
 
 ```json
 {

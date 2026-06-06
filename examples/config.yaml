@@ -36,14 +36,14 @@ defaults:
   xrelay:
     loglevel: warning
     api:
-      enabled: false
+      enabled: true
       tag: api
       listen: 127.0.0.1:10085
       services: [StatsService]
     stats:
-      enabled: false
+      enabled: true
     policy:
-      enabled: false
+      enabled: true
       levels:
         "0":
           statsUserUplink: true

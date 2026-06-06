@@ -268,6 +268,15 @@ def make_stack(
         "enabled": xrelay_enabled,
         "outbound": outbound,
         "inbounds": inbounds,
+        "api": {
+            "enabled": False,
+        },
+        "stats": {
+            "enabled": False,
+        },
+        "policy": {
+            "enabled": False,
+        },
     }
     if xrelay_overrides:
         xrelay_config.update(xrelay_overrides)

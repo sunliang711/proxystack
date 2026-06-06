@@ -123,9 +123,9 @@ class DefaultClashConfig(ProxystackModel):
 
 
 class XrelayApiConfig(ProxystackModel):
-    """Xray API 配置，默认关闭且只允许监听本机回环地址。"""
+    """Xray API 配置，只允许监听本机回环地址。"""
 
-    enabled: bool = False
+    enabled: bool = True
     tag: Name = "api"
     listen: str = "127.0.0.1:10085"
     services: list[str] = Field(default_factory=lambda: ["StatsService"], min_length=1)
@@ -159,7 +159,7 @@ class XrelayApiConfig(ProxystackModel):
 class XrelayStatsConfig(ProxystackModel):
     """Xray stats 配置开关。"""
 
-    enabled: bool = False
+    enabled: bool = True
 
 
 class XrelayPolicySystemConfig(ProxystackModel):
@@ -195,7 +195,7 @@ def default_xrelay_policy_levels() -> dict[str, XrelayPolicyLevelConfig]:
 class XrelayPolicyConfig(ProxystackModel):
     """Xray policy 配置，支持 system 和 levels 统计字段。"""
 
-    enabled: bool = False
+    enabled: bool = True
     levels: dict[str, XrelayPolicyLevelConfig] = Field(default_factory=default_xrelay_policy_levels)
     system: XrelayPolicySystemConfig = Field(default_factory=XrelayPolicySystemConfig)
 

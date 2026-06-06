@@ -84,14 +84,14 @@ defaults:
   xrelay:
     loglevel: warning
     api:
-      enabled: false
+      enabled: true
       tag: api
       listen: 127.0.0.1:10085
       services: [StatsService]
     stats:
-      enabled: false
+      enabled: true
     policy:
-      enabled: false
+      enabled: true
 
 security:
   require_auth_for_public_socks_http: true
@@ -254,10 +254,10 @@ xrelay:
 
 规则：
 
-- `api.enabled` 默认 `false`；开启时默认 `tag: api`、`listen: 127.0.0.1:10085`、`services: [StatsService]`。
+- `api.enabled` 默认 `true`；默认 `tag: api`、`listen: 127.0.0.1:10085`、`services: [StatsService]`。
 - API listen 只能使用 `127.0.0.1`、`::1` 或 `localhost`，不能配置公网监听地址。
-- `stats.enabled` 默认 `false`；开启时生成 `stats: {}`。
-- 开启 Stats 时，两个 `policy.levels."0"` 用户统计开关和四个 `policy.system` 流量统计开关默认生成 `true`，显式配置值可以覆盖。
+- `stats.enabled` 默认 `true`；开启时生成 `stats: {}`。
+- `policy.enabled` 默认 `true`；两个 `policy.levels."0"` 用户统计开关和四个 `policy.system` 流量统计开关默认生成 `true`，显式配置值可以覆盖。
 
 ### inbound 字段
 

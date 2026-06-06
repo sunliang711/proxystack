@@ -178,14 +178,14 @@ defaults:
   xrelay:
     loglevel: warning
     api:
-      enabled: false
+      enabled: true
       tag: api
       listen: 127.0.0.1:10085
       services: [StatsService]
     stats:
-      enabled: false
+      enabled: true
     policy:
-      enabled: false
+      enabled: true
       levels:
         "0":
           statsUserUplink: true
@@ -404,7 +404,7 @@ def rewrite_ref_string(value: str, source: str, target: str) -> str:
 
 
 def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> None:
-    """按全局端口池为 stack 内 xrelay inbound、clash socks 和 controller 分配端口。"""
+    """按全局端口池为 stack 内 xrelay inbound/API、clash socks 和 controller 分配端口。"""
     used_ports = collect_used_ports(config)
     xrelay_data = stack_data.setdefault("xrelay", {})
     inbounds = xrelay_data.get("inbounds", [])
@@ -421,6 +421,21 @@ def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> No
         socks_data["port"] = port
         used_ports.add(port)
 
+    api_data = xrelay_data.get("api", {})
+    if api_data.get("enabled") is True:
+        api_host = "127.0.0.1"
+        if "listen" in api_data:
+            api_host, _ = parse_listen(str(api_data["listen"]))
+        api_port = allocate_from_range(
+            config.port_ranges.clash_controller.start,
+            config.port_ranges.clash_controller.end,
+            used_ports,
+            1,
+        )[0]
+        api_data["listen"] = f"{api_host}:{api_port}"
+        xrelay_data["api"] = api_data
+        used_ports.add(api_port)
+
     controller_data = clash_data.setdefault("controller", {})
     controller_host = "127.0.0.1"
     if "listen" in controller_data:
@@ -432,6 +447,7 @@ def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> No
         1,
     )[0]
     controller_data["listen"] = f"{controller_host}:{controller_port}"
+    used_ports.add(controller_port)
 
 
 def collect_used_ports(config: GlobalConfig) -> set[int]:

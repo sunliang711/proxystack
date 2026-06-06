@@ -260,8 +260,10 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert config.exists()
     config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
     xrelay_defaults = config_data["defaults"]["xrelay"]
+    assert xrelay_defaults["api"]["enabled"] is True
     assert xrelay_defaults["api"]["services"] == ["StatsService"]
-    assert xrelay_defaults["stats"]["enabled"] is False
+    assert xrelay_defaults["stats"]["enabled"] is True
+    assert xrelay_defaults["policy"]["enabled"] is True
     assert xrelay_defaults["policy"]["levels"]["0"]["statsUserUplink"] is True
     assert xrelay_defaults["policy"]["system"]["statsInboundUplink"] is True
     assert config_data["install"]["mihomo"]["source"] == "auto"
@@ -363,8 +365,10 @@ def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path
     assert [inbound["port"] for inbound in usa2["xrelay"]["inbounds"]] == [24002, 24003]
     assert usa1["clash"]["listeners"]["socks"][0]["port"] == 17000
     assert usa2["clash"]["listeners"]["socks"][0]["port"] == 17001
-    assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:19000"
-    assert usa2["clash"]["controller"]["listen"] == "127.0.0.1:19001"
+    assert usa1["xrelay"]["api"]["listen"] == "127.0.0.1:19000"
+    assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:19001"
+    assert usa2["xrelay"]["api"]["listen"] == "127.0.0.1:19002"
+    assert usa2["clash"]["controller"]["listen"] == "127.0.0.1:19003"
 
 
 def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
@@ -394,7 +398,8 @@ def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatc
     inbound_ports = [inbound["port"] for inbound in stack_data["xrelay"]["inbounds"]]
     assert inbound_ports == [24000, 24001]
     assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 17000
-    assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:19000"
+    assert stack_data["xrelay"]["api"]["listen"] == "127.0.0.1:19000"
+    assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:19001"
 
 
 def test_agent_clone_default_refuses_invalid_duplicate_ports(tmp_path: Path) -> None:
