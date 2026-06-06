@@ -8,6 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SOURCE_DIR="${PROJECT_ROOT}"
 BASE_DIR="/opt/proxystack"
+BIN_DIR="/usr/local/bin"
 IMPORT_BUNDLE=""
 INSTALL_SYSTEMD="0"
 START_SERVICE="0"
@@ -22,11 +23,12 @@ Usage: scripts/install-sub-local.sh [options]
 
 Install proxystack-sub for a local non-Docker deployment. The script creates
 the venv and subscription data directories, optionally imports a bundle, and
-optionally installs or starts ps-sub.service.
+optionally installs or starts proxystack-sub.service.
 
 Options:
   --source DIR             Install from a local source directory. Default: repository root
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
+  --bin-dir DIR            Console-script symlink directory. Default: /usr/local/bin
   --import-bundle FILE     Import a sub-bundle.zip after installation.
   --python CMD             Python command used to create the venv. Default: python3
   --user USER              System user. Default: proxystack
@@ -66,6 +68,14 @@ parse_args() {
 				;;
 			--base-dir=*)
 				BASE_DIR="${1#*=}"
+				shift
+				;;
+			--bin-dir)
+				BIN_DIR="$(read_arg "$1" "${2:-}")"
+				shift 2
+				;;
+			--bin-dir=*)
+				BIN_DIR="${1#*=}"
 				shift
 				;;
 			--import-bundle)
@@ -126,6 +136,7 @@ parse_args() {
 # 校验安装来源、路径和发布包输入。
 validate_args() {
 	guard_managed_path "${BASE_DIR}" "base directory"
+	guard_system_dir "${BIN_DIR}" "bin directory"
 	validate_install_identity "${INSTALL_USER}" "${INSTALL_GROUP}" "${BASE_DIR}" "/usr/sbin/nologin"
 	if [[ ! -d "${SOURCE_DIR}" && "${DRY_RUN}" != "1" ]]; then
 		die "Source directory does not exist: ${SOURCE_DIR}"
@@ -184,7 +195,9 @@ install_python_package() {
 			"${stamp_path}" \
 			"${source_fingerprint}" \
 			"${BASE_DIR}/.venv/bin/proxystack-agent" \
-			"${BASE_DIR}/.venv/bin/proxystack-sub"; then
+			"${BASE_DIR}/.venv/bin/proxystack-sub" \
+			"${BASE_DIR}/.venv/bin/ps-agent" \
+			"${BASE_DIR}/.venv/bin/ps-sub"; then
 			log "Python package already up to date; skipping pip install"
 			return 0
 		fi
@@ -196,6 +209,15 @@ install_python_package() {
 	if [[ -n "${source_fingerprint}" ]]; then
 		write_python_package_stamp "${stamp_path}" "${source_fingerprint}" "${INSTALL_USER}:${INSTALL_GROUP}"
 	fi
+}
+
+# 链接 console scripts 到系统 bin 目录。
+link_console_scripts() {
+	ensure_dir "${BIN_DIR}" "0755" "" "system"
+	run ln -sf "${BASE_DIR}/.venv/bin/proxystack-agent" "${BIN_DIR}/proxystack-agent"
+	run ln -sf "${BASE_DIR}/.venv/bin/proxystack-sub" "${BIN_DIR}/proxystack-sub"
+	run ln -sf "${BASE_DIR}/.venv/bin/ps-agent" "${BIN_DIR}/ps-agent"
+	run ln -sf "${BASE_DIR}/.venv/bin/ps-sub" "${BIN_DIR}/ps-sub"
 }
 
 # 创建默认 config.yaml，已存在时保持不动。
@@ -238,6 +260,7 @@ main() {
 	parse_args "$@"
 	validate_args
 	require_root
+	require_cmd ln
 	ensure_python_venv_available "${PYTHON_BIN}"
 
 	ensure_group
@@ -245,6 +268,7 @@ main() {
 	ensure_sub_dirs
 	ensure_venv "${BASE_DIR}/.venv" "${PYTHON_BIN}" "${INSTALL_USER}"
 	install_python_package
+	link_console_scripts
 	ensure_config
 	maybe_import_bundle
 	maybe_install_systemd

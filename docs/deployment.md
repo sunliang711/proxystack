@@ -136,12 +136,32 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 
 本地部署要求：
 
-- `ps-sub.service` 只运行订阅 HTTP 服务；unit 安装和启停使用 `proxystack-agent service ... sub`，常用重启可用 `proxystack-agent up sub`。
+- `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装和启停使用 `proxystack-agent service ... sub`，常用重启可用 `proxystack-agent up sub`。
 - 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认自动 rebuild。多个输入文件也可以直接放入 `/opt/proxystack/sub/inputs/` 后执行 `proxystack-sub rebuild`。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
 - 服务进程只读取 `/opt/proxystack/sub/current`，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
 
-## 4. 同机非 Docker 目录边界
+## 4. 本地卸载
+
+本地非 Docker 部署统一使用 `scripts/uninstall-local.sh` 卸载 systemd unit。默认保留配置、stack、运行数据、用户和 CLI 链接：
+
+```bash
+sudo scripts/uninstall-local.sh
+```
+
+只卸载订阅服务：
+
+```bash
+sudo scripts/uninstall-local.sh --target sub
+```
+
+彻底清理托管目录和用户必须显式指定：
+
+```bash
+sudo scripts/uninstall-local.sh --target all --purge-data --remove-user --remove-bin
+```
+
+## 5. 同机非 Docker 目录边界
 
 agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目录，但不能共用同一批运行数据：
 
@@ -170,8 +190,8 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
 
 - agent 锁文件：`/opt/proxystack/runtime/agent.lock`。
 - sub 锁文件：`/opt/proxystack/sub/sub.lock`。
-- agent 服务：`ps-xray@<name>.service`、`ps-clash@<name>.service`。
-- sub 服务：`ps-sub.service`。
+- agent 服务：`proxystack-xray@<name>.service`、`proxystack-clash@<name>.service`。
+- sub 服务：`proxystack-sub.service`。
 - `validate/doctor` 必须检查订阅服务端口是否和 xrelay/clash/controller 端口冲突。
 
 因此同机部署不会目录冲突；唯一需要用户配置的是订阅服务监听端口，例如 `127.0.0.1:3003` 或由反向代理转发的公网端口。
@@ -186,7 +206,7 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
 - `/opt/proxystack/config.yaml` 和 `stacks/*.yaml`：`0640`。
 - `/opt/proxystack/runtime/`、`publish/`、`downloads/`：`0750`。
 - `/opt/proxystack/sub/`、`sub/inputs/`、`sub/bundles/`、`sub/current/`：`0750`。
-- `/usr/local/bin/proxystack-agent` 和 `/usr/local/bin/proxystack-sub`：root-owned symlink，指向 `/opt/proxystack/.venv/bin/` 中的 console script。
+- `/usr/local/bin/proxystack-agent`、`/usr/local/bin/proxystack-sub`、`/usr/local/bin/ps-agent` 和 `/usr/local/bin/ps-sub`：root-owned symlink，指向 `/opt/proxystack/.venv/bin/` 中的 console script。
 - `service install|uninstall` 和首次创建 `/etc/systemd/system/*.service` 必须以 root 运行；`update self`、`install/update mihomo|xray|geo` 默认以 `proxystack` 用户运行。需要重启 systemd 服务时，用户必须显式使用 sudo 或系统授权，CLI 不静默提权。
 
 systemd hardening 要求：
@@ -197,17 +217,17 @@ systemd hardening 要求：
 - `ProtectHome=true`。
 - `PrivateTmp=true`。
 - `ReadWritePaths=/opt/proxystack/runtime` 用于 xray/clash 运行服务；如果 `config.paths.generated` 不在 runtime 下，也会额外加入该生成目录。
-- `ReadWritePaths=/opt/proxystack/sub` 用于 `ps-sub.service`。
+- `ReadWritePaths=/opt/proxystack/sub` 用于 `proxystack-sub.service`。
 
 Task09 P0 实现的 unit 约束：
 
-- `ps-xray@.service` 和 `ps-clash@.service` 只引用 `runtime/generated` 下的生成后配置文件，不把 `config.yaml` 或 `stacks/*.yaml` 作为运行配置传入服务。
+- `proxystack-xray@.service` 和 `proxystack-clash@.service` 只引用 `runtime/generated` 下的生成后配置文件，不把 `config.yaml` 或 `stacks/*.yaml` 作为运行配置传入服务。
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
-- `ps-sub.service` 只传入 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，不读取或改写 stack 文件。
+- `proxystack-sub.service` 只传入 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，不读取或改写 stack 文件。
 - `service install|uninstall` 是唯一 unit 文件安装卸载入口；`install/update` 分组不提供 unit 安装命令。
 - `systemctl` 和 `journalctl` 通过参数数组调用；返回非零时 CLI 展示 stdout/stderr 摘要并失败，不吞掉权限错误。
 
-## 5. Docker 部署 `proxystack-sub`
+## 6. Docker 部署 `proxystack-sub`
 
 适用于远端订阅服务器或希望隔离运行环境的场景。
 
@@ -300,7 +320,7 @@ Docker 部署安全要求：
 - 不把完整 stack 或 mihomo 配置挂载进容器。
 - 如果公网暴露订阅服务，建议在反向代理层加 HTTPS、访问控制、限流和日志。
 
-## 6. 发布包同步方式
+## 7. 发布包同步方式
 
 P0 只要求手动上传/导入：
 

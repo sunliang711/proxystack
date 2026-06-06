@@ -26,6 +26,8 @@ dev = [
 [project.scripts]
 proxystack-agent = "proxystack.cli.agent:run"
 proxystack-sub = "proxystack.cli.sub:run"
+ps-agent = "proxystack.cli.agent:run"
+ps-sub = "proxystack.cli.sub:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]

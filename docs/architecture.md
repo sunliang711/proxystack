@@ -11,7 +11,7 @@
 - 统一配置目录：所有本地文件默认收敛到 `/opt/proxystack`，全局配置和 stack 配置分离。
 - 独立 stack 文件：每个 stack 一个 YAML 文件，里面包含该 stack 的 xrelay 和 clash 配置。
 - 配置编译：从 `config.yaml + stacks/*.yaml` 生成 Xray JSON、mihomo YAML、subscription 输入索引和订阅发布包。
-- 多实例管理：本地 agent 支持 `ps-xray@<name>.service`、`ps-clash@<name>.service`；sub 服务本地部署时支持 `ps-sub.service`，Docker 部署时由容器运行时管理。
+- 多实例管理：本地 agent 支持 `proxystack-xray@<name>.service`、`proxystack-clash@<name>.service`；sub 服务本地部署时支持 `proxystack-sub.service`，Docker 部署时由容器运行时管理。
 - 下载和安装：安装/更新 mihomo、xray-core 和 geo 数据；systemd unit 由 `service install|uninstall` 管理。
 - CLI 生命周期：`init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`up`、`down`、`restart`、`status`、`logs`、`enable`、`disable`、`publish`、`doctor`，以及高级 `validate`、`plan`、`apply` 和 `service install|uninstall|start|stop|restart|status|log`。
 - 配置生命周期：`add`、`edit`、`list`、`remove`、`clone`、`render`；`clone --allocate-ports` 可基于全局端口池重新分配监听端口。
@@ -55,10 +55,10 @@ flowchart LR
   gens --> sidx["runtime/generated/sub/index.json"]
   gens --> bundle["publish/sub-bundle.zip"]
   cli --> systemd["systemd 管理器"]
-  systemd --> xray["ps-xray@name.service"]
-  systemd --> mihomo["ps-clash@name.service"]
+  systemd --> xray["proxystack-xray@name.service"]
+  systemd --> mihomo["proxystack-clash@name.service"]
   bundle --> remote["proxystack-sub inputs"]
-  remote --> subsvc["ps-sub.service"]
+  remote --> subsvc["proxystack-sub.service"]
 ```
 
 运行时链路：
@@ -181,7 +181,7 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 默认部署在 Linux + systemd：
 
 - Python 虚拟环境：`/opt/proxystack/.venv`
-- CLI：`/usr/local/bin/proxystack-agent`、`/usr/local/bin/proxystack-sub`
+- CLI：`/usr/local/bin/proxystack-agent`、`/usr/local/bin/proxystack-sub`，并提供短别名 `/usr/local/bin/ps-agent`、`/usr/local/bin/ps-sub`
 - 代理核心二进制：`/opt/proxystack/bin/mihomo`、`/opt/proxystack/bin/xray`
 - geo 数据：`/opt/proxystack/geo/`
 - 全局配置：`/opt/proxystack/config.yaml`
@@ -193,9 +193,9 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - 本地订阅服务数据：`/opt/proxystack/sub/`
 - 日志：systemd journal
 - systemd 模板：
-  - `/etc/systemd/system/ps-xray@.service`
-  - `/etc/systemd/system/ps-clash@.service`
-  - `/etc/systemd/system/ps-sub.service`
+  - `/etc/systemd/system/proxystack-xray@.service`
+  - `/etc/systemd/system/proxystack-clash@.service`
+  - `/etc/systemd/system/proxystack-sub.service`
 
 订阅服务本地部署：
 
@@ -203,7 +203,7 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - 发布包目录：`/opt/proxystack/sub/bundles/`
 - 输入目录：`/opt/proxystack/sub/inputs/`
 - 当前订阅索引：`/opt/proxystack/sub/current/index.json`
-- systemd 服务：`/etc/systemd/system/ps-sub.service`
+- systemd 服务：`/etc/systemd/system/proxystack-sub.service`
 
 订阅服务 Docker 部署：
 

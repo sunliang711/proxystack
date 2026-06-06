@@ -183,7 +183,9 @@ install_python_package() {
 			"${stamp_path}" \
 			"${source_fingerprint}" \
 			"${BASE_DIR}/.venv/bin/proxystack-agent" \
-			"${BASE_DIR}/.venv/bin/proxystack-sub"; then
+			"${BASE_DIR}/.venv/bin/proxystack-sub" \
+			"${BASE_DIR}/.venv/bin/ps-agent" \
+			"${BASE_DIR}/.venv/bin/ps-sub"; then
 			log "Python package already up to date; skipping pip install"
 			return 0
 		fi
@@ -202,6 +204,8 @@ link_console_scripts() {
 	ensure_dir "${BIN_DIR}" "0755" "" "system"
 	run ln -sf "${BASE_DIR}/.venv/bin/proxystack-agent" "${BIN_DIR}/proxystack-agent"
 	run ln -sf "${BASE_DIR}/.venv/bin/proxystack-sub" "${BIN_DIR}/proxystack-sub"
+	run ln -sf "${BASE_DIR}/.venv/bin/ps-agent" "${BIN_DIR}/ps-agent"
+	run ln -sf "${BASE_DIR}/.venv/bin/ps-sub" "${BIN_DIR}/ps-sub"
 }
 
 # 根据参数决定是否初始化 config.yaml。

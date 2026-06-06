@@ -94,14 +94,14 @@ def test_status_and_log_use_fake_runner(tmp_path: Path) -> None:
     runner = FakeRunner(stdout="active\n")
     manager = SystemdManager(load_config(config), runner=runner)
 
-    status_lines = manager.systemctl("status", ("ps-xray@usa1.service",))
-    log_lines = manager.journalctl(("ps-sub.service",), follow=True)
+    status_lines = manager.systemctl("status", ("proxystack-xray@usa1.service",))
+    log_lines = manager.journalctl(("proxystack-sub.service",), follow=True)
 
-    assert status_lines == ["status: ps-xray@usa1.service", "  active"]
-    assert log_lines == ["log: ps-sub.service", "  active"]
+    assert status_lines == ["status: proxystack-xray@usa1.service", "  active"]
+    assert log_lines == ["log: proxystack-sub.service", "  active"]
     assert runner.calls == [
-        ("systemctl", "status", "ps-xray@usa1.service"),
-        ("journalctl", "-u", "ps-sub.service", "--no-pager", "-n", "100", "-f"),
+        ("systemctl", "status", "proxystack-xray@usa1.service"),
+        ("journalctl", "-u", "proxystack-sub.service", "--no-pager", "-n", "100", "-f"),
     ]
 
 
@@ -113,24 +113,24 @@ def test_follow_log_uses_one_journalctl_for_multiple_units(tmp_path: Path) -> No
 
     log_lines = manager.journalctl(
         (
-            "ps-xray@usa1.service",
-            "ps-clash@usa1.service",
+            "proxystack-xray@usa1.service",
+            "proxystack-clash@usa1.service",
         ),
         follow=True,
     )
 
     assert log_lines == [
-        "log: ps-xray@usa1.service",
-        "log: ps-clash@usa1.service",
+        "log: proxystack-xray@usa1.service",
+        "log: proxystack-clash@usa1.service",
         "  active",
     ]
     assert runner.calls == [
         (
             "journalctl",
             "-u",
-            "ps-xray@usa1.service",
+            "proxystack-xray@usa1.service",
             "-u",
-            "ps-clash@usa1.service",
+            "proxystack-clash@usa1.service",
             "--no-pager",
             "-n",
             "100",
@@ -146,7 +146,7 @@ def test_nonzero_command_raises_clear_summary(tmp_path: Path) -> None:
     manager = SystemdManager(load_config(config), runner=runner)
 
     with pytest.raises(SystemdCommandError, match="permission denied"):
-        manager.systemctl("restart", ("ps-xray@usa1.service",))
+        manager.systemctl("restart", ("proxystack-xray@usa1.service",))
 
 
 def test_follow_run_command_streams_without_pipe(monkeypatch: MonkeyPatch) -> None:
@@ -164,11 +164,11 @@ def test_follow_run_command_streams_without_pipe(monkeypatch: MonkeyPatch) -> No
 
     monkeypatch.setattr(service_module.subprocess, "run", fake_run)
 
-    result = service_module.run_command(["journalctl", "-u", "ps-sub.service", "-f"])
+    result = service_module.run_command(["journalctl", "-u", "proxystack-sub.service", "-f"])
 
     assert result.returncode == 0
     assert captured == {
-        "args": ["journalctl", "-u", "ps-sub.service", "-f"],
+        "args": ["journalctl", "-u", "proxystack-sub.service", "-f"],
         "check": False,
         "text": True,
         "stdout": None,

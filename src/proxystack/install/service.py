@@ -712,11 +712,11 @@ def file_sha256(path: Path) -> str:
 def service_plan_for_target(target: str) -> tuple[str, ...]:
     """生成更新流程的 service adapter 文本计划，不执行真实服务动作。"""
     if target == "mihomo":
-        affected_services = ("ps-clash@*.service",)
+        affected_services = ("proxystack-clash@*.service",)
     elif target == "xray":
-        affected_services = ("ps-xray@*.service",)
+        affected_services = ("proxystack-xray@*.service",)
     else:
-        affected_services = ("ps-xray@*.service", "ps-clash@*.service")
+        affected_services = ("proxystack-xray@*.service", "proxystack-clash@*.service")
     return tuple(
         [
             "Service adapter dry-run; Task09 will execute systemd.",

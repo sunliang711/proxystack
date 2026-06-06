@@ -74,7 +74,7 @@ def test_init_add_validate_plan_apply_up_publish_import_serve_main_flow(tmp_path
     xray_config.unlink()
     up_result = runner.invoke(agent_app, ["up", "xrelay/edge", "-c", str(config), "--skip-system-ports"])
     assert up_result.exit_code == 0
-    assert fake_systemd.calls == [("systemctl", "restart", "ps-xray@edge.service")]
+    assert fake_systemd.calls == [("systemctl", "restart", "proxystack-xray@edge.service")]
 
     publish_result = runner.invoke(agent_app, ["publish", "-c", str(config), "--skip-system-ports"])
     bundle = config.parent / "publish" / "sub-bundle.zip"

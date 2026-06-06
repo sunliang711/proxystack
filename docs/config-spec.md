@@ -132,7 +132,7 @@ install:
 - `/opt/proxystack/geo/` 保存 `geoip`、`geosite`、ASN 或 mmdb 等运行时 geo 数据。
 - `/opt/proxystack/bin/`、`geo/`、`.venv/`、`runtime/`、`publish/`、`downloads/` 默认 owner 为 `proxystack:proxystack`，目录权限为 `0750`。
 - 代理核心二进制权限为 `0750`，geo 数据文件权限为 `0640`，更新时必须先写临时文件并校验 sha256，再原子替换。
-- `/usr/local/bin/proxystack-agent` 和 `/usr/local/bin/proxystack-sub` 只是指向 `.venv/bin/` 中 console script 的 root-owned symlink，不作为 Python 包实际安装位置。
+- `/usr/local/bin/proxystack-agent`、`/usr/local/bin/proxystack-sub`、`/usr/local/bin/ps-agent` 和 `/usr/local/bin/ps-sub` 只是指向 `.venv/bin/` 中 console script 的 root-owned symlink，不作为 Python 包实际安装位置。
 - `update self` 只写 `.venv/`，应以 `proxystack` 用户或具备同等写权限的管理员身份运行；CLI 不做隐式提权，权限不足时必须失败并提示明确的 sudo 命令。
 
 同机部署目录边界：

@@ -31,8 +31,8 @@ class ServiceNode:
     def service_name(self) -> str:
         """返回当前节点对应的 systemd 服务名。"""
         if self.component == "xrelay":
-            return f"ps-xray@{self.stack}.service"
-        return f"ps-{self.component}@{self.stack}.service"
+            return f"proxystack-xray@{self.stack}.service"
+        return f"proxystack-{self.component}@{self.stack}.service"
 
     def label(self) -> str:
         """返回 plan 输出使用的紧凑标签。"""

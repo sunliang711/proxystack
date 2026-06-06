@@ -424,7 +424,7 @@ P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `
     {
       "path": "/opt/proxystack/runtime/generated/xray/usa1.json",
       "sha256": "...",
-      "service": "ps-xray@usa1.service"
+      "service": "proxystack-xray@usa1.service"
     }
   ]
 }

@@ -337,8 +337,8 @@ def test_update_all_does_not_include_self(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "self" not in result.output
     assert "Service adapter dry-run" in result.output
-    assert "ps-xray@*.service" in result.output
-    assert "ps-clash@*.service" in result.output
+    assert "proxystack-xray@*.service" in result.output
+    assert "proxystack-clash@*.service" in result.output
 
 
 def test_install_update_help_is_available() -> None:

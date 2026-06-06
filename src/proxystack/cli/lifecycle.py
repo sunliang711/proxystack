@@ -46,15 +46,15 @@ from proxystack.graph import build_reference_graph
 MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 BUILTIN_TEMPLATES = {"pair", "auto-url-test", "load-balance"}
-SUB_SERVICE_NAME = "ps-sub.service"
+SUB_SERVICE_NAME = "proxystack-sub.service"
 MANAGED_USER = "proxystack"
 MANAGED_GROUP = "proxystack"
 MANAGED_DIR_MODE = 0o750
 MANAGED_FILE_MODE = 0o640
 SYSTEMD_UNIT_PATHS = [
-    Path("/etc/systemd/system/ps-xray@.service"),
-    Path("/etc/systemd/system/ps-clash@.service"),
-    Path("/etc/systemd/system/ps-sub.service"),
+    Path("/etc/systemd/system/proxystack-xray@.service"),
+    Path("/etc/systemd/system/proxystack-clash@.service"),
+    Path("/etc/systemd/system/proxystack-sub.service"),
 ]
 
 
@@ -862,8 +862,8 @@ def includes_component(scope: TargetScope, stack_name: str, component: str) -> b
 def component_service_name(component: str, stack_name: str) -> str:
     """把组件和 stack 名转换为当前约定的 systemd 服务名。"""
     if component == "xrelay":
-        return f"ps-xray@{stack_name}.service"
-    return f"ps-{component}@{stack_name}.service"
+        return f"proxystack-xray@{stack_name}.service"
+    return f"proxystack-{component}@{stack_name}.service"
 
 
 def build_dependency_plan(stack_set: StackSet, scope: TargetScope) -> Optional[DependencyPlan]:

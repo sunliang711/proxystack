@@ -10,6 +10,7 @@ import subprocess
 SCRIPT_PATHS = [
     Path("scripts/install-agent.sh"),
     Path("scripts/install-sub-local.sh"),
+    Path("scripts/uninstall-local.sh"),
     Path("scripts/deploy-sub-docker.sh"),
     Path("scripts/lib/common.sh"),
 ]
@@ -34,8 +35,8 @@ def test_task12_scripts_have_valid_bash_syntax() -> None:
 
 
 def test_task12_entrypoints_have_help_output() -> None:
-    """验证三个部署入口都提供 --help 输出。"""
-    for script in SCRIPT_PATHS[:3]:
+    """验证部署入口都提供 --help 输出。"""
+    for script in SCRIPT_PATHS[:4]:
         result = run_script(["bash", str(script), "--help"])
 
         assert result.returncode == 0, script
@@ -45,6 +46,10 @@ def test_task12_entrypoints_have_help_output() -> None:
 
         assert result.returncode == 0, script
         assert "--source" in result.stdout
+    result = run_script(["bash", "scripts/uninstall-local.sh", "--help"])
+
+    assert result.returncode == 0
+    assert "--target" in result.stdout
 
 
 def test_install_scripts_default_to_repository_source() -> None:
@@ -123,7 +128,53 @@ def test_install_sub_local_dry_run_uses_sub_service_only() -> None:
     assert result.returncode == 0, output
     assert "proxystack-agent service install sub" in output
     assert "proxystack-agent service start sub" in output
+    assert "ps-sub" in output
     assert "systemctl" not in output
+
+
+def test_uninstall_local_dry_run_keeps_data_by_default() -> None:
+    """验证本地卸载 dry-run 只预览服务和 unit 清理，默认保留数据。"""
+    result = run_script(
+        [
+            "bash",
+            "scripts/uninstall-local.sh",
+            "--target",
+            "all",
+            "--base-dir",
+            "/tmp/proxystack-task12-uninstall/opt/proxystack",
+            "--bin-dir",
+            "/tmp/proxystack-task12-uninstall/usr/local/bin",
+            "--dry-run",
+        ]
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "systemctl stop" in output
+    assert "proxystack-xray@\\*.service" in output
+    assert "proxystack-sub.service" in output
+    assert "systemctl daemon-reload" in output
+    assert "Data purge skipped" in output
+    assert "rm -rf /tmp/proxystack-task12-uninstall/opt/proxystack" not in output
+
+
+def test_uninstall_local_rejects_partial_purge_data() -> None:
+    """验证卸载脚本不允许对共享 base_dir 做局部数据清理。"""
+    result = run_script(
+        [
+            "bash",
+            "scripts/uninstall-local.sh",
+            "--target",
+            "sub",
+            "--base-dir",
+            "/tmp/proxystack-task12-uninstall-sub/opt/proxystack",
+            "--purge-data",
+            "--dry-run",
+        ]
+    )
+
+    assert result.returncode != 0
+    assert "--purge-data is only allowed with --target all" in result.stderr
 
 
 def test_python_venv_dependency_auto_installs_when_supported(tmp_path: Path) -> None:
@@ -450,6 +501,7 @@ def test_managed_path_guard_rejects_dangerous_roots() -> None:
     checks = [
         ["bash", "scripts/install-agent.sh", "--source", str(Path.cwd()), "--base-dir", "/", "--dry-run"],
         ["bash", "scripts/install-sub-local.sh", "--source", str(Path.cwd()), "--base-dir", "/", "--dry-run"],
+        ["bash", "scripts/uninstall-local.sh", "--base-dir", "/", "--dry-run"],
         ["bash", "scripts/deploy-sub-docker.sh", "--image", "proxystack-sub:latest", "--data-dir", "/", "--dry-run"],
     ]
 
