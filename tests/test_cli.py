@@ -533,6 +533,30 @@ def test_agent_service_log_pair_follow_uses_single_journalctl_call(tmp_path: Pat
     ]
 
 
+def test_agent_logs_stack_follow_uses_single_journalctl_call(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证顶层 logs 对 stack follow 时一次订阅 mihomo 和 xray 两个 unit。"""
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+
+    result = runner.invoke(agent_app, ["logs", "usa1", "--follow", "-c", "examples/config.yaml"])
+
+    assert result.exit_code == 0
+    assert "log: proxystack-clash@usa1.service" in result.output
+    assert "log: proxystack-xray@usa1.service" in result.output
+    assert fake_runner.calls == [
+        (
+            "journalctl",
+            "-u",
+            "proxystack-clash@usa1.service",
+            "-u",
+            "proxystack-xray@usa1.service",
+            "--no-pager",
+            "-n",
+            "100",
+            "-f",
+        )
+    ]
+
+
 def test_agent_service_commands_skip_system_port_occupancy_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证服务命令默认不会因服务自身端口已占用而失败。"""
     use_fake_systemd(monkeypatch, tmp_path)

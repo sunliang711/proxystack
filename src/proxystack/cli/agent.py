@@ -434,7 +434,7 @@ def status(
 @app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def logs(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
-    follow: bool = typer.Option(False, "--follow", "-f", help="展示 follow 日志动作。"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="持续跟随 journalctl 输出。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:

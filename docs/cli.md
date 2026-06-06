@@ -110,7 +110,7 @@ proxystack-agent doctor
 - `stop [target]`：通过 systemd 停止目标范围内服务，不删除配置和生成文件。
 - `restart [target]`：先检查目标服务需要的 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写 manifest，然后通过 systemd 重启目标范围内服务；`restart sub` 不读取 stack。
 - `status [target]`：通过 systemd 查询目标范围内服务状态。
-- `logs [target]`：通过 `journalctl` 查看目标范围内服务日志。
+- `logs [target]`：通过 `journalctl` 查看目标范围内服务日志；`logs <stack> -f` 会在一次 `journalctl` 调用中同时订阅该 stack 的 mihomo 和 xray unit。
 - `enable [target]`：通过 systemd 设置目标范围内服务开机自启。
 - `disable [target]`：通过 systemd 取消目标范围内服务开机自启。
 - `publish`：生成订阅发布包，默认输出到 `/opt/proxystack/publish/sub-bundle.zip`。
