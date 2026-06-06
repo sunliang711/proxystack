@@ -28,7 +28,7 @@
 - `service log` 代理 `journalctl`，支持 follow 和非 follow。
 - `service install|uninstall` 是唯一的 systemd unit 安装卸载入口。
 - xray/clash unit 只能写 agent runtime 相关目录，sub unit 只能写 `/opt/proxystack/sub`。
-- `up sub` 只影响 `proxystack-sub.service`，不会读取或改写 stack 文件。
+- `start sub` 只影响 `proxystack-sub.service`，不会读取或改写 stack 文件。
 - 单元测试不调用真实 systemctl。
 - uninstall 不删除 `/opt/proxystack/config.yaml` 和 `stacks/*.yaml`，除非显式 purge。
 
@@ -37,8 +37,8 @@
 - 新增 `src/proxystack/systemd` 服务层，支持 fake runner 和 fake unit_dir。
 - `service install|uninstall` 是唯一 unit 文件安装卸载入口；`install/update` 分组仍只负责代理核心和 geo 数据。
 - `service log` 代理 `journalctl`，支持 `--follow/-f`。
-- 顶层 `down/restart/status/logs/enable/disable` 已接入 systemd runner。
-- 顶层 `up` 对普通代理目标先 `apply`，再只 restart 本次变化影响且在目标范围内的服务；`up sub` 只 restart `proxystack-sub.service`，不读取或改写 stack 文件，也不创建 `runtime/generated`。
+- 顶层 `start/stop/restart/status/logs/enable/disable` 已接入 systemd runner。
+- 顶层 `start` 对普通代理目标先写入生成配置，再重启受影响服务并启动目标范围内未变化的服务；`start sub` 只启动 `proxystack-sub.service`，不读取或改写 stack 文件，也不创建 `runtime/generated`。
 - `systemctl` 和 `journalctl` 通过参数数组调用；非零退出码抛出错误并包含 stdout/stderr 摘要；`journalctl -f` 直接流式输出。
 
 ## 依赖

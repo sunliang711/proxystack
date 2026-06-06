@@ -80,7 +80,7 @@ proxystack-agent edit usa1
 proxystack-agent install all
 proxystack-agent service install
 proxystack-agent check
-proxystack-agent up
+proxystack-agent start
 proxystack-agent status
 proxystack-agent publish
 ```
@@ -89,8 +89,8 @@ proxystack-agent publish
 
 - `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
-- `check` 等价于 `validate + plan`。
-- `up` 等价于 `validate + apply` 并通过 systemd 重启受影响服务。
+- `check` 校验配置并展示生成变更预览，不写运行目录、不操作 systemd。
+- `start` 先生成配置并写入 manifest，再通过 systemd 启动目标服务；配置变化时会重启受影响服务，并启动目标范围内未变化的服务。
 - `publish` 默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
 - 后续 proxystack 代码更新使用 `proxystack-agent update self --wheel <file>` 或配置的包源；代理核心更新使用 `proxystack-agent update mihomo|xray|geo|all`。
 - `install/update mihomo|xray|geo|all` 仍只处理代理核心和 geo 数据，不自动停启 systemd 服务；真实停启和 unit 管理由 `service` 分组和顶层生命周期命令提供。
@@ -136,7 +136,7 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 
 本地部署要求：
 
-- `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装和启停使用 `proxystack-agent service ... sub`，常用重启可用 `proxystack-agent up sub`。
+- `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装使用 `proxystack-agent service install sub`，常用启停使用 `proxystack-agent start sub`、`proxystack-agent stop sub` 和 `proxystack-agent restart sub`。
 - 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认自动 rebuild。多个输入文件也可以直接放入 `/opt/proxystack/sub/inputs/` 后执行 `proxystack-sub rebuild`。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
 - 服务进程只读取 `/opt/proxystack/sub/current`，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。

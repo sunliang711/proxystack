@@ -2,7 +2,7 @@
 
 ## 1. 总体原则
 
-`proxystack-agent apply` 的输入只有 `/opt/proxystack/config.yaml` 和 `/opt/proxystack/stacks/*.yaml`，输出包括：
+`proxystack-agent start` 的配置生成输入只有 `/opt/proxystack/config.yaml` 和 `/opt/proxystack/stacks/*.yaml`，输出包括：
 
 - Xray JSON：`/opt/proxystack/runtime/generated/xray/<stack>.json`
 - mihomo YAML：`/opt/proxystack/runtime/generated/clash/<stack>.yaml`
@@ -251,7 +251,7 @@ rules:
 
 校验层必须确保 `rules.final` 和 `rules.extra` 中的规则目标都存在。使用默认 `rules.final: AllProxy` 时，当前 clash 必须定义 `AllProxy` 组。
 
-`plan` 和 `render clash <name>` 必须能展示最终 rules，避免规则隐藏在模板中不可见。
+`check` 和 `render clash <name>` 必须能展示最终 rules，避免规则隐藏在模板中不可见。
 
 ## 5. 订阅生成
 
@@ -410,7 +410,7 @@ P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `
 
 ## 8. manifest
 
-每次 `apply` 写入 manifest：
+每次 `start` 写入 manifest：
 
 ```json
 {

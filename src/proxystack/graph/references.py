@@ -59,7 +59,7 @@ class Endpoint:
 
 @dataclass(frozen=True)
 class ReferenceIndex:
-    """跨 stack endpoint 索引，供校验、生成器和 plan 复用。"""
+    """跨 stack endpoint 索引，供校验、生成器和 check 复用。"""
 
     xrelay_inbounds: dict[str, Endpoint]
     clash_listeners: dict[str, Endpoint]

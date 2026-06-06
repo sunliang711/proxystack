@@ -33,7 +33,7 @@
 
 ```bash
 proxystack-agent validate -c ./examples/config.yaml
-proxystack-agent plan -c ./examples/config.yaml
+proxystack-agent check -c ./examples/config.yaml
 ```
 
 仓库内的 `examples/config.yaml` 是开发示例，`base_dir` 设置为 `./examples`，并配套提供 `examples/stacks/`；上面命令默认从仓库根目录执行。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
@@ -215,7 +215,7 @@ clash:
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `name` | 是 | stack 名称，必须与文件名一致 |
-| `enabled` | 否 | 是否参与 `check/up/publish`，默认 `true` |
+| `enabled` | 否 | 是否参与 `check/start/publish`，默认 `true` |
 | `role` | 否 | stack 角色，P0 支持 `edge` 和 `auto` |
 | `labels` | 否 | 标签列表，用于 `list` 展示和未来 auto selector |
 | `xrelay` | 是 | Xray/xrelay 配置 |

@@ -17,7 +17,7 @@
 - [x] 实现 mihomo 配置生成器和 `render clash`
 - [x] 实现订阅 input/index 生成、多 inputs 合并和发布包
 - [x] 实现 `proxystack-sub import/rebuild/serve` 与 FastAPI 订阅路由
-- [x] 实现 CLI 生命周期命令、runtime 生成文件和 manifest apply
+- [x] 实现 CLI 生命周期命令、runtime 生成文件和 manifest 写入
 - [x] 实现 mihomo/xray/geo 下载安装更新和 self update P0 候选版
 - [x] 实现 systemd unit 安装和真实服务管理 P0
 - [x] 实现发布构建、订阅包 schema 校验和订阅服务 Docker 示例 P0
@@ -31,7 +31,7 @@
 | M0 | 项目文档、配置规范、任务拆分 | 已完成 |
 | M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
 | M2 | Xray/mihomo/sub 生成器、golden tests | 进行中 |
-| M3 | apply、manifest、systemd 管理 | 进行中 |
+| M3 | 生成配置写入、manifest、systemd 管理 | 进行中 |
 | M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 已完成 |
 | M5 | mihomo API、原生备份导入导出和发布增强 | 未开始 |
 

@@ -35,13 +35,13 @@ class ServiceNode:
         return f"proxystack-{self.component}@{self.stack}.service"
 
     def label(self) -> str:
-        """返回 plan 输出使用的紧凑标签。"""
+        """返回 check 输出使用的紧凑标签。"""
         return f"{self.stack}.{self.component}"
 
 
 @dataclass(frozen=True)
 class DependencyPlan:
-    """plan 命令展示所需的依赖服务和操作顺序。"""
+    """check 展示所需的依赖服务和操作顺序。"""
 
     target: Optional[str]
     dependency_nodes: list[ServiceNode]
@@ -144,7 +144,7 @@ class ReferenceGraph:
         )
 
     def select_target_nodes(self, target: Optional[str]) -> set[ServiceNode]:
-        """选择 plan 的目标节点；未指定目标时选择全部服务。"""
+        """选择依赖图目标节点；未指定目标时选择全部服务。"""
         if target is None:
             return set(self.nodes)
         if target not in self.stack_names:
@@ -168,7 +168,7 @@ class ReferenceGraph:
         plan_nodes: set[ServiceNode],
         ordered_nodes: list[ServiceNode],
     ) -> list[tuple[ServiceNode, ServiceNode]]:
-        """收集 plan 范围内的服务依赖边，保持输出顺序稳定。"""
+        """收集目标范围内的服务依赖边，保持输出顺序稳定。"""
         dependency_edges: list[tuple[ServiceNode, ServiceNode]] = []
         for node in ordered_nodes:
             for dependency in sorted(self.dependencies.get(node, frozenset())):
@@ -215,7 +215,7 @@ def compile_reference_graph(stack_set: StackSet) -> GraphCompileResult:
 
 
 def build_reference_graph(stack_set: StackSet) -> ReferenceGraph:
-    """构建无错误的引用图，供 CLI plan 和后续生成器使用。"""
+    """构建无错误的引用图，供 CLI check/start 和生成器使用。"""
     result = compile_reference_graph(stack_set)
     if result.issues:
         raise ReferenceGraphError(result.issues)

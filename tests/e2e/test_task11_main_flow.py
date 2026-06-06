@@ -33,7 +33,7 @@ class FakeSystemdRunner:
         return CommandResult(args=tuple(args), returncode=0, stdout="")
 
 
-def test_init_add_validate_plan_apply_up_publish_import_serve_main_flow(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+def test_init_add_validate_start_publish_import_serve_main_flow(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 P0 主流程在 fake systemd/uvicorn 和临时目录中可完整跑通。"""
     config = tmp_path / "project" / "config.yaml"
     fake_systemd = FakeSystemdRunner()
@@ -56,24 +56,20 @@ def test_init_add_validate_plan_apply_up_publish_import_serve_main_flow(tmp_path
     )
     add_result = runner.invoke(agent_app, ["add", "edge", "--no-edit", "-c", str(config)])
     validate_result = runner.invoke(agent_app, ["validate", "-c", str(config), "--skip-system-ports"])
-    plan_result = runner.invoke(agent_app, ["plan", "-c", str(config), "--skip-system-ports"])
+    check_result = runner.invoke(agent_app, ["check", "-c", str(config), "--skip-system-ports"])
     generated_dir = config.parent / "runtime" / "generated"
     assert init_result.exit_code == 0
     assert add_result.exit_code == 0
     assert validate_result.exit_code == 0
-    assert plan_result.exit_code == 0
+    assert check_result.exit_code == 0
     assert not any(generated_dir.rglob("*.json"))
     assert not any(generated_dir.rglob("*.yaml"))
 
-    apply_result = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+    start_result = runner.invoke(agent_app, ["start", "xrelay/edge", "-c", str(config)])
     xray_config = generated_dir / "xray" / "edge.json"
-    assert apply_result.exit_code == 0
+    assert start_result.exit_code == 0
     assert xray_config.exists()
     assert not (config.parent / "sub" / "current" / "index.json").exists()
-
-    xray_config.unlink()
-    up_result = runner.invoke(agent_app, ["up", "xrelay/edge", "-c", str(config), "--skip-system-ports"])
-    assert up_result.exit_code == 0
     assert fake_systemd.calls == [("systemctl", "restart", "proxystack-xray@edge.service")]
 
     publish_result = runner.invoke(agent_app, ["publish", "-c", str(config), "--skip-system-ports"])

@@ -13,7 +13,7 @@
 - 配置编译：从 `config.yaml + stacks/*.yaml` 生成 Xray JSON、mihomo YAML、subscription 输入索引和订阅发布包。
 - 多实例管理：本地 agent 支持 `proxystack-xray@<name>.service`、`proxystack-clash@<name>.service`；sub 服务本地部署时支持 `proxystack-sub.service`，Docker 部署时由容器运行时管理。
 - 下载和安装：安装/更新 mihomo、xray-core 和 geo 数据；systemd unit 由 `service install|uninstall` 管理。
-- CLI 生命周期：`init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`up`、`down`、`restart`、`status`、`logs`、`enable`、`disable`、`publish`、`doctor`，以及高级 `validate`、`plan`、`apply` 和 `service install|uninstall|start|stop|restart|status|log`。
+- CLI 生命周期：`init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`publish`、`doctor`，以及高级 `validate`、`render` 和 `service install|uninstall|start|stop|restart|status|log`。
 - 配置生命周期：`add`、`edit`、`list`、`remove`、`clone`、`render`；`clone --allocate-ports` 可基于全局端口池重新分配监听端口。
 - 订阅发布：本地基于 `xrelay.inbounds[].sub == true` 生成订阅输入/发布包；agent 和 sub 都可合并多个输入文件后输出或发布 Clash/Premium Clash/Surge 订阅。
 - auto 聚合：支持 mihomo `url-test` 和 `load-balance`，P0 可通过 `--members usa1,usa2` 引用其他 xrelay 暴露的 socks5 inbound。
@@ -128,8 +128,8 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - `proxystack-agent remove <name> [--purge]`
 - `proxystack-agent clone <source> <target> [--allocate-ports]`
 - `proxystack-agent check [name|xrelay/name|clash/name|sub]`
-- `proxystack-agent up [name|xrelay/name|clash/name|sub]`
-- `proxystack-agent down [name|xrelay/name|clash/name|sub]`
+- `proxystack-agent start [name|xrelay/name|clash/name|sub]`
+- `proxystack-agent stop [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent restart [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent status [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent logs [name|xrelay/name|clash/name|sub]`
@@ -139,8 +139,6 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - `proxystack-agent publish --input-dir ./inputs --source merged -o sub-bundle.zip`
 - `proxystack-agent doctor`
 - `proxystack-agent validate [-c config.yaml] [target]`
-- `proxystack-agent plan [-c config.yaml] [target]`
-- `proxystack-agent apply [-c config.yaml] [target]`
 - `proxystack-agent render [model|xrelay|clash|sub] [name]`
 - `proxystack-agent render sub --input-dir ./inputs`
 - `proxystack-agent sub export-input --source usa1 -o usa1.yaml`
@@ -169,7 +167,7 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - 安全默认值：默认不生成公开 socks/http inbound；用户显式配置时必须考虑鉴权。
 - Fail fast：端口冲突、引用缺失和循环依赖都应在 `validate` 阶段暴露。
 - 可观测性：所有命令使用结构化日志，服务状态通过 systemd 和 manifest 查询。
-- 幂等性：`apply` 多次执行结果一致；生成文件带 hash，未变化不写入。`up` 基于 manifest 启动或重启变化服务。
+- 幂等性：`start` 多次执行结果一致；生成文件带 hash，未变化不写入。配置变化时重启受影响服务，并启动目标范围内未变化的服务。
 - 可恢复：P0 保留最近一次生成的 manifest 和上一版生成文件快照，但不提供显式 rollback 命令；显式 rollback 放到 P1，原生备份 `export/import` 推迟到 M5。
 - 远端最小数据：`proxystack-sub` 只保存订阅输入/发布包和合并索引，不保存完整 stack、clash upstream、rules 或 mihomo controller 配置。
 - 同机隔离：agent 和本地 sub 可以共用 `/opt/proxystack` 根目录，但写入目录和锁文件必须分离；agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`，sub 只写 `sub/inputs/`、`sub/bundles/`、`sub/current/`。agent 运行期不写 `config.yaml`，只有 `init` 和 `edit` 这类配置管理命令可以写 `config.yaml`。

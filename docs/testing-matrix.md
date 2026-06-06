@@ -7,7 +7,7 @@
 | 范围 | 覆盖文件 | 关键断言 |
 | --- | --- | --- |
 | 配置加载和非法配置 | `tests/test_config_loader.py`、`tests/unit/test_task11_config_matrix.py` | 示例配置、端口冲突、ref 缺失、循环依赖、危险 noauth、必填字段缺失 |
-| CLI 生命周期 | `tests/test_cli.py`、`tests/unit/test_task11_cli_matrix.py` | help、validate/plan/apply/up 边界、add/clone 端口分配、fake systemd |
+| CLI 生命周期 | `tests/test_cli.py`、`tests/unit/test_task11_cli_matrix.py` | help、validate/check/start 边界、add/clone 端口分配、fake systemd |
 | 下载安装 | `tests/test_install.py` | fake downloader、本地文件、hash、私网 URL、归档路径穿越、self update fake runner |
 | Xray golden | `tests/test_xray_generator.py`、`tests/golden/xray/` | JSON 输出 exact compare |
 | mihomo golden | `tests/test_mihomo_generator.py`、`tests/golden/mihomo/` | YAML 输出 exact compare |
@@ -16,7 +16,7 @@
 | HTTP 订阅服务 | `tests/test_subserver.py` | token、错误 token、无用户、空节点、三类订阅格式 |
 | systemd | `tests/test_systemd.py`、`tests/test_cli.py` | fake runner、fake unit_dir、unit hardening、journalctl follow |
 | Docker Compose | `tests/unit/test_task11_docker_deployment.py`、`tests/test_cli.py` | 非 root、只读 rootfs、`cap_drop: ALL`、`/data` volume、healthcheck |
-| P0 e2e | `tests/e2e/test_task11_main_flow.py` | `init -> add -> validate -> plan -> apply -> up -> publish -> sub import -> serve` |
+| P0 e2e | `tests/e2e/test_task11_main_flow.py` | `init -> add -> validate -> check -> start -> publish -> sub import -> serve` |
 
 ## Golden 更新约定
 

@@ -37,7 +37,7 @@ class MihomoGeneratorError(ValueError):
 
 
 def render_mihomo_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]:
-    """生成指定启用 stack 的 mihomo 配置字典，供 CLI render 和后续 apply 复用。"""
+    """生成指定启用 stack 的 mihomo 配置字典，供 CLI render 和运行配置写入复用。"""
     stack = get_enabled_clash_stack(stack_set, stack_name)
     listener = get_single_socks_listener(stack)
     graph = build_reference_graph(stack_set)

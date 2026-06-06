@@ -57,8 +57,8 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["remove"],
         ["clone"],
         ["check"],
-        ["up"],
-        ["down"],
+        ["start"],
+        ["stop"],
         ["restart"],
         ["status"],
         ["logs"],
@@ -67,8 +67,6 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["publish"],
         ["doctor"],
         ["validate"],
-        ["plan"],
-        ["apply"],
         ["install"],
         ["update"],
         ["service"],
@@ -93,6 +91,11 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         result = runner.invoke(agent_app, [*command, "--help"])
 
         assert result.exit_code == 0, command
+
+    for removed_command in ["up", "down", "plan", "apply"]:
+        result = runner.invoke(agent_app, [removed_command, "--help"])
+
+        assert result.exit_code != 0, removed_command
 
 
 def test_agent_version_is_available() -> None:
@@ -130,9 +133,9 @@ def test_cli_subcommands_print_progress_messages(tmp_path: Path) -> None:
     assert "正在执行 proxystack-sub version ..." in sub_result.output
 
 
-def test_agent_plan_examples() -> None:
-    """验证 proxystack-agent plan 可以展示依赖和顺序。"""
-    result = runner.invoke(agent_app, ["plan", "-c", "examples/config.yaml", "--skip-system-ports"])
+def test_agent_check_examples() -> None:
+    """验证 proxystack-agent check 可以展示依赖和顺序。"""
+    result = runner.invoke(agent_app, ["check", "-c", "examples/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     assert "文件变更" in result.output
@@ -338,30 +341,30 @@ def test_agent_add_members_requires_existing_refs(tmp_path: Path) -> None:
     assert not (config.parent / "stacks" / "auto.yaml").exists()
 
 
-def test_agent_plan_does_not_write_runtime_files(tmp_path: Path) -> None:
-    """验证 plan 只展示文件变化，不写入运行目录文件。"""
+def test_agent_check_does_not_write_runtime_files(tmp_path: Path) -> None:
+    """验证 check 只展示文件变化，不写入运行目录文件。"""
     config = copy_example_project(tmp_path)
     generated_dir = config.parent / "runtime" / "generated"
 
-    result = runner.invoke(agent_app, ["plan", "-c", str(config), "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["check", "-c", str(config), "--skip-system-ports"])
 
     assert result.exit_code == 0
     assert "文件变更" in result.output
     assert not generated_dir.exists()
 
 
-def test_agent_apply_is_idempotent(tmp_path: Path) -> None:
-    """验证 apply 第二次执行不会改写未变化文件。"""
+def test_agent_start_is_idempotent(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start 第二次执行不会改写未变化文件。"""
     config = copy_example_project(tmp_path)
+    use_fake_systemd(monkeypatch, tmp_path)
     manifest = config.parent / "runtime" / "generated" / "manifest.json"
 
-    first = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+    first = runner.invoke(agent_app, ["start", "-c", str(config)])
     os.utime(manifest, (1000, 1000))
-    second = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+    second = runner.invoke(agent_app, ["start", "-c", str(config)])
 
     assert first.exit_code == 0
     assert second.exit_code == 0
-    assert "apply 完成：0 个文件变化" in second.output
     assert manifest.stat().st_mtime_ns == 1_000_000_000_000
 
 
@@ -379,22 +382,22 @@ def test_agent_add_sets_managed_stack_metadata_as_root(tmp_path: Path, monkeypat
     assert (stack_path, 123, 456) in chown_calls
 
 
-def test_agent_apply_repairs_unchanged_generated_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 apply 内容未变化时仍会修复生成文件权限且保持 mtime 幂等。"""
+def test_agent_start_repairs_unchanged_generated_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start 内容未变化时仍会修复生成文件权限且保持 mtime 幂等。"""
     config = copy_example_project(tmp_path)
+    use_fake_systemd(monkeypatch, tmp_path)
     chown_calls = use_fake_root_managed_owner(monkeypatch)
     manifest = config.parent / "runtime" / "generated" / "manifest.json"
     generated_file = config.parent / "runtime" / "generated" / "xray" / "usa1.json"
     stack_file = config.parent / "stacks" / "usa1.yaml"
 
-    first = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+    first = runner.invoke(agent_app, ["start", "-c", str(config)])
     os.utime(manifest, (1000, 1000))
     chown_calls.clear()
-    second = runner.invoke(agent_app, ["apply", "-c", str(config), "--skip-system-ports"])
+    second = runner.invoke(agent_app, ["start", "-c", str(config)])
 
     assert first.exit_code == 0
     assert second.exit_code == 0
-    assert "apply 完成：0 个文件变化" in second.output
     assert manifest.stat().st_mtime_ns == 1_000_000_000_000
     assert generated_file.stat().st_mode & 0o777 == 0o640
     assert stack_file.stat().st_mode & 0o777 == 0o640
@@ -403,13 +406,13 @@ def test_agent_apply_repairs_unchanged_generated_metadata_as_root(tmp_path: Path
     assert (manifest, 123, 456) in chown_calls
 
 
-def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 up 写入生成文件，并只报告目标范围内受影响服务。"""
+def test_agent_start_applies_and_reports_changed_target_services(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start 写入生成文件，并只报告目标范围内受影响服务。"""
     config = copy_example_project(tmp_path)
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
-    first = runner.invoke(agent_app, ["up", "xrelay/usa1", "-c", str(config), "--skip-system-ports"])
-    second = runner.invoke(agent_app, ["up", "xrelay/usa1", "-c", str(config), "--skip-system-ports"])
+    first = runner.invoke(agent_app, ["start", "xrelay/usa1", "-c", str(config)])
+    second = runner.invoke(agent_app, ["start", "xrelay/usa1", "-c", str(config)])
 
     assert first.exit_code == 0
     assert "restart: proxystack-xray@usa1.service" in first.output
@@ -503,9 +506,10 @@ def test_agent_service_install_uninstall_uses_fake_unit_dir(tmp_path: Path, monk
 
 def test_agent_top_level_wrappers_call_fake_runner(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证顶层服务包装命令调用 fake systemd runner。"""
+    config = copy_example_project(tmp_path)
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
     commands = [
-        (["down", "xrelay/usa1"], ("systemctl", "stop", "proxystack-xray@usa1.service")),
+        (["stop", "xrelay/usa1"], ("systemctl", "stop", "proxystack-xray@usa1.service")),
         (["restart", "xrelay/usa1"], ("systemctl", "restart", "proxystack-xray@usa1.service")),
         (["enable", "xrelay/usa1"], ("systemctl", "enable", "proxystack-xray@usa1.service")),
         (["disable", "xrelay/usa1"], ("systemctl", "disable", "proxystack-xray@usa1.service")),
@@ -514,23 +518,23 @@ def test_agent_top_level_wrappers_call_fake_runner(tmp_path: Path, monkeypatch: 
     ]
 
     for command, _ in commands:
-        result = runner.invoke(agent_app, [*command, "-c", "examples/config.yaml"])
+        result = runner.invoke(agent_app, [*command, "-c", str(config)])
 
         assert result.exit_code == 0, command
 
     assert fake_runner.calls == [expected for _, expected in commands]
 
 
-def test_agent_up_sub_only_restarts_sub_without_reading_stack(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 up sub 不读取 stack、不创建 runtime/generated，只影响 sub 服务。"""
+def test_agent_start_sub_only_starts_sub_without_reading_stack(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start sub 不读取 stack、不创建 runtime/generated，只影响 sub 服务。"""
     config = write_cli_config_without_valid_stacks(tmp_path)
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
-    result = runner.invoke(agent_app, ["up", "sub", "-c", str(config)])
+    result = runner.invoke(agent_app, ["start", "sub", "-c", str(config)])
 
     assert result.exit_code == 0
-    assert "restart: proxystack-sub.service" in result.output
-    assert fake_runner.calls == [("systemctl", "restart", "proxystack-sub.service")]
+    assert "start: proxystack-sub.service" in result.output
+    assert fake_runner.calls == [("systemctl", "start", "proxystack-sub.service")]
     assert not (config.parent / "runtime" / "generated").exists()
 
 
@@ -576,14 +580,15 @@ path.write_text(text.replace("usa1.clash.socks", "missing.clash.socks"), encodin
     assert stack_path.read_text(encoding="utf-8") == original_text
 
 
-def test_agent_remove_purge_deletes_generated_files(tmp_path: Path) -> None:
+def test_agent_remove_purge_deletes_generated_files(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 remove --purge 删除 stack 文件和 manifest 中对应生成文件。"""
     config = copy_example_project(tmp_path)
-    apply_result = runner.invoke(agent_app, ["apply", "usa1", "-c", str(config), "--skip-system-ports"])
+    use_fake_systemd(monkeypatch, tmp_path)
+    start_result = runner.invoke(agent_app, ["start", "usa1", "-c", str(config)])
 
     result = runner.invoke(agent_app, ["remove", "usa1", "--purge", "-c", str(config)])
 
-    assert apply_result.exit_code == 0
+    assert start_result.exit_code == 0
     assert result.exit_code == 0
     assert not (config.parent / "stacks" / "usa1.yaml").exists()
     assert not (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
@@ -986,7 +991,7 @@ def use_fake_root_managed_owner(monkeypatch: MonkeyPatch) -> list[tuple[Path, in
 
 
 def write_cli_config_without_valid_stacks(tmp_path: Path) -> Path:
-    """写入包含坏 stack 文件的配置，供 up sub 验证不扫描 stacks。"""
+    """写入包含坏 stack 文件的配置，供 start sub 验证不扫描 stacks。"""
     project_dir = tmp_path / "project"
     stacks_dir = project_dir / "stacks"
     stacks_dir.mkdir(parents=True)

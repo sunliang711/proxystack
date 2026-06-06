@@ -27,7 +27,6 @@ from proxystack.cli.lifecycle import remove_stack
 from proxystack.cli.lifecycle import render_model_json
 from proxystack.cli.lifecycle import resolve_service_scope
 from proxystack.cli.lifecycle import resolve_target_scope
-from proxystack.cli.lifecycle import service_action_lines
 from proxystack.config import DEFAULT_CONFIG_PATH
 from proxystack.config import load_config
 from proxystack.config import load_stacks
@@ -323,45 +322,12 @@ def validate(
 
 
 @app.command()
-def plan(
-    target: Optional[str] = typer.Argument(None, help="可选 stack 名称；缺省为全部 stack。"),
-    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
-) -> None:
-    """展示将写入或删除的生成文件，不写入任何运行目录文件。"""
-    try:
-        runtime_plan = build_runtime_plan(config, target, check_system_ports=not skip_system_ports)
-    except (ValidationError, ConfigValidationError, ValueError) as exc:
-        typer.echo(f"配置编译失败：\n{exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    echo_runtime_plan(runtime_plan)
-
-
-@app.command()
-def apply(
-    target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
-    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
-) -> None:
-    """写入生成文件和 manifest，不启动、不停止、不重启服务。"""
-    try:
-        runtime_plan = build_runtime_plan(config, target, check_system_ports=not skip_system_ports)
-        apply_runtime_plan(runtime_plan)
-    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"应用生成文件失败：\n{exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    changed_count = sum(1 for change in runtime_plan.changes if change.is_changed)
-    typer.echo(f"apply 完成：{changed_count} 个文件变化；未操作 systemd。")
-    echo_runtime_plan(runtime_plan)
-
-
-@app.command()
 def check(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """执行 validate + plan 包装，不写文件、不操作服务。"""
+    """校验配置并展示生成变更预览，不写文件、不操作服务。"""
     try:
         runtime_plan = build_runtime_plan(config, target, check_system_ports=not skip_system_ports)
     except (ValidationError, ConfigValidationError, ValueError) as exc:
@@ -372,44 +338,41 @@ def check(
 
 
 @app.command()
-def up(
+def start(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="只展示服务动作，不写生成文件。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """先 apply 普通代理配置；有变化则重启，无变化则启动目标服务。"""
+    """先写入生成配置，再重启变化服务并启动未变化服务。"""
     try:
-        if dry_run:
-            scope = resolve_service_scope(config, target, check_system_ports=False)
-            echo_service_lines(service_action_lines("restart", scope))
-            return
         if normalize_target(target) == "sub":
             global_config = load_config(config)
-            echo_service_lines(build_systemd_manager(global_config).systemctl("restart", (SUB_SERVICE_NAME,)))
+            echo_service_lines(build_systemd_manager(global_config).systemctl("start", (SUB_SERVICE_NAME,)))
             return
         runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
         apply_runtime_plan(runtime_plan)
         service_scope = resolve_service_scope(config, target, check_system_ports=False)
     except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
-        typer.echo(f"up 失败：\n{exc}", err=True)
+        typer.echo(f"启动失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     service_names = set(service_scope.service_names)
-    services = [service_name for service_name in runtime_plan.changed_services if service_name in service_names]
-    action = "restart" if services else "start"
-    services = services or list(service_scope.service_names)
-    if not services:
-        typer.echo(f"{action}: no services selected")
+    restart_services = [service_name for service_name in runtime_plan.changed_services if service_name in service_names]
+    start_services = [service_name for service_name in service_scope.service_names if service_name not in restart_services]
+    if not restart_services and not start_services:
+        typer.echo("start: no services selected")
         return
     try:
-        echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl(action, services))
+        manager = build_systemd_manager(runtime_plan.config)
+        if restart_services:
+            echo_service_lines(manager.systemctl("restart", restart_services))
+        if start_services:
+            echo_service_lines(manager.systemctl("start", start_services))
     except (OSError, SystemdCommandError) as exc:
-        typer.echo(f"up 失败：\n{exc}", err=True)
+        typer.echo(f"启动失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
 
 
 @app.command()
-def down(
+def stop(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
@@ -424,8 +387,19 @@ def restart(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
-    """重启目标 systemd 服务。"""
-    run_service_adapter("restart", target, config, skip_system_ports)
+    """先写入生成配置，再重启目标 systemd 服务。"""
+    try:
+        if normalize_target(target) == "sub":
+            global_config = load_config(config)
+            echo_service_lines(build_systemd_manager(global_config).systemctl("restart", (SUB_SERVICE_NAME,)))
+            return
+        runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
+        apply_runtime_plan(runtime_plan)
+        service_scope = resolve_service_scope(config, target, check_system_ports=False)
+        echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl("restart", service_scope.service_names))
+    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+        typer.echo(f"重启失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()
@@ -596,7 +570,7 @@ def echo_runtime_plan(runtime_plan: RuntimePlan) -> None:
 
 
 def echo_dependency_plan(dependency_plan: Optional[DependencyPlan]) -> None:
-    """输出服务依赖和建议操作顺序，兼容原有 plan 展示。"""
+    """输出服务依赖和建议操作顺序，供 check 展示。"""
     typer.echo("依赖服务：")
     if dependency_plan is None or not dependency_plan.dependency_edges:
         typer.echo("  无服务依赖")
@@ -962,7 +936,7 @@ def publish(
 
 
 def format_service_node(node: ServiceNode) -> str:
-    """格式化服务节点，供 CLI plan 输出使用。"""
+    """格式化服务节点，供 CLI check 输出使用。"""
     return f"{node.label()} ({node.service_name()})"
 
 

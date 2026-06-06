@@ -39,7 +39,7 @@ class XrayGeneratorError(ValueError):
 
 
 def render_xray_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]:
-    """生成指定启用 stack 的 Xray 配置字典，供 CLI render 和后续 apply 复用。"""
+    """生成指定启用 stack 的 Xray 配置字典，供 CLI render 和运行配置写入复用。"""
     stack = get_enabled_xrelay_stack(stack_set, stack_name)
     defaults = stack_set.config.defaults.xrelay
     api_config = resolve_xrelay_api_config(defaults, stack.xrelay)

@@ -68,13 +68,13 @@ class GeneratedFile:
 
     @property
     def sha256(self) -> str:
-        """返回生成内容的 sha256 摘要，供 manifest 和 plan 对比使用。"""
+        """返回生成内容的 sha256 摘要，供 manifest 和 check 对比使用。"""
         return hashlib.sha256(self.content).hexdigest()
 
 
 @dataclass(frozen=True)
 class FileChange:
-    """表示 plan/apply 中一个文件的预期变化。"""
+    """表示生成配置写入前后的单个文件变化。"""
 
     action: str
     relative_path: str
@@ -109,7 +109,7 @@ class TargetScope:
 
 @dataclass(frozen=True)
 class RuntimePlan:
-    """表示一次 plan/apply 的编译结果和文件变化。"""
+    """表示一次运行配置编译结果和文件变化。"""
 
     config: GlobalConfig
     stack_set: StackSet
@@ -629,7 +629,7 @@ def build_runtime_plan(config_path: Path, target: Optional[str], check_system_po
 
 
 def apply_runtime_plan(plan: RuntimePlan) -> list[FileChange]:
-    """按 plan 写入变化文件和 manifest，未变化文件保持原 mtime。"""
+    """按编译结果写入变化文件和 manifest，未变化文件保持原 mtime。"""
     generated_dir = plan.config.resolve_path(plan.config.paths.generated)
     ensure_managed_directory(generated_dir)
     desired_by_path = {generated_file.relative_path: generated_file for generated_file in plan.generated_files}
@@ -685,7 +685,7 @@ def compile_sub_files(stack_set: StackSet, generated_dir: Path) -> list[Generate
 
 
 def read_generated_at(path: Path) -> Optional[str]:
-    """从既有 YAML/JSON 生成文件中读取 generated_at，用于保持 apply 幂等。"""
+    """从既有 YAML/JSON 生成文件中读取 generated_at，用于保持 start 幂等。"""
     if not path.exists():
         return None
     try:
@@ -752,7 +752,7 @@ def plan_file_changes(
 
 
 def update_manifest_for_scope(manifest: dict[str, Any], plan: RuntimePlan) -> dict[str, Any]:
-    """按本次 apply 范围更新 manifest 文件清单。"""
+    """按本次目标范围更新 manifest 文件清单。"""
     files = dict(manifest.get("files", {}))
     selected_services = set(plan.scope.service_names)
     desired_by_path = {generated_file.relative_path: generated_file for generated_file in plan.generated_files}
@@ -891,16 +891,8 @@ def dependency_plan_for_components(graph: ReferenceGraph, scope: TargetScope) ->
     )
 
 
-def service_action_lines(action: str, scope: TargetScope, follow: bool = False) -> list[str]:
-    """通过可测试 service adapter 生成生命周期动作说明，不调用 systemctl。"""
-    suffix = " --follow" if follow else ""
-    if not scope.service_names:
-        return [f"{action}{suffix}: no services selected"]
-    return [f"{action}{suffix}: {service_name}" for service_name in scope.service_names]
-
-
 def resolve_service_scope(config_path: Path, target: Optional[str], check_system_ports: bool) -> TargetScope:
-    """解析服务生命周期命令 target，供 up/down/status 等命令复用。"""
+    """解析服务生命周期命令 target，供 start/stop/status 等命令复用。"""
     target = normalize_target(target)
     config = load_config(config_path)
     if target == "sub":

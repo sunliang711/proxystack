@@ -8,7 +8,7 @@
 
 - 新建 `src/proxystack/graph`。
 - ref 解析为结构体，不在业务中反复 split 字符串。
-- 依赖图用于 `plan/up` 决定服务操作顺序，并用于循环检测；`apply` 只消费解析后的生成模型。
+- 依赖图用于 `check/start` 展示和执行服务操作顺序，并用于循环检测。
 
 ## 实现步骤
 
@@ -27,7 +27,7 @@
 - `usa1.clash.socks` 能解析到 clash socks listener，其中 `kind` 表示 listener type。
 - ref 不存在、组件不匹配、协议不匹配时失败。
 - auto 场景无循环时通过，有循环时失败。
-- `plan` 能展示目标 stack 的依赖服务和建议操作顺序。
+- `check` 能展示目标 stack 的依赖服务和建议操作顺序。
 
 ## 依赖
 

@@ -13,8 +13,8 @@ proxystack-agent
   remove
   clone
   check
-  up
-  down
+  start
+  stop
   restart
   status
   logs
@@ -23,8 +23,6 @@ proxystack-agent
   publish
   doctor
   validate
-  plan
-  apply
   render
   install
   update
@@ -88,9 +86,9 @@ proxystack-agent edit usa1
 proxystack-agent list
 proxystack-agent clone usa1 usa2
 proxystack-agent check
-proxystack-agent up
-proxystack-agent up usa1
-proxystack-agent down usa1
+proxystack-agent start
+proxystack-agent start usa1
+proxystack-agent stop usa1
 proxystack-agent restart usa1
 proxystack-agent status
 proxystack-agent logs usa1 --follow
@@ -107,10 +105,10 @@ proxystack-agent doctor
 - `list`：列出 stack 文件、enabled 状态、角色、生成文件状态、运行状态、xrelay `user/protocol:port` 和 clash 主要端口。
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
-- `check [target]`：执行 `validate + plan`，不写文件、不操作服务。
-- `up [target]`：执行 `validate + apply`，然后通过 systemd 只重启本次生成文件变化影响到的目标服务；`up sub` 只重启 `proxystack-sub.service`。
-- `down [target]`：通过 systemd 停止目标范围内服务，不删除配置和生成文件。
-- `restart [target]`：通过 systemd 重启目标范围内服务。
+- `check [target]`：校验配置并展示生成变更预览，不写文件、不操作服务。
+- `start [target]`：先生成配置并写 manifest；配置有变化时重启受影响服务，并启动目标范围内未变化的服务；`start sub` 只启动 `proxystack-sub.service`。
+- `stop [target]`：通过 systemd 停止目标范围内服务，不删除配置和生成文件。
+- `restart [target]`：先生成配置并写 manifest，再通过 systemd 重启目标范围内服务；`restart sub` 不读取 stack。
 - `status [target]`：通过 systemd 查询目标范围内服务状态。
 - `logs [target]`：通过 `journalctl` 查看目标范围内服务日志。
 - `enable [target]`：通过 systemd 设置目标范围内服务开机自启。
@@ -120,21 +118,21 @@ proxystack-agent doctor
 
 ## 4. 作用域规则
 
-不传目标或传 `all` 时，`check/up/down/restart/status/logs/enable/disable` 作用于全部 enabled stack。传目标时只作用于指定范围：
+不传目标或传 `all` 时，`check/start/stop/restart/status/logs/enable/disable` 作用于全部 enabled stack。传目标时只作用于指定范围：
 
 ```bash
-proxystack-agent up              # 全部 enabled stack
-proxystack-agent up usa1         # usa1 的 xray + clash
-proxystack-agent up xrelay/usa1  # 只操作 usa1 的 Xray
-proxystack-agent up clash/usa1   # 只操作 usa1 的 mihomo
-proxystack-agent up sub          # 只操作本地订阅服务
+proxystack-agent start              # 全部 enabled stack
+proxystack-agent start usa1         # usa1 的 xray + clash
+proxystack-agent start xrelay/usa1  # 只操作 usa1 的 Xray
+proxystack-agent start clash/usa1   # 只操作 usa1 的 mihomo
+proxystack-agent start sub          # 只操作本地订阅服务
 ```
 
 `sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取 `config.yaml` 和 `stacks/`。
 
 Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake unit_dir 隔离真实 `systemctl`、`journalctl` 和 `/etc/systemd/system`。`service log --follow/-f` 直接流式输出 journal。Task06 P0 已实现的订阅服务命令是 `proxystack-sub import/rebuild/serve`。
 
-服务生命周期命令默认跳过系统端口占用检查，避免在服务已经运行并占用自身监听端口时阻断 `status/restart/up` 等操作；配置结构、ref 和重复端口仍会校验。`up sub` 不读取或改写 stack 文件，也不会创建 `runtime/generated`。
+服务生命周期命令默认跳过系统端口占用检查，避免在服务已经运行并占用自身监听端口时阻断 `status/restart/start` 等操作；配置结构、ref 和重复端口仍会校验。`start sub` 不读取或改写 stack 文件，也不会创建 `runtime/generated`。
 
 ## 5. add/edit/clone/remove
 
@@ -176,26 +174,26 @@ proxystack-agent remove usa2
 - 顶层 `name` 改为 `<target>`。
 - ref 第一段等于 `<source>` 且指向自身资源时，自动改为 `<target>`；指向其他 stack 的 ref 保持不变。
 - 当前 stack 内的明文凭据默认保持不变；用户需要新密码时可编辑生成后的 stack 文件。
-- 默认不自动改端口；如果原端口会导致全局校验失败，命令拒绝写入目标文件。使用 `--allocate-ports` 时按端口池重新分配本 stack 内端口，用户仍需执行 `check/up`。
+- 默认不自动改端口；如果原端口会导致全局校验失败，命令拒绝写入目标文件。使用 `--allocate-ports` 时按端口池重新分配本 stack 内端口，用户仍需执行 `check/start`。
 
 `remove` 默认不删除生成文件，只删除或归档 stack 配置。需要清理生成文件时使用 `--purge`。
 
-## 6. validate/plan/apply
+## 6. validate/check/start
 
 ```bash
 proxystack-agent validate
 proxystack-agent validate usa1
-proxystack-agent plan
-proxystack-agent plan usa1
-proxystack-agent apply
-proxystack-agent apply usa1
+proxystack-agent check
+proxystack-agent check usa1
+proxystack-agent start
+proxystack-agent start usa1
 ```
 
 - `validate`：校验 `config.yaml`、所有 stack 文件、端口、ref、rules、mode、安全约束和明文字段格式。
-- `plan`：执行完整编译，对比 manifest，展示将生成/修改/删除的文件和建议重启的服务，不写文件。
-- `apply`：生成配置并写 manifest，不启动、不停止、不重启服务。
+- `check`：执行完整编译，对比 manifest，展示将生成/修改/删除的文件和建议重启的服务，不写文件。
+- `start`：生成配置并写 manifest；重启受生成文件变化影响的服务，并启动目标范围内未变化的服务。
 
-`check` 是 `validate + plan` 的常用包装；`up` 是 `validate + apply + systemd restart changed` 的常用包装。普通代理目标会先写入生成文件和 manifest，再只重启本次变化影响到的服务；`up sub` 是例外，只重启订阅服务，不读取 stack。
+顶层不再提供 `plan`、`apply`、`up`、`down` 子命令；日常服务控制使用 `start`、`stop`、`restart`。
 
 ## 7. render
 
@@ -287,7 +285,7 @@ proxystack-agent service status [target]
 proxystack-agent service log [target] --follow
 ```
 
-`enable/disable/up/down/restart/status/logs` 是 `service` 分组的常用包装。
+`start/stop/restart/status/logs/enable/disable` 是 `service` 分组的常用包装；顶层 `start` 和 `restart` 会先生成配置。
 
 `service install|uninstall` 写 `/etc/systemd/system/`，必须以 root 或具备等价 systemd 管理权限的用户运行；其他服务生命周期命令权限不足时必须给出明确错误。
 
@@ -352,7 +350,7 @@ GET /surge_sub/:user
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。
 - `render sub`：只输出订阅索引，不写文件；加 `--input-dir` 时输出多 input 合并后的结果。
 
-订阅服务启动和请求处理只读取合并后的 `current/index.json`，不直接解析 `config.yaml` 或 stack 文件。`proxystack-sub import` 默认校验发布包、解包 inputs 并自动 rebuild；只有传 `--no-rebuild` 时才需要手动执行 `rebuild`。本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent up sub/status sub/logs sub` 管理；订阅内容变更的主流程仍是 `publish + sub import`。
+订阅服务启动和请求处理只读取合并后的 `current/index.json`，不直接解析 `config.yaml` 或 stack 文件。`proxystack-sub import` 默认校验发布包、解包 inputs 并自动 rebuild；只有传 `--no-rebuild` 时才需要手动执行 `rebuild`。本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程仍是 `publish + sub import`。
 
 ## 11. mihomo 辅助命令
 
