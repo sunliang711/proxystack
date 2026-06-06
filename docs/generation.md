@@ -142,6 +142,7 @@ allow-lan: false
 bind-address: 127.0.0.1
 mode: Rule
 log-level: info
+ipv6: true
 external-controller: 127.0.0.1:19091
 ```
 

@@ -44,6 +44,7 @@ def render_mihomo_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]
     return {
         "mode": stack.clash.mode,
         "log-level": "info",
+        "ipv6": True,
         "allow-lan": not is_loopback_listen_host(listener.listen),
         "bind-address": listener.listen,
         "external-controller": stack.clash.controller.listen,

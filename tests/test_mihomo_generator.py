@@ -44,6 +44,7 @@ def test_render_mihomo_output_is_yaml() -> None:
 
     parsed_config = YAML(typ="safe").load(dumps_mihomo_config(stack_set, "auto"))
 
+    assert parsed_config["ipv6"] is True
     assert parsed_config["socks-port"] == 17093
     assert [proxy["name"] for proxy in parsed_config["proxies"]] == ["usa1-local", "usa2-local"]
 
