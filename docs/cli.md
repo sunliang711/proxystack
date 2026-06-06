@@ -164,7 +164,9 @@ proxystack-agent remove usa2
 
 `add` 创建 stack 后默认会打开编辑器并在保存后校验；自动化脚本可使用 `--no-edit` 跳过编辑。独立的 `edit` 命令仍保留，`edit <name>` 用于再次编辑已有 stack，`edit` 不带名称时编辑全局 `config.yaml`。
 
-`add` 默认会基于 `config.yaml` 的 `port_ranges` 自动分配 xrelay inbound、clash socks 和 clash controller 端口，避免连续新增 stack 时撞上模板固定端口。需要保留模板端口时使用 `--keep-template-ports`；此时端口仍必须合法、唯一且未被系统占用。
+`add` 默认会基于 `config.yaml` 的 `port_ranges` 自动分配 xrelay inbound、xrelay API、clash socks 和 clash controller 端口，避免连续新增 stack 时撞上模板固定端口。需要保留模板端口时使用 `--keep-template-ports`；此时端口仍必须合法、唯一且未被系统占用。
+
+`add` 使用内置模板时会把 xrelay vmess inbound 的模板占位 UUID 自动替换为随机 UUID；`--from-file` 会保留输入文件中的 UUID。
 
 `clone --allocate-ports` 会基于相同端口池重新分配克隆目标的端口。自动分配只选择当前配置未使用且系统未占用的端口；无法分配时命令失败并提示用户修改端口池。手写端口可以在端口池之外，但仍必须合法、唯一且未被系统占用。
 

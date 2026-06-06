@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 from typing import Any
 from typing import Optional
+from uuid import uuid4
 
 from pydantic import ValidationError
 from ruamel.yaml import YAML
@@ -51,6 +52,7 @@ MANAGED_USER = "proxystack"
 MANAGED_GROUP = "proxystack"
 MANAGED_DIR_MODE = 0o750
 MANAGED_FILE_MODE = 0o640
+VMESS_UUID_PLACEHOLDER = "11111111-1111-4111-8111-111111111111"
 SYSTEMD_UNIT_PATHS = [
     Path("/etc/systemd/system/proxystack-xray@.service"),
     Path("/etc/systemd/system/proxystack-clash@.service"),
@@ -313,7 +315,24 @@ def load_stack_source_data(name: str, template_name: str, from_file: Optional[Pa
         return source_data
     if template_name not in BUILTIN_TEMPLATES:
         raise ValueError(f"unknown stack template: {template_name}")
-    return load_yaml_text(read_builtin_template(template_name))
+    source_data = load_yaml_text(read_builtin_template(template_name))
+    replace_template_vmess_uuids(source_data)
+    return source_data
+
+
+def replace_template_vmess_uuids(stack_data: dict[str, Any]) -> None:
+    """把内置模板中的 xrelay vmess 占位 UUID 替换为随机 UUID。"""
+    xrelay_data = stack_data.get("xrelay")
+    if not isinstance(xrelay_data, dict):
+        return
+    inbounds = xrelay_data.get("inbounds")
+    if not isinstance(inbounds, list):
+        return
+    for inbound_data in inbounds:
+        if not isinstance(inbound_data, dict):
+            continue
+        if inbound_data.get("protocol") == "vmess" and inbound_data.get("uuid") == VMESS_UUID_PLACEHOLDER:
+            inbound_data["uuid"] = str(uuid4())
 
 
 def read_builtin_template(template_name: str) -> str:

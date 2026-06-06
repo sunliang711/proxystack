@@ -8,6 +8,7 @@ import socket
 import sys
 from types import SimpleNamespace
 from typing import Sequence
+from uuid import UUID
 from zipfile import ZipFile
 
 from pytest import MonkeyPatch
@@ -369,6 +370,13 @@ def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path
     assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:19001"
     assert usa2["xrelay"]["api"]["listen"] == "127.0.0.1:19002"
     assert usa2["clash"]["controller"]["listen"] == "127.0.0.1:19003"
+    usa1_uuid = usa1["xrelay"]["inbounds"][1]["uuid"]
+    usa2_uuid = usa2["xrelay"]["inbounds"][1]["uuid"]
+    UUID(usa1_uuid)
+    UUID(usa2_uuid)
+    assert usa1_uuid != lifecycle_module.VMESS_UUID_PLACEHOLDER
+    assert usa2_uuid != lifecycle_module.VMESS_UUID_PLACEHOLDER
+    assert usa1_uuid != usa2_uuid
 
 
 def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
