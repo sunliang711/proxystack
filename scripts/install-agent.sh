@@ -137,7 +137,7 @@ validate_args() {
 ensure_group() {
 	require_cmd getent
 	if getent group "${INSTALL_GROUP}" >/dev/null 2>&1; then
-		log "Group already exists: ${INSTALL_GROUP}"
+		log "SKIP: group already exists: ${INSTALL_GROUP}"
 		return 0
 	fi
 	require_cmd groupadd
@@ -148,7 +148,7 @@ ensure_group() {
 ensure_user() {
 	require_cmd id
 	if id -u "${INSTALL_USER}" >/dev/null 2>&1; then
-		log "User already exists: ${INSTALL_USER}"
+		log "SKIP: user already exists: ${INSTALL_USER}"
 		return 0
 	fi
 	require_cmd useradd
@@ -186,7 +186,7 @@ install_python_package() {
 			"${BASE_DIR}/.venv/bin/proxystack-sub" \
 			"${BASE_DIR}/.venv/bin/ps-agent" \
 			"${BASE_DIR}/.venv/bin/ps-sub"; then
-			log "Python package already up to date; skipping pip install"
+			log "SKIP: Python package already up to date"
 			return 0
 		fi
 	fi
@@ -202,16 +202,20 @@ install_python_package() {
 # 链接 console scripts 到系统 bin 目录。
 link_console_scripts() {
 	ensure_dir "${BIN_DIR}" "0755" "" "system"
-	run ln -sf "${BASE_DIR}/.venv/bin/proxystack-agent" "${BIN_DIR}/proxystack-agent"
-	run ln -sf "${BASE_DIR}/.venv/bin/proxystack-sub" "${BIN_DIR}/proxystack-sub"
-	run ln -sf "${BASE_DIR}/.venv/bin/ps-agent" "${BIN_DIR}/ps-agent"
-	run ln -sf "${BASE_DIR}/.venv/bin/ps-sub" "${BIN_DIR}/ps-sub"
+	ensure_symlink "${BASE_DIR}/.venv/bin/proxystack-agent" "${BIN_DIR}/proxystack-agent" "system"
+	ensure_symlink "${BASE_DIR}/.venv/bin/proxystack-sub" "${BIN_DIR}/proxystack-sub" "system"
+	ensure_symlink "${BASE_DIR}/.venv/bin/ps-agent" "${BIN_DIR}/ps-agent" "system"
+	ensure_symlink "${BASE_DIR}/.venv/bin/ps-sub" "${BIN_DIR}/ps-sub" "system"
 }
 
 # 根据参数决定是否初始化 config.yaml。
 maybe_init_project() {
 	if [[ "${RUN_INIT}" != "1" ]]; then
-		log "Project init skipped"
+		log "SKIP: project init disabled"
+		return 0
+	fi
+	if ! is_dry_run && [[ -f "${BASE_DIR}/config.yaml" ]]; then
+		log "SKIP: config already exists: ${BASE_DIR}/config.yaml"
 		return 0
 	fi
 	run_as_user "${INSTALL_USER}" "${BASE_DIR}/.venv/bin/proxystack-agent" init --config "${BASE_DIR}/config.yaml" --base-dir "${BASE_DIR}"
@@ -222,7 +226,21 @@ maybe_install_systemd() {
 	if [[ "${INSTALL_SYSTEMD}" != "1" ]]; then
 		return 0
 	fi
+	if systemd_units_installed; then
+		log "SKIP: systemd units already installed"
+		return 0
+	fi
 	run "${BASE_DIR}/.venv/bin/proxystack-agent" service install --config "${BASE_DIR}/config.yaml"
+}
+
+# 判断 agent 需要的 systemd unit 是否已经全部安装。
+systemd_units_installed() {
+	if is_dry_run; then
+		return 1
+	fi
+	[[ -f /etc/systemd/system/proxystack-xray@.service ]] &&
+		[[ -f /etc/systemd/system/proxystack-clash@.service ]] &&
+		[[ -f /etc/systemd/system/proxystack-sub.service ]]
 }
 
 # 主入口。

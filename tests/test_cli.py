@@ -49,6 +49,20 @@ def test_agent_help_is_available() -> None:
     assert "proxystack-agent" in result.output
 
 
+def test_agent_help_groups_commands_by_panel() -> None:
+    """验证 usage 中 commands 列表按用途分组展示。"""
+    result = runner.invoke(agent_app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "配置管理" in result.output
+    assert "安装更新" in result.output
+    assert "校验与渲染" in result.output
+    assert "服务控制" in result.output
+    assert "订阅发布" in result.output
+    assert result.output.index("配置管理") < result.output.index("安装更新")
+    assert result.output.index("安装更新") < result.output.index("校验与渲染")
+
+
 def test_agent_lifecycle_command_help_is_available() -> None:
     """验证生命周期命令都提供 help 输出。"""
     commands = [

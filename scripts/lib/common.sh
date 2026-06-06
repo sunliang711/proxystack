@@ -370,12 +370,105 @@ ensure_dir() {
 		die "Unknown directory guard scope: ${scope}"
 	fi
 
+	if directory_is_current "${path}" "${mode}" "${owner_group}"; then
+		log "SKIP: directory already exists: ${path}"
+		return 0
+	fi
+
 	require_cmd install
 	run install -d -m "${mode}" "${path}"
 	if [[ -n "${owner_group}" ]]; then
 		require_cmd chown
 		run chown "${owner_group}" "${path}"
 	fi
+}
+
+# 判断目录是否已经存在且权限、owner 符合预期。
+directory_is_current() {
+	local path="${1:-}"
+	local mode="${2:-0750}"
+	local owner_group="${3:-}"
+	local actual_mode
+	local actual_owner
+
+	if [[ ! -d "${path}" ]]; then
+		return 1
+	fi
+	actual_mode="$(path_mode "${path}")" || return 1
+	if [[ "$(normalize_mode "${actual_mode}")" != "$(normalize_mode "${mode}")" ]]; then
+		return 1
+	fi
+	if [[ -n "${owner_group}" ]]; then
+		actual_owner="$(path_owner_group "${path}")" || return 1
+		if [[ "${actual_owner}" != "${owner_group}" ]]; then
+			return 1
+		fi
+	fi
+	return 0
+}
+
+# 读取路径权限，兼容 GNU stat 和 BSD stat。
+path_mode() {
+	local path="${1:-}"
+	if stat -c '%a' "${path}" >/dev/null 2>&1; then
+		stat -c '%a' "${path}"
+		return 0
+	fi
+	stat -f '%Lp' "${path}"
+}
+
+# 读取路径 owner:group，兼容 GNU stat 和 BSD stat。
+path_owner_group() {
+	local path="${1:-}"
+	if stat -c '%U:%G' "${path}" >/dev/null 2>&1; then
+		stat -c '%U:%G' "${path}"
+		return 0
+	fi
+	stat -f '%Su:%Sg' "${path}"
+}
+
+# 归一化权限值，便于比较 0750 和 750。
+normalize_mode() {
+	local mode="${1:-}"
+	while [[ "${#mode}" -gt 1 && "${mode}" == 0* ]]; do
+		mode="${mode#0}"
+	done
+	if [[ -z "${mode}" ]]; then
+		printf '0'
+		return 0
+	fi
+	printf '%s' "${mode}"
+}
+
+# 创建或更新 symlink；目标已正确时输出 SKIP。
+ensure_symlink() {
+	local target_path="${1:-}"
+	local link_path="${2:-}"
+	local scope="${3:-system}"
+	local link_parent
+	local current_target
+
+	if [[ -z "${target_path}" || -z "${link_path}" ]]; then
+		die "ensure_symlink needs target and link path"
+	fi
+	link_parent="${link_path%/*}"
+	if [[ "${scope}" == "system" ]]; then
+		guard_system_dir "${link_parent}" "symlink directory"
+	elif [[ "${scope}" == "managed" ]]; then
+		guard_managed_path "${link_parent}" "symlink directory"
+	elif [[ "${scope}" != "none" ]]; then
+		die "Unknown symlink guard scope: ${scope}"
+	fi
+	if [[ -L "${link_path}" ]]; then
+		require_cmd readlink
+		current_target="$(readlink "${link_path}")"
+		if [[ "${current_target}" == "${target_path}" ]]; then
+			log "SKIP: symlink already exists: ${link_path} -> ${target_path}"
+			return 0
+		fi
+	fi
+	require_cmd ln
+	run ln -sf "${target_path}" "${link_path}"
 }
 
 # 以指定用户执行命令；优先使用 runuser，必要时使用 sudo。
@@ -636,7 +729,7 @@ ensure_venv() {
 	guard_managed_path "${venv_dir}" "venv directory"
 	require_cmd "${python_bin}"
 	if [[ -f "${venv_dir}/pyvenv.cfg" ]]; then
-		log "Python venv already exists: ${venv_dir}"
+		log "SKIP: Python venv already exists: ${venv_dir}"
 		return 0
 	fi
 	run_as_user "${owner_user}" "${python_bin}" -m venv "${venv_dir}"

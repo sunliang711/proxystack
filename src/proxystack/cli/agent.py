@@ -67,6 +67,12 @@ from proxystack.systemd import CommandRunner
 from proxystack.systemd import SystemdCommandError
 from proxystack.systemd import SystemdManager
 
+CONFIG_HELP_PANEL = "配置管理"
+INSTALL_HELP_PANEL = "安装更新"
+VALIDATE_HELP_PANEL = "校验与渲染"
+SERVICE_HELP_PANEL = "服务控制"
+SUBSCRIPTION_HELP_PANEL = "订阅发布"
+
 app = typer.Typer(
     help="本地代理栈管理命令。",
     no_args_is_help=True,
@@ -83,9 +89,9 @@ service_app = typer.Typer(
     help="systemd unit 安装和服务生命周期管理命令。",
     no_args_is_help=True,
 )
-app.add_typer(render_app, name="render")
-app.add_typer(sub_app, name="sub")
-app.add_typer(service_app, name="service")
+app.add_typer(render_app, name="render", rich_help_panel=VALIDATE_HELP_PANEL)
+app.add_typer(sub_app, name="sub", rich_help_panel=SUBSCRIPTION_HELP_PANEL)
+app.add_typer(service_app, name="service", rich_help_panel=SERVICE_HELP_PANEL)
 
 SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
@@ -122,7 +128,7 @@ def echo_command_progress(command_prefix: str, subcommand: Optional[str]) -> Non
     typer.echo(f"正在执行 {command_prefix} {subcommand} ...", err=True)
 
 
-@app.command()
+@app.command(rich_help_panel=CONFIG_HELP_PANEL)
 def init(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     base_dir: Optional[Path] = typer.Option(None, "--base-dir", help="base_dir；缺省使用 config.yaml 所在目录。"),
@@ -140,7 +146,7 @@ def init(
         typer.echo(f"  - {path}")
 
 
-@app.command()
+@app.command(rich_help_panel=CONFIG_HELP_PANEL)
 def add(
     name: str = typer.Argument(..., help="新 stack 名称。"),
     template: str = typer.Option("pair", "--template", help="内置模板：pair/auto-url-test/load-balance。"),
@@ -167,7 +173,7 @@ def add(
         typer.echo(f"编辑校验通过：{path}")
 
 
-@app.command("clone")
+@app.command("clone", rich_help_panel=CONFIG_HELP_PANEL)
 def clone_command(
     source: str = typer.Argument(..., help="来源 stack 名称。"),
     target: str = typer.Argument(..., help="目标 stack 名称。"),
@@ -183,7 +189,7 @@ def clone_command(
     typer.echo(f"stack 已克隆：{path}")
 
 
-@app.command("list")
+@app.command("list", rich_help_panel=CONFIG_HELP_PANEL)
 def list_command(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
@@ -198,7 +204,7 @@ def list_command(
         typer.echo(line)
 
 
-@app.command()
+@app.command(rich_help_panel=CONFIG_HELP_PANEL)
 def remove(
     name: str = typer.Argument(..., help="要删除的 stack 名称。"),
     purge: bool = typer.Option(False, "--purge", help="同时删除该 stack 对应生成文件。"),
@@ -215,7 +221,7 @@ def remove(
         typer.echo(f"  - {path}")
 
 
-@app.command()
+@app.command(rich_help_panel=CONFIG_HELP_PANEL)
 def edit(
     name: Optional[str] = typer.Argument(None, help="stack 名称；缺省编辑 config.yaml。"),
     editor: Optional[str] = typer.Option(None, "--editor", help="覆盖 EDITOR，例如 --editor true。"),
@@ -231,7 +237,7 @@ def edit(
     typer.echo(f"编辑校验通过：{path}")
 
 
-@app.command()
+@app.command(rich_help_panel=INSTALL_HELP_PANEL)
 def version(
     target: Optional[str] = typer.Argument(None, help="可选组件：mihomo/xray/geo。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -254,7 +260,7 @@ def version(
         typer.echo(version_result.output)
 
 
-@app.command()
+@app.command(rich_help_panel=INSTALL_HELP_PANEL)
 def install(
     target: str = typer.Argument(..., help="安装目标：mihomo/xray/geo/all。"),
     component_version: Optional[str] = typer.Option(None, "--version", help="目标版本标签。"),
@@ -272,7 +278,7 @@ def install(
     echo_install_results(results)
 
 
-@app.command()
+@app.command(rich_help_panel=INSTALL_HELP_PANEL)
 def update(
     target: str = typer.Argument(..., help="更新目标：mihomo/xray/geo/all/self。"),
     package_spec: Optional[str] = typer.Argument(None, help="update self 使用的 package spec。"),
@@ -304,7 +310,7 @@ def update(
     echo_install_results(results)
 
 
-@app.command()
+@app.command(rich_help_panel=VALIDATE_HELP_PANEL)
 def validate(
     target: Optional[str] = typer.Argument(None, help="可选 stack 名称；缺省为全部 stack。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -323,7 +329,7 @@ def validate(
     typer.echo(f"配置校验通过：{len(stack_set.stacks)} 个 stack，目标 {target_label}")
 
 
-@app.command()
+@app.command(rich_help_panel=VALIDATE_HELP_PANEL)
 def check(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -339,7 +345,7 @@ def check(
     echo_runtime_plan(runtime_plan)
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def start(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -380,7 +386,7 @@ def start(
         raise typer.Exit(code=1) from exc
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def stop(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -390,7 +396,7 @@ def stop(
     run_service_adapter("stop", target, config, skip_system_ports)
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def restart(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -415,7 +421,7 @@ def restart(
         raise typer.Exit(code=1) from exc
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def status(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -425,7 +431,7 @@ def status(
     run_service_adapter("status", target, config, skip_system_ports)
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def logs(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     follow: bool = typer.Option(False, "--follow", "-f", help="展示 follow 日志动作。"),
@@ -436,7 +442,7 @@ def logs(
     run_service_adapter("log", target, config, skip_system_ports, follow=follow)
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def enable(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -446,7 +452,7 @@ def enable(
     run_service_adapter("enable", target, config, skip_system_ports)
 
 
-@app.command()
+@app.command(rich_help_panel=SERVICE_HELP_PANEL)
 def disable(
     target: Optional[str] = typer.Argument(None, help="可选 stack、xrelay/name、clash/name 或 sub。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
@@ -538,7 +544,7 @@ def service_log(
     run_service_group_action("log", target, config, follow=follow)
 
 
-@app.command()
+@app.command(rich_help_panel=VALIDATE_HELP_PANEL)
 def doctor(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
@@ -970,7 +976,7 @@ def validate_inputs(
     typer.echo(f"订阅 inputs 校验通过：{len(rendered_index.nodes)} 个节点")
 
 
-@app.command("publish")
+@app.command("publish", rich_help_panel=SUBSCRIPTION_HELP_PANEL)
 def publish(
     source: Optional[str] = typer.Option(None, "--source", help="发布包 source；缺省使用 config.subscription.source。"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="发布包输出路径。"),

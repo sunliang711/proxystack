@@ -318,6 +318,49 @@ fi
     assert result.returncode == 0, result.stderr
 
 
+def test_ensure_dir_skips_existing_directory(tmp_path: Path) -> None:
+    """验证 ensure_dir 对已符合要求的目录输出 SKIP，不重复执行 install。"""
+    existing_dir = tmp_path / "existing"
+    existing_dir.mkdir()
+    existing_dir.chmod(0o750)
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+ensure_dir "{existing_dir}" 0750 "" none
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    assert "SKIP: directory already exists" in result.stderr
+    assert "RUN: install -d" not in result.stderr
+
+
+def test_ensure_symlink_skips_existing_link(tmp_path: Path) -> None:
+    """验证 ensure_symlink 对已正确的链接输出 SKIP，不重复 ln。"""
+    target = tmp_path / "target"
+    link = tmp_path / "link"
+    target.write_text("ok\n", encoding="utf-8")
+    link.symlink_to(target)
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        f"""
+source scripts/lib/common.sh
+ensure_symlink "{target}" "{link}" none
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    assert "SKIP: symlink already exists" in result.stderr
+    assert "RUN: ln -sf" not in result.stderr
+
+
 def test_stage_python_source_propagates_failure_when_captured(tmp_path: Path) -> None:
     """验证源码 stage 即使在命令替换中调用，也会传播 tar 失败。"""
     source_dir = tmp_path / "source"
