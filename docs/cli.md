@@ -106,9 +106,9 @@ proxystack-agent doctor
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
 - `check [target]`：校验配置并展示生成变更预览，不写文件、不操作服务。
-- `start [target]`：先生成配置并写 manifest；配置有变化时重启受影响服务，并启动目标范围内未变化的服务；`start sub` 只启动 `proxystack-sub.service`。
+- `start [target]`：先检查目标服务需要的 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写 manifest；配置有变化时重启受影响服务，并启动目标范围内未变化的服务；`start sub` 只启动 `proxystack-sub.service`。
 - `stop [target]`：通过 systemd 停止目标范围内服务，不删除配置和生成文件。
-- `restart [target]`：先生成配置并写 manifest，再通过 systemd 重启目标范围内服务；`restart sub` 不读取 stack。
+- `restart [target]`：先检查目标服务需要的 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写 manifest，然后通过 systemd 重启目标范围内服务；`restart sub` 不读取 stack。
 - `status [target]`：通过 systemd 查询目标范围内服务状态。
 - `logs [target]`：通过 `journalctl` 查看目标范围内服务日志。
 - `enable [target]`：通过 systemd 设置目标范围内服务开机自启。
@@ -191,9 +191,15 @@ proxystack-agent start usa1
 
 - `validate`：校验 `config.yaml`、所有 stack 文件、端口、ref、rules、mode、安全约束和明文字段格式。
 - `check`：执行完整编译，对比 manifest，展示将生成/修改/删除的文件和建议重启的服务，不写文件。
-- `start`：生成配置并写 manifest；重启受生成文件变化影响的服务，并启动目标范围内未变化的服务。
+- `start`：检查代理核心二进制、生成配置并写 manifest；重启受生成文件变化影响的服务，并启动目标范围内未变化的服务。
 
 顶层不再提供 `plan`、`apply`、`up`、`down` 子命令；日常服务控制使用 `start`、`stop`、`restart`。
+
+`start` 和 `restart` 会在调用 systemd 前检查目标服务需要的代理核心二进制：
+
+- `clash/<name>` 或 stack 中启用的 clash 服务需要 `config.paths.bin/mihomo`。
+- `xrelay/<name>` 或 stack 中启用的 xrelay 服务需要 `config.paths.bin/xray`。
+- 文件缺失或没有可执行权限时命令失败，并提示先执行 `ps-agent install all` 或按需执行 `ps-agent install mihomo|xray`。
 
 ## 7. render
 

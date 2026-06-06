@@ -65,6 +65,7 @@ def test_init_add_validate_start_publish_import_serve_main_flow(tmp_path: Path, 
     assert not any(generated_dir.rglob("*.json"))
     assert not any(generated_dir.rglob("*.yaml"))
 
+    write_fake_proxy_binaries(config.parent)
     start_result = runner.invoke(agent_app, ["start", "xrelay/edge", "-c", str(config)])
     xray_config = generated_dir / "xray" / "edge.json"
     assert start_result.exit_code == 0
@@ -92,3 +93,13 @@ def test_init_add_validate_start_publish_import_serve_main_flow(tmp_path: Path, 
     assert health.status_code == 200
     assert subscription.status_code == 200
     assert "example vmess" in subscription.text
+
+
+def write_fake_proxy_binaries(project_dir: Path) -> None:
+    """写入端到端测试用代理核心占位文件，避免调用真实 xray/mihomo。"""
+    bin_dir = project_dir / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    for binary_name in ["mihomo", "xray"]:
+        binary_path = bin_dir / binary_name
+        binary_path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        binary_path.chmod(0o750)

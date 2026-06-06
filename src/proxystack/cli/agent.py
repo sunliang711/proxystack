@@ -350,8 +350,9 @@ def start(
             echo_service_lines(build_systemd_manager(global_config).systemctl("start", (SUB_SERVICE_NAME,)))
             return
         runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
-        apply_runtime_plan(runtime_plan)
         service_scope = resolve_service_scope(config, target, check_system_ports=False)
+        ensure_proxy_binaries_installed(runtime_plan.config, service_scope.service_names)
+        apply_runtime_plan(runtime_plan)
     except SystemdCommandError as exc:
         typer.echo(f"启动失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
         raise typer.Exit(code=1) from exc
@@ -401,8 +402,9 @@ def restart(
             echo_service_lines(build_systemd_manager(global_config).systemctl("restart", (SUB_SERVICE_NAME,)))
             return
         runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
-        apply_runtime_plan(runtime_plan)
         service_scope = resolve_service_scope(config, target, check_system_ports=False)
+        ensure_proxy_binaries_installed(runtime_plan.config, service_scope.service_names)
+        apply_runtime_plan(runtime_plan)
         echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl("restart", service_scope.service_names))
     except SystemdCommandError as exc:
         typer.echo(f"重启失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
@@ -620,6 +622,51 @@ def format_service_install_hint(target: Optional[str], config: Path) -> str:
     if config != DEFAULT_CONFIG_PATH:
         command_parts.extend(["-c", str(config)])
     return " ".join(shlex.quote(part) for part in command_parts)
+
+
+def ensure_proxy_binaries_installed(config: GlobalConfig, service_names: tuple[str, ...]) -> None:
+    """校验启动目标需要的代理核心二进制已安装且带可执行权限。"""
+    required_binaries = required_proxy_binaries(service_names)
+    if not required_binaries:
+        return
+    bin_dir = config.resolve_path(config.paths.bin)
+    missing_lines: list[str] = []
+    for binary_name in required_binaries:
+        path = bin_dir / binary_name
+        if not path.exists():
+            missing_lines.append(f"  - {binary_name}: missing {path}")
+            continue
+        if not path.is_file():
+            missing_lines.append(f"  - {binary_name}: not a file {path}")
+            continue
+        if path.stat().st_mode & 0o111 == 0:
+            missing_lines.append(f"  - {binary_name}: not executable {path}")
+    if not missing_lines:
+        return
+    raise ValueError(
+        "\n".join(
+            [
+                "代理核心未安装或不可执行：",
+                *missing_lines,
+                "请先执行：",
+                "  ps-agent install all",
+                "或按需执行：",
+                "  ps-agent install mihomo",
+                "  ps-agent install xray",
+            ]
+        )
+    )
+
+
+def required_proxy_binaries(service_names: tuple[str, ...]) -> tuple[str, ...]:
+    """根据 systemd 服务名推导启动前必须存在的代理核心二进制。"""
+    binary_names: list[str] = []
+    for service_name in service_names:
+        if service_name.startswith("proxystack-clash@"):
+            append_unique(binary_names, "mihomo")
+        elif service_name.startswith("proxystack-xray@"):
+            append_unique(binary_names, "xray")
+    return tuple(binary_names)
 
 
 def run_service_adapter(

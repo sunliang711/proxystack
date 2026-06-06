@@ -90,7 +90,7 @@ proxystack-agent publish
 - `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
 - `check` 校验配置并展示生成变更预览，不写运行目录、不操作 systemd。
-- `start` 先生成配置并写入 manifest，再通过 systemd 启动目标服务；配置变化时会重启受影响服务，并启动目标范围内未变化的服务。
+- `start` 先检查 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写入 manifest，最后通过 systemd 启动目标服务；配置变化时会重启受影响服务，并启动目标范围内未变化的服务。
 - `publish` 默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
 - 后续 proxystack 代码更新使用 `proxystack-agent update self --wheel <file>` 或配置的包源；代理核心更新使用 `proxystack-agent update mihomo|xray|geo|all`。
 - `install/update mihomo|xray|geo|all` 仍只处理代理核心和 geo 数据，不自动停启 systemd 服务；真实停启和 unit 管理由 `service` 分组和顶层生命周期命令提供。

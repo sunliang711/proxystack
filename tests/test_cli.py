@@ -428,6 +428,22 @@ def test_agent_start_applies_and_reports_changed_target_services(tmp_path: Path,
     ]
 
 
+def test_agent_start_rejects_missing_proxy_binary_before_systemd(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start 在代理核心缺失时不写生成文件、不调用 systemd。"""
+    config = copy_example_project(tmp_path)
+    (config.parent / "bin" / "xray").unlink()
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+
+    result = runner.invoke(agent_app, ["start", "xrelay/usa1", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "代理核心未安装或不可执行" in result.output
+    assert "xray: missing" in result.output
+    assert "ps-agent install all" in result.output
+    assert fake_runner.calls == []
+    assert not (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
+
+
 def test_agent_start_reports_install_hint_when_unit_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 start 遇到 systemd unit 缺失时提示先安装 unit。"""
     config = copy_example_project(tmp_path)
@@ -985,7 +1001,18 @@ def copy_example_project(tmp_path: Path) -> Path:
     writer = YAML()
     with config.open("w", encoding="utf-8") as config_file:
         writer.dump(config_data, config_file)
+    write_fake_proxy_binaries(project_dir)
     return config
+
+
+def write_fake_proxy_binaries(project_dir: Path) -> None:
+    """写入测试用代理核心占位文件，避免 start 测试调用真实二进制。"""
+    bin_dir = project_dir / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    for binary_name in ["mihomo", "xray"]:
+        binary_path = bin_dir / binary_name
+        binary_path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        binary_path.chmod(0o750)
 
 
 def use_fake_systemd(monkeypatch: MonkeyPatch, tmp_path: Path) -> FakeSystemdRunner:
