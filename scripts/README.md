@@ -63,8 +63,8 @@ sudo scripts/install-sub-local.sh \
 - `--source DIR` 默认脚本所在仓库根目录，用于覆盖源码安装目录。
 - `--base-dir DIR` 默认 `/opt/proxystack`，订阅数据目录固定为 `${base_dir}/sub`。
 - `--import-bundle FILE` 调用 `proxystack-sub import FILE --data-dir ${base_dir}/sub`。
-- `--install-systemd` 只安装 `proxystack-sub.service`。
-- `--start` 启动 `proxystack-sub.service`。
+- `--install-systemd` 只安装 `ps-sub.service`。
+- `--start` 启动 `ps-sub.service`。
 
 脚本会在 `config.yaml` 不存在时运行 `proxystack-agent init` 生成默认配置；已存在配置不会被覆盖。
 

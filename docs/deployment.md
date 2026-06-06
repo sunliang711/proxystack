@@ -136,7 +136,7 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 
 本地部署要求：
 
-- `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装和启停使用 `proxystack-agent service ... sub`，常用重启可用 `proxystack-agent up sub`。
+- `ps-sub.service` 只运行订阅 HTTP 服务；unit 安装和启停使用 `proxystack-agent service ... sub`，常用重启可用 `proxystack-agent up sub`。
 - 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认自动 rebuild。多个输入文件也可以直接放入 `/opt/proxystack/sub/inputs/` 后执行 `proxystack-sub rebuild`。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
 - 服务进程只读取 `/opt/proxystack/sub/current`，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
@@ -170,8 +170,8 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
 
 - agent 锁文件：`/opt/proxystack/runtime/agent.lock`。
 - sub 锁文件：`/opt/proxystack/sub/sub.lock`。
-- agent 服务：`proxystack-xray@<name>.service`、`proxystack-clash@<name>.service`。
-- sub 服务：`proxystack-sub.service`。
+- agent 服务：`ps-xray@<name>.service`、`ps-clash@<name>.service`。
+- sub 服务：`ps-sub.service`。
 - `validate/doctor` 必须检查订阅服务端口是否和 xrelay/clash/controller 端口冲突。
 
 因此同机部署不会目录冲突；唯一需要用户配置的是订阅服务监听端口，例如 `127.0.0.1:3003` 或由反向代理转发的公网端口。
@@ -197,13 +197,13 @@ systemd hardening 要求：
 - `ProtectHome=true`。
 - `PrivateTmp=true`。
 - `ReadWritePaths=/opt/proxystack/runtime` 用于 xray/clash 运行服务；如果 `config.paths.generated` 不在 runtime 下，也会额外加入该生成目录。
-- `ReadWritePaths=/opt/proxystack/sub` 用于 `proxystack-sub.service`。
+- `ReadWritePaths=/opt/proxystack/sub` 用于 `ps-sub.service`。
 
 Task09 P0 实现的 unit 约束：
 
-- `proxystack-xray@.service` 和 `proxystack-clash@.service` 只引用 `runtime/generated` 下的生成后配置文件，不把 `config.yaml` 或 `stacks/*.yaml` 作为运行配置传入服务。
+- `ps-xray@.service` 和 `ps-clash@.service` 只引用 `runtime/generated` 下的生成后配置文件，不把 `config.yaml` 或 `stacks/*.yaml` 作为运行配置传入服务。
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
-- `proxystack-sub.service` 只传入 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，不读取或改写 stack 文件。
+- `ps-sub.service` 只传入 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，不读取或改写 stack 文件。
 - `service install|uninstall` 是唯一 unit 文件安装卸载入口；`install/update` 分组不提供 unit 安装命令。
 - `systemctl` 和 `journalctl` 通过参数数组调用；返回非零时 CLI 展示 stdout/stderr 摘要并失败，不吞掉权限错误。
 

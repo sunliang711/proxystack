@@ -22,7 +22,7 @@ Usage: scripts/install-sub-local.sh [options]
 
 Install proxystack-sub for a local non-Docker deployment. The script creates
 the venv and subscription data directories, optionally imports a bundle, and
-optionally installs or starts proxystack-sub.service.
+optionally installs or starts ps-sub.service.
 
 Options:
   --source DIR             Install from a local source directory. Default: repository root

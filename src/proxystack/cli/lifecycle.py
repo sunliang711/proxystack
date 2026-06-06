@@ -46,15 +46,15 @@ from proxystack.graph import build_reference_graph
 MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 BUILTIN_TEMPLATES = {"pair", "auto-url-test", "load-balance"}
-SUB_SERVICE_NAME = "proxystack-sub.service"
+SUB_SERVICE_NAME = "ps-sub.service"
 MANAGED_USER = "proxystack"
 MANAGED_GROUP = "proxystack"
 MANAGED_DIR_MODE = 0o750
 MANAGED_FILE_MODE = 0o640
 SYSTEMD_UNIT_PATHS = [
-    Path("/etc/systemd/system/proxystack-xray@.service"),
-    Path("/etc/systemd/system/proxystack-clash@.service"),
-    Path("/etc/systemd/system/proxystack-sub.service"),
+    Path("/etc/systemd/system/ps-xray@.service"),
+    Path("/etc/systemd/system/ps-clash@.service"),
+    Path("/etc/systemd/system/ps-sub.service"),
 ]
 
 
@@ -487,9 +487,12 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
     """读取 stack 列表并提取 CLI 展示所需字段。"""
     config = load_config(config_path)
     stack_set = load_stacks(config, check_system_ports=check_system_ports)
+    generated_dir = config.resolve_path(config.paths.generated)
     rows: list[dict[str, str]] = []
     for stack in stack_set.stacks:
         clash_ports = ",".join(str(listener.port) for listener in stack.clash.listeners.socks)
+        generated_components = generated_stack_components(generated_dir, stack)
+        running_components = running_stack_components(stack)
         rows.append(
             {
                 "name": stack.name,
@@ -497,12 +500,53 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
                 "role": stack.role,
                 "xrelay": "yes" if stack.xrelay.enabled else "no",
                 "clash": "yes" if stack.clash.enabled else "no",
+                "generated": format_component_list(generated_components),
+                "running": format_component_list(running_components),
                 "xrelay_ports": format_xrelay_inbounds(stack.xrelay.inbounds),
                 "clash_socks": clash_ports or "-",
                 "clash_controller": stack.clash.controller.listen,
             }
         )
     return rows
+
+
+def generated_stack_components(generated_dir: Path, stack: Stack) -> list[str]:
+    """根据 runtime/generated 下的配置文件判断 stack 哪些服务已生成配置。"""
+    components: list[str] = []
+    if stack.xrelay.enabled and (generated_dir / "xray" / f"{stack.name}.json").exists():
+        components.append("xrelay")
+    if stack.clash.enabled and (generated_dir / "mihomo" / f"{stack.name}.yaml").exists():
+        components.append("clash")
+    return components
+
+
+def running_stack_components(stack: Stack) -> list[str]:
+    """通过 systemctl is-active 判断 stack 哪些服务正在运行。"""
+    components: list[str] = []
+    if stack.xrelay.enabled and is_service_active(component_service_name("xrelay", stack.name)):
+        components.append("xrelay")
+    if stack.clash.enabled and is_service_active(component_service_name("clash", stack.name)):
+        components.append("clash")
+    return components
+
+
+def is_service_active(service_name: str) -> bool:
+    """查询 systemd 服务是否 active；无 systemd 或服务不存在时按未运行处理。"""
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "--quiet", service_name],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
+def format_component_list(components: list[str]) -> str:
+    """把组件列表格式化为 list 表格中的紧凑展示值。"""
+    return ",".join(components) if components else "-"
 
 
 def format_xrelay_inbounds(inbounds: list[Inbound]) -> str:
@@ -816,10 +860,10 @@ def includes_component(scope: TargetScope, stack_name: str, component: str) -> b
 
 
 def component_service_name(component: str, stack_name: str) -> str:
-    """把组件和 stack 名转换为 Task09 约定的 systemd 服务名。"""
+    """把组件和 stack 名转换为当前约定的 systemd 服务名。"""
     if component == "xrelay":
-        return f"proxystack-xray@{stack_name}.service"
-    return f"proxystack-{component}@{stack_name}.service"
+        return f"ps-xray@{stack_name}.service"
+    return f"ps-{component}@{stack_name}.service"
 
 
 def build_dependency_plan(stack_set: StackSet, scope: TargetScope) -> Optional[DependencyPlan]:

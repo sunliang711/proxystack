@@ -44,7 +44,7 @@
 - agent 和 sub 对同一 inputs 目录生成一致的合并结果。
 - `publish --input-dir` 默认不包含当前 stack；传入 `--include-stack` 时才合并当前 stack 生成的临时 input。
 - 重复 `node.id` 默认让 rebuild 失败，并输出冲突报告。
-- 本地部署可通过 `proxystack-sub.service` 读取 `/opt/proxystack/sub/current`。
+- 本地部署可通过 `ps-sub.service` 读取 `/opt/proxystack/sub/current`。
 - Docker 部署可通过 `/data` volume 读取同一套 current 数据结构。
 - Docker 容器不包含 mihomo、xray-core，也不管理 systemd。
 - 同机部署测试覆盖 agent publish 后 sub import 默认 rebuild，不允许 agent 直接写 `sub/current`。

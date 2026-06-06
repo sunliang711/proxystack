@@ -97,11 +97,11 @@ proxystack-agent doctor
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
 - `edit`：编辑 `/opt/proxystack/config.yaml`。
 - `edit <name>`：编辑 `/opt/proxystack/stacks/<name>.yaml`。
-- `list`：列出 stack 文件、enabled 状态、角色、xrelay `user/protocol:port` 和 clash 主要端口。
+- `list`：列出 stack 文件、enabled 状态、角色、生成文件状态、运行状态、xrelay `user/protocol:port` 和 clash 主要端口。
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
 - `check [target]`：执行 `validate + plan`，不写文件、不操作服务。
-- `up [target]`：执行 `validate + apply`，然后通过 systemd 只重启本次生成文件变化影响到的目标服务；`up sub` 只重启 `proxystack-sub.service`。
+- `up [target]`：执行 `validate + apply`，然后通过 systemd 只重启本次生成文件变化影响到的目标服务；`up sub` 只重启 `ps-sub.service`。
 - `down [target]`：通过 systemd 停止目标范围内服务，不删除配置和生成文件。
 - `restart [target]`：通过 systemd 重启目标范围内服务。
 - `status [target]`：通过 systemd 查询目标范围内服务状态。
@@ -123,7 +123,7 @@ proxystack-agent up clash/usa1   # 只操作 usa1 的 mihomo
 proxystack-agent up sub          # 只操作本地订阅服务
 ```
 
-`sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取 `config.yaml` 和 `stacks/`。
+`sub` 只代表本机部署的 `ps-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取 `config.yaml` 和 `stacks/`。
 
 Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake unit_dir 隔离真实 `systemctl`、`journalctl` 和 `/etc/systemd/system`。`service log --follow/-f` 直接流式输出 journal。Task06 P0 已实现的订阅服务命令是 `proxystack-sub import/rebuild/serve`。
 
@@ -288,29 +288,29 @@ systemd unit 安装入口统一为 `service install [target]`，不在 `install`
 
 目标规则：
 
-- 不传目标或传 `all`：`service install|uninstall` 管理三个 unit 文件；`service start|stop|restart|status|log|enable|disable` 作用于全部 enabled stack 和 `proxystack-sub.service`。
+- 不传目标或传 `all`：`service install|uninstall` 管理三个 unit 文件；`service start|stop|restart|status|log|enable|disable` 作用于全部 enabled stack 和 `ps-sub.service`。
 - `usa1`：作用于该 stack 的 xray 和 mihomo 服务实例。
-- `xrelay/usa1`：只作用于 `proxystack-xray@usa1.service`。
-- `clash/usa1`：只作用于 `proxystack-clash@usa1.service`。
-- `sub`：只作用于 `proxystack-sub.service`，不会读取 stack。
+- `xrelay/usa1`：只作用于 `ps-xray@usa1.service`。
+- `clash/usa1`：只作用于 `ps-clash@usa1.service`。
+- `sub`：只作用于 `ps-sub.service`，不会读取 stack。
 
 `service log` 代理 `journalctl -u <unit> --no-pager -n 100`；多服务 follow 会在一次 `journalctl` 调用中传入多个 `-u`；传 `--follow/-f` 时追加 `-f`。`systemctl` 或 `journalctl` 返回非零时，CLI 会失败并展示 stdout/stderr 摘要，不吞掉权限错误。
 
 systemd 单元：
 
 ```text
-proxystack-xray@usa1.service
-proxystack-clash@usa1.service
-proxystack-sub.service
+ps-xray@usa1.service
+ps-clash@usa1.service
+ps-sub.service
 ```
 
 unit 内容约束：
 
 - 三个 unit 均使用 `User=proxystack`、`Group=proxystack`、`NoNewPrivileges=true`、`ProtectSystem=strict`、`ProtectHome=true`、`PrivateTmp=true`。
-- `proxystack-xray@.service` 只执行 `/opt/proxystack/bin/xray run -config /opt/proxystack/runtime/generated/xray/%i.json`。
-- `proxystack-clash@.service` 只执行 `/opt/proxystack/bin/mihomo -f /opt/proxystack/runtime/generated/mihomo/%i.yaml`。
+- `ps-xray@.service` 只执行 `/opt/proxystack/bin/xray run -config /opt/proxystack/runtime/generated/xray/%i.json`。
+- `ps-clash@.service` 只执行 `/opt/proxystack/bin/mihomo -f /opt/proxystack/runtime/generated/mihomo/%i.yaml`。
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
-- `proxystack-sub.service` 只执行 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，`ReadWritePaths` 仅包含 `config.paths.sub`。
+- `ps-sub.service` 只执行 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，`ReadWritePaths` 仅包含 `config.paths.sub`。
 
 ## 10. 订阅发布与远端服务
 

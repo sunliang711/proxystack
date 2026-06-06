@@ -13,9 +13,9 @@ from proxystack.domain.models import GlobalConfig
 from proxystack.domain.models import parse_listen
 
 SYSTEMD_UNIT_DIR = Path("/etc/systemd/system")
-XRAY_TEMPLATE_UNIT = "proxystack-xray@.service"
-CLASH_TEMPLATE_UNIT = "proxystack-clash@.service"
-SUB_UNIT = "proxystack-sub.service"
+XRAY_TEMPLATE_UNIT = "ps-xray@.service"
+CLASH_TEMPLATE_UNIT = "ps-clash@.service"
+SUB_UNIT = "ps-sub.service"
 UNIT_NAMES = (XRAY_TEMPLATE_UNIT, CLASH_TEMPLATE_UNIT, SUB_UNIT)
 
 CommandRunner = Callable[[Sequence[str]], "CommandResult"]

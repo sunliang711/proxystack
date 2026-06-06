@@ -13,7 +13,7 @@
 - 脚本放在项目根目录的 `scripts/` 下。
 - 公共函数放在 `scripts/lib/common.sh`，统一处理日志、`--dry-run`、命令检查、路径保护和目录创建。
 - `scripts/install-agent.sh`：本地安装 agent，创建系统用户、目录、Python venv、从源码目录安装 Python 包、链接 console scripts，可选安装 systemd unit；可以创建 `/opt/proxystack/bin` 和 `/opt/proxystack/geo` 空目录，但不下载代理核心或 geo 数据。
-- `scripts/install-sub-local.sh`：本地或远端非 Docker 部署订阅服务，创建 sub 数据目录，可选导入发布包，可选安装和启动 `proxystack-sub.service`。
+- `scripts/install-sub-local.sh`：本地或远端非 Docker 部署订阅服务，创建 sub 数据目录，可选导入发布包，可选安装和启动 `ps-sub.service`。
 - `scripts/deploy-sub-docker.sh`：Docker 部署订阅服务，创建 `/data` 持久化目录，启动安全默认的容器。
 - 日志 message 使用英文；面向用户的文档说明使用中文。
 

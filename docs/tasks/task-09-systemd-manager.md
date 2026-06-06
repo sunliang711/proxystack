@@ -14,9 +14,9 @@
 
 ## 实现步骤
 
-1. [x] 生成 `proxystack-xray@.service`。
-2. [x] 生成 `proxystack-clash@.service`。
-3. [x] 生成 `proxystack-sub.service`，只传入 sub 的 `--data-dir`、host 和 port，不读取 agent 的 stack 配置。
+1. [x] 生成 `ps-xray@.service`。
+2. [x] 生成 `ps-clash@.service`。
+3. [x] 生成 `ps-sub.service`，只传入 sub 的 `--data-dir`、host 和 port，不读取 agent 的 stack 配置。
 4. [x] 实现 `service install/uninstall`，支持 `sub` 目标，便于 sub-only 机器只安装订阅服务 unit。
 5. [x] 实现 enable/disable/start/stop/restart/status/log。
 6. [x] 支持目标选择：全部、实例对、单组件、sub。
@@ -28,7 +28,7 @@
 - `service log` 代理 `journalctl`，支持 follow 和非 follow。
 - `service install|uninstall` 是唯一的 systemd unit 安装卸载入口。
 - xray/clash unit 只能写 agent runtime 相关目录，sub unit 只能写 `/opt/proxystack/sub`。
-- `up sub` 只影响 `proxystack-sub.service`，不会读取或改写 stack 文件。
+- `up sub` 只影响 `ps-sub.service`，不会读取或改写 stack 文件。
 - 单元测试不调用真实 systemctl。
 - uninstall 不删除 `/opt/proxystack/config.yaml` 和 `stacks/*.yaml`，除非显式 purge。
 
@@ -38,7 +38,7 @@
 - `service install|uninstall` 是唯一 unit 文件安装卸载入口；`install/update` 分组仍只负责代理核心和 geo 数据。
 - `service log` 代理 `journalctl`，支持 `--follow/-f`。
 - 顶层 `down/restart/status/logs/enable/disable` 已接入 systemd runner。
-- 顶层 `up` 对普通代理目标先 `apply`，再只 restart 本次变化影响且在目标范围内的服务；`up sub` 只 restart `proxystack-sub.service`，不读取或改写 stack 文件，也不创建 `runtime/generated`。
+- 顶层 `up` 对普通代理目标先 `apply`，再只 restart 本次变化影响且在目标范围内的服务；`up sub` 只 restart `ps-sub.service`，不读取或改写 stack 文件，也不创建 `runtime/generated`。
 - `systemctl` 和 `journalctl` 通过参数数组调用；非零退出码抛出错误并包含 stdout/stderr 摘要；`journalctl -f` 直接流式输出。
 
 ## 依赖

@@ -139,7 +139,7 @@ def test_agent_plan_examples() -> None:
     assert "依赖服务" in result.output
     assert "建议操作顺序" in result.output
     assert "auto.clash" in result.output
-    assert "proxystack-xray@usa1.service" in result.output
+    assert "ps-xray@usa1.service" in result.output
 
 
 def test_agent_render_xrelay_example() -> None:
@@ -241,9 +241,15 @@ def test_agent_add_auto_edits_created_stack(tmp_path: Path, monkeypatch: MonkeyP
     assert (config.parent / "stacks" / "new1.yaml").exists()
 
 
-def test_agent_list_outputs_aligned_table(tmp_path: Path) -> None:
+def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 list 使用对齐表格展示 stack 摘要。"""
     config = copy_example_project(tmp_path)
+    generated_dir = config.parent / "runtime" / "generated"
+    (generated_dir / "xray").mkdir(parents=True)
+    (generated_dir / "mihomo").mkdir(parents=True)
+    (generated_dir / "xray" / "usa1.json").write_text("{}", encoding="utf-8")
+    (generated_dir / "mihomo" / "usa1.yaml").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(lifecycle_module, "is_service_active", lambda service_name: service_name == "ps-xray@usa1.service")
 
     result = runner.invoke(agent_app, ["list", "--skip-system-ports", "-c", str(config)])
 
@@ -253,6 +259,9 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path) -> None:
     assert "----" in result.output
     assert "Services" in result.output
     assert "xrelay,clash" in result.output
+    assert "Generated" in result.output
+    assert "Running" in result.output
+    assert "xrelay,clash  xrelay" in result.output
     assert "Xrelay Ports" in result.output
     assert "alice/socks5:24001,alice/vmess:24101" in result.output
 
@@ -403,14 +412,14 @@ def test_agent_up_applies_and_reports_changed_target_services(tmp_path: Path, mo
     second = runner.invoke(agent_app, ["up", "xrelay/usa1", "-c", str(config), "--skip-system-ports"])
 
     assert first.exit_code == 0
-    assert "restart: proxystack-xray@usa1.service" in first.output
-    assert "proxystack-clash@usa1.service" not in first.output
+    assert "restart: ps-xray@usa1.service" in first.output
+    assert "ps-clash@usa1.service" not in first.output
     assert (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
     assert second.exit_code == 0
-    assert "start: proxystack-xray@usa1.service" in second.output
+    assert "start: ps-xray@usa1.service" in second.output
     assert fake_runner.calls == [
-        ("systemctl", "restart", "proxystack-xray@usa1.service"),
-        ("systemctl", "start", "proxystack-xray@usa1.service"),
+        ("systemctl", "restart", "ps-xray@usa1.service"),
+        ("systemctl", "start", "ps-xray@usa1.service"),
     ]
 
 
@@ -421,13 +430,13 @@ def test_agent_service_target_selection(tmp_path: Path, monkeypatch: MonkeyPatch
     logs_result = runner.invoke(agent_app, ["service", "log", "sub", "--follow", "-c", "examples/config.yaml"])
 
     assert status_result.exit_code == 0
-    assert "status: proxystack-clash@usa1.service" in status_result.output
-    assert "proxystack-xray@usa1.service" not in status_result.output
+    assert "status: ps-clash@usa1.service" in status_result.output
+    assert "ps-xray@usa1.service" not in status_result.output
     assert logs_result.exit_code == 0
-    assert "log: proxystack-sub.service" in logs_result.output
+    assert "log: ps-sub.service" in logs_result.output
     assert fake_runner.calls == [
-        ("systemctl", "status", "proxystack-clash@usa1.service"),
-        ("journalctl", "-u", "proxystack-sub.service", "--no-pager", "-n", "100", "-f"),
+        ("systemctl", "status", "ps-clash@usa1.service"),
+        ("journalctl", "-u", "ps-sub.service", "--no-pager", "-n", "100", "-f"),
     ]
 
 
@@ -438,15 +447,15 @@ def test_agent_service_log_pair_follow_uses_single_journalctl_call(tmp_path: Pat
     result = runner.invoke(agent_app, ["service", "log", "usa1", "--follow", "-c", "examples/config.yaml"])
 
     assert result.exit_code == 0
-    assert "log: proxystack-xray@usa1.service" in result.output
-    assert "log: proxystack-clash@usa1.service" in result.output
+    assert "log: ps-xray@usa1.service" in result.output
+    assert "log: ps-clash@usa1.service" in result.output
     assert fake_runner.calls == [
         (
             "journalctl",
             "-u",
-            "proxystack-clash@usa1.service",
+            "ps-clash@usa1.service",
             "-u",
-            "proxystack-xray@usa1.service",
+            "ps-xray@usa1.service",
             "--no-pager",
             "-n",
             "100",
@@ -470,7 +479,7 @@ def test_agent_service_commands_skip_system_port_occupancy_by_default(tmp_path: 
         sock.close()
 
     assert result.exit_code == 0
-    assert "status: proxystack-xray@usa1.service" in result.output
+    assert "status: ps-xray@usa1.service" in result.output
 
 
 def test_agent_service_install_uninstall_uses_fake_unit_dir(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -481,12 +490,12 @@ def test_agent_service_install_uninstall_uses_fake_unit_dir(tmp_path: Path, monk
 
     install_result = runner.invoke(agent_app, ["service", "install", "sub", "-c", str(config)])
     assert install_result.exit_code == 0
-    assert (unit_dir / "proxystack-sub.service").exists()
+    assert (unit_dir / "ps-sub.service").exists()
 
     uninstall_result = runner.invoke(agent_app, ["service", "uninstall", "sub", "-c", str(config)])
 
     assert uninstall_result.exit_code == 0
-    assert not (unit_dir / "proxystack-sub.service").exists()
+    assert not (unit_dir / "ps-sub.service").exists()
     assert config.exists()
     assert (config.parent / "stacks" / "usa1.yaml").exists()
     assert fake_runner.calls == [("systemctl", "daemon-reload"), ("systemctl", "daemon-reload")]
@@ -496,12 +505,12 @@ def test_agent_top_level_wrappers_call_fake_runner(tmp_path: Path, monkeypatch: 
     """验证顶层服务包装命令调用 fake systemd runner。"""
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
     commands = [
-        (["down", "xrelay/usa1"], ("systemctl", "stop", "proxystack-xray@usa1.service")),
-        (["restart", "xrelay/usa1"], ("systemctl", "restart", "proxystack-xray@usa1.service")),
-        (["enable", "xrelay/usa1"], ("systemctl", "enable", "proxystack-xray@usa1.service")),
-        (["disable", "xrelay/usa1"], ("systemctl", "disable", "proxystack-xray@usa1.service")),
-        (["status", "xrelay/usa1"], ("systemctl", "status", "proxystack-xray@usa1.service")),
-        (["logs", "xrelay/usa1"], ("journalctl", "-u", "proxystack-xray@usa1.service", "--no-pager", "-n", "100")),
+        (["down", "xrelay/usa1"], ("systemctl", "stop", "ps-xray@usa1.service")),
+        (["restart", "xrelay/usa1"], ("systemctl", "restart", "ps-xray@usa1.service")),
+        (["enable", "xrelay/usa1"], ("systemctl", "enable", "ps-xray@usa1.service")),
+        (["disable", "xrelay/usa1"], ("systemctl", "disable", "ps-xray@usa1.service")),
+        (["status", "xrelay/usa1"], ("systemctl", "status", "ps-xray@usa1.service")),
+        (["logs", "xrelay/usa1"], ("journalctl", "-u", "ps-xray@usa1.service", "--no-pager", "-n", "100")),
     ]
 
     for command, _ in commands:
@@ -520,8 +529,8 @@ def test_agent_up_sub_only_restarts_sub_without_reading_stack(tmp_path: Path, mo
     result = runner.invoke(agent_app, ["up", "sub", "-c", str(config)])
 
     assert result.exit_code == 0
-    assert "restart: proxystack-sub.service" in result.output
-    assert fake_runner.calls == [("systemctl", "restart", "proxystack-sub.service")]
+    assert "restart: ps-sub.service" in result.output
+    assert fake_runner.calls == [("systemctl", "restart", "ps-sub.service")]
     assert not (config.parent / "runtime" / "generated").exists()
 
 

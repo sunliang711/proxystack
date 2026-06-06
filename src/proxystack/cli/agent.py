@@ -700,9 +700,9 @@ def unit_names_for_services(service_names: tuple[str, ...]) -> tuple[str, ...]:
     """把服务实例名转换为需要安装或卸载的 unit 文件名。"""
     unit_names: list[str] = []
     for service_name in service_names:
-        if service_name.startswith("proxystack-xray@"):
+        if service_name.startswith("ps-xray@"):
             append_unique(unit_names, XRAY_TEMPLATE_UNIT)
-        elif service_name.startswith("proxystack-clash@"):
+        elif service_name.startswith("ps-clash@"):
             append_unique(unit_names, CLASH_TEMPLATE_UNIT)
         elif service_name == SUB_SERVICE_NAME:
             append_unique(unit_names, SUB_UNIT)
@@ -733,6 +733,8 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
             "enabled": row["enabled"],
             "role": row["role"],
             "services": format_stack_services(row),
+            "generated": row["generated"],
+            "running": row["running"],
             "xrelay_ports": row["xrelay_ports"],
             "clash_socks": row["clash_socks"],
             "clash_controller": row["clash_controller"],
@@ -744,6 +746,8 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
         ("enabled", "Enabled"),
         ("role", "Role"),
         ("services", "Services"),
+        ("generated", "Generated"),
+        ("running", "Running"),
         ("xrelay_ports", "Xrelay Ports"),
         ("clash_socks", "Clash Socks"),
         ("clash_controller", "Clash Controller"),

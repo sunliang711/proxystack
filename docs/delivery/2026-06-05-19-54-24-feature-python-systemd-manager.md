@@ -5,7 +5,7 @@
 - 新增 `src/proxystack/systemd`，封装 systemd unit 生成、安装/卸载、`systemctl` 和 `journalctl` 调用。
 - 新增 `proxystack-agent service install|uninstall|enable|disable|start|stop|restart|status|log`。
 - 顶层 `up/down/restart/status/logs/enable/disable` 已接入真实 systemd runner；`up` 会先写入代理生成文件，再只重启本次变化影响到的目标服务。
-- `up sub`、`service <action> sub` 只作用于 `proxystack-sub.service`，不读取或改写 stack 文件。
+- `up sub`、`service <action> sub` 只作用于 `ps-sub.service`，不读取或改写 stack 文件。
 - 更新 CLI、部署、进度和任务文档。
 
 ## 关键边界
