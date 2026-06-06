@@ -17,6 +17,7 @@ XRAY_TEMPLATE_UNIT = "proxystack-xray@.service"
 CLASH_TEMPLATE_UNIT = "proxystack-clash@.service"
 SUB_UNIT = "proxystack-sub.service"
 UNIT_NAMES = (XRAY_TEMPLATE_UNIT, CLASH_TEMPLATE_UNIT, SUB_UNIT)
+SYSTEMD_STATUS_INACTIVE_EXIT_CODE = 3
 
 CommandRunner = Callable[[Sequence[str]], "CommandResult"]
 
@@ -218,7 +219,11 @@ class SystemdManager:
             return [f"{action}: no services selected"]
         lines: list[str] = []
         for service_name in service_names:
-            result = self.run_checked(["systemctl", action, service_name])
+            result = self.runner(["systemctl", action, service_name])
+            if result.returncode != 0:
+                # systemctl status 对 inactive/dead unit 返回 3；status 命令仍应展示状态。
+                if action != "status" or result.returncode != SYSTEMD_STATUS_INACTIVE_EXIT_CODE:
+                    raise SystemdCommandError(command_error_message(result))
             lines.extend(format_success_output(action, service_name, result))
         return lines
 

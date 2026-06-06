@@ -105,6 +105,18 @@ def test_status_and_log_use_fake_runner(tmp_path: Path) -> None:
     ]
 
 
+def test_status_allows_inactive_systemd_exit_code(tmp_path: Path) -> None:
+    """验证 inactive 服务的 systemctl status 输出仍能返回给调用方。"""
+    config = write_systemd_config(tmp_path)
+    runner = FakeRunner(returncode=3, stdout="inactive\n")
+    manager = SystemdManager(load_config(config), runner=runner)
+
+    status_lines = manager.systemctl("status", ("proxystack-xray@usa1.service",))
+
+    assert status_lines == ["status: proxystack-xray@usa1.service", "  inactive"]
+    assert runner.calls == [("systemctl", "status", "proxystack-xray@usa1.service")]
+
+
 def test_follow_log_uses_one_journalctl_for_multiple_units(tmp_path: Path) -> None:
     """验证 follow 多服务时一次 journalctl 订阅多个 unit。"""
     config = write_systemd_config(tmp_path)

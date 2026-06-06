@@ -966,12 +966,12 @@ def export_input(
     source: Optional[str] = typer.Option(None, "--source", help="订阅 input source；缺省使用 config.subscription.source。"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="输出 input YAML 路径。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
+    check_system_ports: bool = typer.Option(False, "--check-system-ports/--skip-system-ports", help="是否检查系统端口占用；默认跳过，避免运行中服务阻断导出。"),
 ) -> None:
     """从当前 stack 生成订阅 input YAML。"""
     try:
         global_config = load_config(config)
-        stack_set = load_stacks(global_config, check_system_ports=not skip_system_ports)
+        stack_set = load_stacks(global_config, check_system_ports=check_system_ports)
         input_source = source or global_config.subscription.source
         subscription_input = render_stack_input(stack_set, input_source)
         validate_bundle_input_name(f"{input_source}.yaml")

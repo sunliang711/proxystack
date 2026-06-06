@@ -767,6 +767,29 @@ def test_agent_sub_export_input(tmp_path: Path) -> None:
     assert exported_input["nodes"][0]["id"] == "auto:relay"
 
 
+def test_agent_sub_export_input_skips_running_service_ports_by_default(tmp_path: Path) -> None:
+    """验证 export-input 不会因自身服务端口已被监听而失败。"""
+    config = copy_example_project(tmp_path)
+    stack_path = config.parent / "stacks" / "usa1.yaml"
+    yaml = YAML()
+    stack_data = yaml.load(stack_path.read_text(encoding="utf-8"))
+    output = tmp_path / "local.yaml"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("0.0.0.0", 0))
+        sock.listen()
+        stack_data["xrelay"]["inbounds"][0]["port"] = sock.getsockname()[1]
+        with stack_path.open("w", encoding="utf-8") as stack_file:
+            yaml.dump(stack_data, stack_file)
+
+        result = runner.invoke(agent_app, ["sub", "export-input", "--source", "local", "-o", str(output), "-c", str(config)])
+    finally:
+        sock.close()
+
+    assert result.exit_code == 0
+    assert output.exists()
+
+
 def test_agent_sub_validate_inputs(tmp_path: Path) -> None:
     """验证 proxystack-agent sub validate-inputs 可以校验 inputs 目录。"""
     input_dir = tmp_path / "inputs"
