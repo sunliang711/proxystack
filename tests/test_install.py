@@ -21,6 +21,7 @@ from proxystack.install import detect_component_version
 from proxystack.install import install_artifact
 from proxystack.install import run_self_update
 from proxystack.install.service import atomic_replace_file
+from proxystack.install.service import download_url_with_opener
 from proxystack.install.service import file_sha256
 from proxystack.install.service import validate_download_url
 
@@ -42,6 +43,23 @@ def test_install_mihomo_from_local_file(tmp_path: Path) -> None:
     assert installed.read_bytes() == b"mihomo-binary"
     assert installed.parent.stat().st_mode & 0o777 == 0o750
     assert installed.stat().st_mode & 0o777 == 0o750
+
+
+def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
+    """验证 install CLI 会输出准备、来源、校验和安装进度。"""
+    config = write_install_config(tmp_path)
+    source = write_source(tmp_path / "sources" / "mihomo.bin", b"mihomo-binary")
+
+    result = runner.invoke(
+        agent_app,
+        ["install", "mihomo", "--source", str(source), "--sha256", file_sha256(source), "-c", str(config)],
+    )
+
+    assert result.exit_code == 0
+    assert "install: prepare mihomo" in result.output
+    assert "source: local file" in result.output
+    assert "install: verify mihomo.bin" in result.output
+    assert "install: complete mihomo" in result.output
 
 
 def test_install_xray_uses_fake_downloader(tmp_path: Path) -> None:
@@ -169,6 +187,27 @@ def test_download_url_rejects_private_ip() -> None:
     """验证下载 URL 拒绝本机和私网 IP。"""
     with pytest.raises(ValueError, match="private or local"):
         validate_download_url("https://127.0.0.1/xray.zip", resolve_dns=False)
+
+
+def test_download_url_reports_byte_progress(tmp_path: Path) -> None:
+    """验证真实下载循环会输出字节进度，避免长时间静默。"""
+    payload = b"x" * (6 * 1024 * 1024)
+    destination = tmp_path / "downloads" / "xray.zip"
+    destination.parent.mkdir()
+    messages: list[str] = []
+
+    result = download_url_with_opener(
+        "https://example.com/xray.zip",
+        destination,
+        FakeOpener(payload),
+        progress=messages.append,
+    )
+
+    assert result == destination
+    assert destination.read_bytes() == payload
+    assert messages[0].startswith("download: start xray.zip")
+    assert any(message.startswith("download: progress xray.zip") for message in messages)
+    assert messages[-1].startswith("download: complete xray.zip")
 
 
 def test_download_requires_sha256_before_downloader_runs(tmp_path: Path) -> None:
@@ -455,3 +494,40 @@ def write_zip(path: Path, members: dict[str, bytes]) -> Path:
 def sha256_bytes(content: bytes) -> str:
     """计算测试字节内容的 sha256。"""
     return hashlib.sha256(content).hexdigest()
+
+
+class FakeResponse:
+    """模拟 urllib response，供下载进度测试读取。"""
+
+    def __init__(self, payload: bytes) -> None:
+        """保存响应字节和 Content-Length。"""
+        self.payload = payload
+        self.offset = 0
+        self.headers = {"Content-Length": str(len(payload))}
+
+    def __enter__(self) -> "FakeResponse":
+        """支持 with opener.open(...) as response。"""
+        return self
+
+    def __exit__(self, _exc_type: object, _exc: object, _traceback: object) -> None:
+        """测试响应无需额外释放资源。"""
+        return None
+
+    def read(self, size: int) -> bytes:
+        """按请求大小返回下一段响应内容。"""
+        chunk = self.payload[self.offset : self.offset + size]
+        self.offset += len(chunk)
+        return chunk
+
+
+class FakeOpener:
+    """模拟 urllib opener，避免进度测试访问真实网络。"""
+
+    def __init__(self, payload: bytes) -> None:
+        """保存每次 open 要返回的响应内容。"""
+        self.payload = payload
+
+    def open(self, _source: str, timeout: int) -> FakeResponse:
+        """返回 fake response，并校验 timeout 参数仍按常量传入。"""
+        assert timeout > 0
+        return FakeResponse(self.payload)

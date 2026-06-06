@@ -890,8 +890,13 @@ def run_artifact_operation(
             sha256,
             archive_member,
         )
-        results.append(install_artifact(global_config, request, operation=operation))
+        results.append(install_artifact(global_config, request, operation=operation, progress=echo_install_progress))
     return results
+
+
+def echo_install_progress(message: str) -> None:
+    """把安装下载进度输出到 stderr，避免遮挡最终结果。"""
+    typer.echo(message, err=True)
 
 
 def echo_install_results(results: list[InstallResult]) -> None:

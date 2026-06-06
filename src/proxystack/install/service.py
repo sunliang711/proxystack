@@ -57,8 +57,11 @@ VERSION_ARGS = {
 }
 GEO_SUFFIXES = {".dat", ".mmdb"}
 DOWNLOAD_TIMEOUT = 30
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
+DOWNLOAD_PROGRESS_STEP = 5 * 1024 * 1024
 
 Downloader = Callable[[str, Path], Path]
+DownloadProgress = Callable[[str], None]
 FileReplacer = Callable[[Path, Path, int], None]
 CommandRunner = Callable[[Sequence[str]], "CommandResult"]
 
@@ -173,14 +176,18 @@ def install_artifact(
     operation: str = "install",
     downloader: Optional[Downloader] = None,
     replacer: FileReplacer = None,
+    progress: Optional[DownloadProgress] = None,
 ) -> InstallResult:
     """安装或更新单个代理核心/geo 目标，不调用 systemctl。"""
     target = normalize_artifact_target(request.target)
     downloads_dir = config.resolve_path(config.paths.downloads)
+    emit_progress(progress, f"{operation}: prepare {target}")
     require_download_hash(request.source, request.sha256)
-    source_path = fetch_source(request, downloads_dir, downloader)
+    source_path = fetch_source(request, downloads_dir, downloader, progress)
+    emit_progress(progress, f"{operation}: verify {source_path.name}")
     source_sha256 = file_sha256(source_path)
     verify_sha256_value(source_sha256, request.sha256)
+    emit_progress(progress, f"{operation}: install {target}")
     installed_paths = install_source_files(
         config,
         target,
@@ -188,6 +195,7 @@ def install_artifact(
         request.archive_member,
         replacer or atomic_replace_file,
     )
+    emit_progress(progress, f"{operation}: complete {target}")
     return InstallResult(
         operation=operation,
         target=target,
@@ -211,18 +219,28 @@ def normalize_artifact_target(target: str) -> str:
     return target
 
 
-def fetch_source(request: InstallRequest, downloads_dir: Path, downloader: Optional[Downloader]) -> Path:
+def fetch_source(
+    request: InstallRequest,
+    downloads_dir: Path,
+    downloader: Optional[Downloader],
+    progress: Optional[DownloadProgress] = None,
+) -> Path:
     """读取本地文件或下载远端 URL，远端内容写入 downloads 缓存目录。"""
     source = request.source
     if is_managed_source_alias(request.target, source):
-        return fetch_managed_source(request, downloads_dir, downloader or download_url_with_redirects)
+        return fetch_managed_source(request, downloads_dir, downloader, progress)
     parsed_url = urlparse(source)
     if parsed_url.scheme in {"http", "https"}:
-        effective_downloader = downloader or download_url
-        validate_download_url(source, resolve_dns=effective_downloader is download_url)
+        effective_downloader = downloader
+        validate_download_url(source, resolve_dns=effective_downloader is None)
         ensure_private_directory(downloads_dir)
         destination = downloads_dir / safe_download_name(parsed_url.path)
-        return effective_downloader(source, destination)
+        if effective_downloader is not None:
+            emit_progress(progress, f"download: start {destination.name} from custom source")
+            downloaded_path = effective_downloader(source, destination)
+            emit_progress(progress, f"download: complete {destination.name}")
+            return downloaded_path
+        return download_url(source, destination, progress=progress)
     if parsed_url.scheme == "file":
         local_path = Path(unquote(parsed_url.path))
     elif parsed_url.scheme:
@@ -233,20 +251,34 @@ def fetch_source(request: InstallRequest, downloads_dir: Path, downloader: Optio
         raise ValueError(f"source must be a file: {local_path}")
     if not local_path.exists():
         raise ValueError(f"source file does not exist: {local_path}")
+    emit_progress(progress, f"source: local file {local_path}")
     return local_path
 
 
-def fetch_managed_source(request: InstallRequest, downloads_dir: Path, downloader: Downloader) -> Path:
+def fetch_managed_source(
+    request: InstallRequest,
+    downloads_dir: Path,
+    downloader: Optional[Downloader],
+    progress: Optional[DownloadProgress] = None,
+) -> Path:
     """按内置 GitHub/R2 候选源下载 mihomo 或 xray。"""
     ensure_private_directory(downloads_dir)
+    emit_progress(progress, f"download: resolve {request.target} {request.version} via {request.source}")
     sources = build_managed_sources(request.target, request.version, request.source)
     failures: list[str] = []
     for source in sources:
         destination = downloads_dir / source.filename
         try:
-            return downloader(source.url, destination)
+            emit_progress(progress, f"download: try {source.name} {source.filename}")
+            if downloader is not None:
+                downloaded_path = downloader(source.url, destination)
+            else:
+                downloaded_path = download_url_with_redirects(source.url, destination, progress=progress)
+            emit_progress(progress, f"download: selected {source.name}")
+            return downloaded_path
         except (OSError, TimeoutError, ValueError) as exc:
             destination.unlink(missing_ok=True)
+            emit_progress(progress, f"download: failed {source.name}: {exc}")
             failures.append(f"{source.name}: {exc}")
     raise ValueError(f"all managed download sources failed for {request.target}: {'; '.join(failures)}")
 
@@ -409,28 +441,86 @@ def safe_download_name(raw_path: str) -> str:
     return filename
 
 
-def download_url(source: str, destination: Path) -> Path:
+def download_url(source: str, destination: Path, progress: Optional[DownloadProgress] = None) -> Path:
     """下载远端文件到缓存路径，失败时不替换既有缓存文件。"""
-    return download_url_with_opener(source, destination, build_opener(NoRedirectHandler()))
+    return download_url_with_opener(source, destination, build_opener(NoRedirectHandler()), progress=progress)
 
 
-def download_url_with_redirects(source: str, destination: Path) -> Path:
+def download_url_with_redirects(source: str, destination: Path, progress: Optional[DownloadProgress] = None) -> Path:
     """下载内置托管源文件，允许 GitHub Release 资产重定向。"""
-    return download_url_with_opener(source, destination, build_opener())
+    return download_url_with_opener(source, destination, build_opener(), progress=progress)
 
 
-def download_url_with_opener(source: str, destination: Path, opener) -> Path:
+def download_url_with_opener(source: str, destination: Path, opener, progress: Optional[DownloadProgress] = None) -> Path:
     """使用指定 opener 下载远端文件到缓存路径。"""
     with tempfile.NamedTemporaryFile("wb", delete=False, dir=destination.parent) as temp_file:
         temp_path = Path(temp_file.name)
         try:
             with opener.open(source, timeout=DOWNLOAD_TIMEOUT) as response:
-                shutil.copyfileobj(response, temp_file)
+                copy_download_response(response, temp_file, destination.name, progress)
         except BaseException:
             temp_path.unlink(missing_ok=True)
             raise
     temp_path.replace(destination)
     return destination
+
+
+def copy_download_response(response, destination_file, filename: str, progress: Optional[DownloadProgress]) -> None:  # type: ignore[no-untyped-def]
+    """复制下载响应到目标文件，并按固定间隔报告字节进度。"""
+    total_size = response_content_length(response)
+    downloaded_size = 0
+    next_progress_size = DOWNLOAD_PROGRESS_STEP
+    emit_progress(progress, format_download_progress("download: start", filename, downloaded_size, total_size))
+    while True:
+        chunk = response.read(DOWNLOAD_CHUNK_SIZE)
+        if not chunk:
+            break
+        destination_file.write(chunk)
+        downloaded_size += len(chunk)
+        if downloaded_size >= next_progress_size:
+            emit_progress(progress, format_download_progress("download: progress", filename, downloaded_size, total_size))
+            next_progress_size += DOWNLOAD_PROGRESS_STEP
+    emit_progress(progress, format_download_progress("download: complete", filename, downloaded_size, total_size))
+
+
+def response_content_length(response) -> Optional[int]:  # type: ignore[no-untyped-def]
+    """读取 HTTP Content-Length，缺失或非法时返回 None。"""
+    raw_value = response.headers.get("Content-Length")
+    if raw_value is None:
+        return None
+    try:
+        content_length = int(raw_value)
+    except ValueError:
+        return None
+    if content_length < 0:
+        return None
+    return content_length
+
+
+def format_download_progress(prefix: str, filename: str, downloaded_size: int, total_size: Optional[int]) -> str:
+    """格式化下载进度消息，已知总大小时包含百分比。"""
+    if total_size is None or total_size == 0:
+        return f"{prefix} {filename} {format_byte_count(downloaded_size)}"
+    percent = min(100, int(downloaded_size * 100 / total_size))
+    return f"{prefix} {filename} {format_byte_count(downloaded_size)}/{format_byte_count(total_size)} ({percent}%)"
+
+
+def format_byte_count(size: int) -> str:
+    """把字节数格式化为易读的 KiB/MiB/GiB。"""
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
+def emit_progress(progress: Optional[DownloadProgress], message: str) -> None:
+    """在 CLI 传入回调时输出进度，服务层默认保持静默。"""
+    if progress is None:
+        return
+    progress(message)
 
 
 class NoRedirectHandler(HTTPRedirectHandler):
