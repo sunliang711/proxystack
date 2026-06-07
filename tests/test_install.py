@@ -526,6 +526,18 @@ def test_update_all_does_not_include_self(tmp_path: Path) -> None:
     assert "proxystack-clash@*.service" in result.output
 
 
+@pytest.mark.parametrize("command", ["install", "update"])
+def test_install_update_all_rejects_explicit_version(tmp_path: Path, command: str) -> None:
+    """验证 all 目标不接受单个 --version 误套所有组件。"""
+    config = write_config_with_sources(tmp_path)
+
+    result = runner.invoke(agent_app, [command, "all", "--version", "v1.2.3", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "config.install.<target>.version" in result.output
+    assert "single target" in result.output
+
+
 def test_install_update_help_is_available() -> None:
     """验证安装更新相关 help 可以正常输出。"""
     for command in [["install"], ["update"], ["version"]]:

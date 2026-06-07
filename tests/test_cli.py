@@ -180,6 +180,27 @@ def test_agent_validate_examples() -> None:
     assert "配置校验通过" in result.output
 
 
+def test_agent_validate_missing_config_reports_friendly_error(tmp_path: Path) -> None:
+    """验证缺失 config 不会向用户暴露 traceback。"""
+    result = runner.invoke(agent_app, ["validate", "-c", str(tmp_path / "missing.yaml"), "--skip-system-ports"])
+
+    assert result.exit_code == 1
+    assert "Config file could not be read" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_agent_edit_missing_stack_reports_friendly_error(tmp_path: Path) -> None:
+    """验证缺失 stack 不会向用户暴露 traceback。"""
+    config = copy_example_project(tmp_path)
+
+    result = runner.invoke(agent_app, ["edit", "missing", "--check-only", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "file does not exist" in result.output
+    assert "missing.yaml" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_cli_subcommands_print_progress_messages(tmp_path: Path) -> None:
     """验证子命令执行时会输出过程提示，便于观察执行进度。"""
     input_dir = tmp_path / "inputs"
@@ -767,6 +788,7 @@ def test_agent_check_edit_check_only_and_doctor(tmp_path: Path) -> None:
     assert "Binaries:" in doctor_result.output
     assert "Systemd units:" in doctor_result.output
     assert "Ports:" in doctor_result.output
+    assert "subscription.listen" in doctor_result.output
 
 
 def test_agent_sub_export_input(tmp_path: Path) -> None:

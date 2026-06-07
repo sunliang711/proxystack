@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import ValidationError
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from proxystack.domain.models import GlobalConfig
 from proxystack.domain.models import Stack
@@ -63,8 +64,13 @@ def load_stacks(config: GlobalConfig, check_system_ports: bool = True) -> StackS
 def _load_yaml_mapping(path: Path, label: str) -> dict[str, Any]:
     """读取 YAML 文件并确保顶层是 mapping。"""
     yaml = YAML(typ="safe")
-    with path.open("r", encoding="utf-8") as config_file:
-        loaded_config = yaml.load(config_file)
+    try:
+        with path.open("r", encoding="utf-8") as config_file:
+            loaded_config = yaml.load(config_file)
+    except OSError as exc:
+        raise ValueError(f"{label} could not be read: {path} ({exc})") from exc
+    except YAMLError as exc:
+        raise ValueError(f"{label} contains invalid YAML: {path}\n{exc}") from exc
     if loaded_config is None:
         return {}
     if not isinstance(loaded_config, dict):

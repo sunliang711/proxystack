@@ -921,6 +921,8 @@ def run_artifact_operation(
     config_path: Path,
 ) -> list[InstallResult]:
     """执行 install/update 代理核心和 geo 数据，all 只读取配置内分目标来源。"""
+    if target == "all" and component_version is not None:
+        raise ValueError("all target uses config.install.<target>.version or install a single target")
     if target == "all" and (source is not None or sha256 is not None or archive_member is not None):
         raise ValueError("all target uses config.install.* source, sha256 and archive_member")
     global_config = load_config(config_path)
