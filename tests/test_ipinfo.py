@@ -105,8 +105,8 @@ def test_parse_source_response_handles_text_and_wrong_family() -> None:
     assert wrong_family_ipv6 is True
 
 
-def test_run_curl_adds_proxy_family_and_timeout(monkeypatch) -> None:
-    """验证 run_curl 使用代理、family 和 timeout 参数调用 curl。"""
+def test_run_curl_does_not_force_ipv6_proxy_connection(monkeypatch) -> None:
+    """验证 IPv6 查询不强制 curl 用 IPv6 连接本机代理。"""
     calls: list[list[str]] = []
 
     def fake_run(args, check, capture_output, text):
@@ -119,7 +119,7 @@ def test_run_curl_adds_proxy_family_and_timeout(monkeypatch) -> None:
 
     monkeypatch.setattr(ipinfo_module.subprocess, "run", fake_run)
 
-    result = run_curl("socks5://127.0.0.1:17091", "https://ipinfo.io/json", "ipv6", 2.5)
+    result = run_curl("socks5://127.0.0.1:17091", "https://api64.ipify.org?format=json", "ipv6", 2.5)
 
     assert result.returncode == 0
     assert calls == [
@@ -131,7 +131,6 @@ def test_run_curl_adds_proxy_family_and_timeout(monkeypatch) -> None:
             "2.5",
             "-x",
             "socks5://127.0.0.1:17091",
-            "-6",
-            "https://ipinfo.io/json",
+            "https://api64.ipify.org?format=json",
         ]
     ]

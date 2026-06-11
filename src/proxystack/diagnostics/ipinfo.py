@@ -217,8 +217,6 @@ def run_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResul
     command = ["curl", "-sS", "-L", "-m", format_timeout(timeout), "-x", proxy_url]
     if family == "ipv4":
         command.append("-4")
-    elif family == "ipv6":
-        command.append("-6")
     command.append(url)
 
     try:
