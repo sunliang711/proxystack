@@ -76,6 +76,7 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["setup"],
         ["add"],
         ["edit"],
+        ["config"],
         ["list"],
         ["remove"],
         ["clone"],
@@ -292,6 +293,9 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert xrelay_defaults["policy"]["enabled"] is True
     assert xrelay_defaults["policy"]["levels"]["0"]["statsUserUplink"] is True
     assert xrelay_defaults["policy"]["system"]["statsInboundUplink"] is True
+    assert config_data["base_dir"] == str(project_dir)
+    assert config_data["external_host"] == "proxy.test"
+    assert config_data["subscription"]["base_url"] == "https://sub.example.com"
     assert config_data["install"]["mihomo"]["source"] == "auto"
     assert config_data["install"]["geo"]["source"] == "auto"
     for relative_path in [
@@ -306,6 +310,25 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
         "sub/current",
     ]:
         assert (project_dir / relative_path).is_dir()
+
+
+def test_agent_init_falls_back_when_examples_config_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 examples/config.yaml 缺失时 init 仍使用内置默认配置。"""
+    project_dir = tmp_path / "project"
+    config = project_dir / "config.yaml"
+    monkeypatch.setattr(lifecycle_module, "EXAMPLE_CONFIG_PATH", tmp_path / "missing" / "config.yaml")
+
+    result = runner.invoke(
+        agent_app,
+        ["init", "-c", str(config), "--base-dir", str(project_dir), "--external-host", "proxy.test"],
+    )
+
+    assert result.exit_code == 0
+    config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
+    assert config_data["base_dir"] == str(project_dir)
+    assert config_data["external_host"] == "proxy.test"
+    assert "base_url" not in config_data["subscription"]
+    assert config_data["port_ranges"]["xrelay_inbound"] == "24000-24999"
 
 
 def test_agent_add_uses_template_and_refuses_overwrite(tmp_path: Path) -> None:
@@ -387,10 +410,10 @@ def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path
     assert second.exit_code == 0, second.output
     usa1 = YAML(typ="safe").load((config.parent / "stacks" / "usa1.yaml").read_text(encoding="utf-8"))
     usa2 = YAML(typ="safe").load((config.parent / "stacks" / "usa2.yaml").read_text(encoding="utf-8"))
-    assert [inbound["port"] for inbound in usa1["xrelay"]["inbounds"]] == [24000, 24001]
-    assert [inbound["port"] for inbound in usa2["xrelay"]["inbounds"]] == [24002, 24003]
-    assert usa1["clash"]["listeners"]["socks"][0]["port"] == 17000
-    assert usa2["clash"]["listeners"]["socks"][0]["port"] == 17001
+    assert [inbound["port"] for inbound in usa1["xrelay"]["inbounds"]] == [4300, 4301]
+    assert [inbound["port"] for inbound in usa2["xrelay"]["inbounds"]] == [4302, 4303]
+    assert usa1["clash"]["listeners"]["socks"][0]["port"] == 7090
+    assert usa2["clash"]["listeners"]["socks"][0]["port"] == 7091
     assert usa1["xrelay"]["api"]["listen"] == "127.0.0.1:19000"
     assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:19001"
     assert usa2["xrelay"]["api"]["listen"] == "127.0.0.1:19002"
@@ -429,8 +452,8 @@ def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatc
     assert result.exit_code == 0
     stack_data = YAML(typ="safe").load((config.parent / "stacks" / "edge.yaml").read_text(encoding="utf-8"))
     inbound_ports = [inbound["port"] for inbound in stack_data["xrelay"]["inbounds"]]
-    assert inbound_ports == [24000, 24001]
-    assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 17000
+    assert inbound_ports == [4300, 4301]
+    assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 7090
     assert stack_data["xrelay"]["api"]["listen"] == "127.0.0.1:19000"
     assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:19001"
 
@@ -820,12 +843,15 @@ def test_agent_check_edit_check_only_and_doctor(tmp_path: Path) -> None:
 
     check_result = runner.invoke(agent_app, ["check", "usa1", "-c", str(config), "--skip-system-ports"])
     edit_result = runner.invoke(agent_app, ["edit", "usa1", "--check-only", "-c", str(config)])
+    config_result = runner.invoke(agent_app, ["config", "--check-only", "-c", str(config)])
     doctor_result = runner.invoke(agent_app, ["doctor", "-c", str(config)])
 
     assert check_result.exit_code == 0
     assert "配置校验通过" in check_result.output
     assert edit_result.exit_code == 0
     assert "编辑校验通过" in edit_result.output
+    assert config_result.exit_code == 0
+    assert f"编辑校验通过：{config}" in config_result.output
     assert doctor_result.exit_code == 0
     assert "Directories:" in doctor_result.output
     assert "Binaries:" in doctor_result.output

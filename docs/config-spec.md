@@ -36,7 +36,7 @@ proxystack-agent validate -c ./examples/config.yaml
 proxystack-agent check -c ./examples/config.yaml
 ```
 
-仓库内的 `examples/config.yaml` 是开发示例，`base_dir` 设置为 `./examples`，并配套提供 `examples/stacks/`；上面命令默认从仓库根目录执行。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
+仓库内的 `examples/config.yaml` 同时作为开发示例和 `init` 初始配置模板；`init` 会优先读取它，并按目标环境改写 `base_dir` 和 `external_host`。如果模板文件缺失，`init` 会退回代码内置默认配置。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
 
 关键规则：
 

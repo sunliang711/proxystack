@@ -345,9 +345,9 @@ def test_download_url_rejects_private_ip() -> None:
         validate_download_url("https://127.0.0.1/xray.zip", resolve_dns=False)
 
 
-def test_download_url_reports_byte_progress(tmp_path: Path) -> None:
-    """验证真实下载循环会输出字节进度，避免长时间静默。"""
-    payload = b"x" * (6 * 1024 * 1024)
+def test_download_url_reports_time_based_progress(tmp_path: Path) -> None:
+    """验证真实下载循环按时间刷新进度，避免小文件下载期间静默。"""
+    payload = b"x" * (256 * 1024)
     destination = tmp_path / "downloads" / "xray.zip"
     destination.parent.mkdir()
     messages: list[str] = []
@@ -363,6 +363,8 @@ def test_download_url_reports_byte_progress(tmp_path: Path) -> None:
     assert destination.read_bytes() == payload
     assert messages[0].startswith("download: start xray.zip")
     assert any(message.startswith("download: progress xray.zip") for message in messages)
+    assert all("/s" in message for message in messages)
+    assert any("[#" in message or "[-" in message for message in messages)
     assert messages[-1].startswith("download: complete xray.zip")
 
 

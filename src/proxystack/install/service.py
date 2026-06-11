@@ -17,6 +17,7 @@ import socket
 import subprocess
 import tarfile
 import tempfile
+import time
 from typing import Callable
 from typing import Optional
 from typing import Sequence
@@ -65,8 +66,8 @@ VERSION_ARGS = {
 }
 GEO_SUFFIXES = {".dat", ".mmdb", ".metadb"}
 DOWNLOAD_TIMEOUT = 30
-DOWNLOAD_CHUNK_SIZE = 1024 * 1024
-DOWNLOAD_PROGRESS_STEP = 5 * 1024 * 1024
+DOWNLOAD_CHUNK_SIZE = 64 * 1024
+DOWNLOAD_PROGRESS_INTERVAL = 0.2
 
 Downloader = Callable[[str, Path], Path]
 DownloadProgress = Callable[[str], None]
@@ -510,21 +511,23 @@ def download_url_with_opener(source: str, destination: Path, opener, progress: O
 
 
 def copy_download_response(response, destination_file, filename: str, progress: Optional[DownloadProgress]) -> None:  # type: ignore[no-untyped-def]
-    """复制下载响应到目标文件，并按固定间隔报告字节进度。"""
+    """复制下载响应到目标文件，并按时间间隔刷新下载进度。"""
     total_size = response_content_length(response)
     downloaded_size = 0
-    next_progress_size = DOWNLOAD_PROGRESS_STEP
-    emit_progress(progress, format_download_progress("download: start", filename, downloaded_size, total_size))
+    start_time = time.monotonic()
+    next_progress_time = start_time
+    emit_progress(progress, format_download_progress("download: start", filename, downloaded_size, total_size, start_time))
     while True:
         chunk = response.read(DOWNLOAD_CHUNK_SIZE)
         if not chunk:
             break
         destination_file.write(chunk)
         downloaded_size += len(chunk)
-        if downloaded_size >= next_progress_size:
-            emit_progress(progress, format_download_progress("download: progress", filename, downloaded_size, total_size))
-            next_progress_size += DOWNLOAD_PROGRESS_STEP
-    emit_progress(progress, format_download_progress("download: complete", filename, downloaded_size, total_size))
+        now = time.monotonic()
+        if now >= next_progress_time or (total_size is not None and downloaded_size >= total_size):
+            emit_progress(progress, format_download_progress("download: progress", filename, downloaded_size, total_size, start_time))
+            next_progress_time = now + DOWNLOAD_PROGRESS_INTERVAL
+    emit_progress(progress, format_download_progress("download: complete", filename, downloaded_size, total_size, start_time))
 
 
 def response_content_length(response) -> Optional[int]:  # type: ignore[no-untyped-def]
@@ -541,15 +544,34 @@ def response_content_length(response) -> Optional[int]:  # type: ignore[no-untyp
     return content_length
 
 
-def format_download_progress(prefix: str, filename: str, downloaded_size: int, total_size: Optional[int]) -> str:
-    """格式化下载进度消息，已知总大小时包含百分比。"""
+def format_download_progress(prefix: str, filename: str, downloaded_size: int, total_size: Optional[int], start_time: float) -> str:
+    """格式化下载进度消息，已知总大小时包含百分比和速度。"""
+    speed = download_speed(downloaded_size, start_time)
     if total_size is None or total_size == 0:
-        return f"{prefix} {filename} {format_byte_count(downloaded_size)}"
-    percent = min(100, int(downloaded_size * 100 / total_size))
-    return f"{prefix} {filename} {format_byte_count(downloaded_size)}/{format_byte_count(total_size)} ({percent}%)"
+        return f"{prefix} {filename} {format_byte_count(downloaded_size)} {format_byte_count(speed)}/s"
+    percent = min(100.0, downloaded_size * 100 / total_size)
+    progress_bar = format_progress_bar(downloaded_size, total_size)
+    return f"{prefix} {filename} [{progress_bar}] {percent:5.1f}% {format_byte_count(downloaded_size)}/{format_byte_count(total_size)} {format_byte_count(speed)}/s"
 
 
-def format_byte_count(size: int) -> str:
+def format_progress_bar(downloaded_size: int, total_size: int) -> str:
+    """按当前下载比例生成固定宽度 ASCII 进度条。"""
+    bar_width = 30
+    if total_size <= 0:
+        return "-" * bar_width
+    filled_width = min(bar_width, int(bar_width * downloaded_size / total_size))
+    return "#" * filled_width + "-" * (bar_width - filled_width)
+
+
+def download_speed(downloaded_size: int, start_time: float) -> float:
+    """按已下载字节和开始时间计算平均下载速度。"""
+    elapsed = time.monotonic() - start_time
+    if elapsed <= 0:
+        return 0.0
+    return downloaded_size / elapsed
+
+
+def format_byte_count(size: float) -> str:
     """把字节数格式化为易读的 KiB/MiB/GiB。"""
     value = float(size)
     for unit in ("B", "KiB", "MiB", "GiB"):

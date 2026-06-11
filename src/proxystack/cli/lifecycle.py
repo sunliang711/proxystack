@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import grp
 from importlib import resources
 import hashlib
+from io import StringIO
 import json
 import os
 from pathlib import Path
@@ -48,6 +49,7 @@ MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 BUILTIN_TEMPLATES = {"pair", "auto-url-test", "load-balance"}
 SUB_SERVICE_NAME = "proxystack-sub.service"
+EXAMPLE_CONFIG_PATH = Path(__file__).resolve().parents[3] / "examples" / "config.yaml"
 MANAGED_USER = "proxystack"
 MANAGED_GROUP = "proxystack"
 MANAGED_DIR_MODE = 0o750
@@ -138,11 +140,44 @@ def init_project(config_path: Path, base_dir: Optional[Path], external_host: str
         created_paths.extend(ensure_project_dirs(config))
         return created_paths
 
-    config_text = default_config_yaml(actual_base_dir, external_host)
+    config_text = initial_config_yaml(actual_base_dir, external_host)
     write_text_if_changed(config_path, config_text, force=force)
     config = load_config(config_path)
     created_paths.extend(ensure_project_dirs(config))
     return created_paths
+
+
+def initial_config_yaml(base_dir: Path, external_host: str) -> str:
+    """优先从 examples/config.yaml 生成初始配置，缺失时使用内置默认值。"""
+    template_path = find_example_config_template(base_dir)
+    if template_path is None:
+        return default_config_yaml(base_dir, external_host)
+    return render_example_config_yaml(template_path, base_dir, external_host)
+
+
+def find_example_config_template(base_dir: Path) -> Optional[Path]:
+    """查找可用于 init 的 examples/config.yaml 模板文件。"""
+    candidates = [
+        base_dir / "runtime" / "source" / "examples" / "config.yaml",
+        EXAMPLE_CONFIG_PATH,
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def render_example_config_yaml(template_path: Path, base_dir: Path, external_host: str) -> str:
+    """读取 examples/config.yaml，并改写和当前部署环境相关的字段。"""
+    yaml = YAML()
+    template_data = yaml.load(template_path.read_text(encoding="utf-8"))
+    if not isinstance(template_data, dict):
+        raise ValueError(f"example config must be a mapping: {template_path}")
+    template_data["base_dir"] = str(base_dir)
+    template_data["external_host"] = external_host
+    output = StringIO()
+    yaml.dump(template_data, output)
+    return output.getvalue()
 
 
 def default_config_yaml(base_dir: Path, external_host: str) -> str:

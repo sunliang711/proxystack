@@ -277,6 +277,21 @@ def edit(
     typer.echo(f"编辑校验通过：{path}")
 
 
+@app.command("config", rich_help_panel=CONFIG_HELP_PANEL)
+def config_command(
+    editor: Optional[str] = typer.Option(None, "--editor", help="覆盖 EDITOR，例如 --editor true。"),
+    check_only: bool = typer.Option(False, "--check-only", help="只校验 config.yaml，不启动编辑器。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """安全编辑全局 config.yaml。"""
+    try:
+        path = edit_config_or_stack(config, None, editor, check_only)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"配置编辑失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"编辑校验通过：{path}")
+
+
 @app.command("export", rich_help_panel=CONFIG_HELP_PANEL)
 def export_backup(
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="原生配置备份包输出路径。"),

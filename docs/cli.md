@@ -83,6 +83,7 @@ systemd unit 文件仍需要安装到系统目录，这是 systemd 的要求；u
 ```bash
 proxystack-agent init
 proxystack-agent setup
+proxystack-agent config
 proxystack-agent add usa1
 proxystack-agent edit
 proxystack-agent edit usa1
@@ -104,8 +105,9 @@ proxystack-agent doctor
 
 命令语义：
 
-- `init`：创建 `/opt/proxystack` 目录结构和默认 `config.yaml`；已存在文件默认不覆盖。
+- `init`：创建 `/opt/proxystack` 目录结构和默认 `config.yaml`；优先以 `examples/config.yaml` 为模板并改写 `base_dir`、`external_host`，模板缺失时使用内置默认值；已存在文件默认不覆盖。
 - `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
+- `config`：安全编辑 `/opt/proxystack/config.yaml`；等价于 `edit` 不带 stack 名称，但语义更明确。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
 - `edit`：编辑 `/opt/proxystack/config.yaml`。
 - `edit <name>`：编辑 `/opt/proxystack/stacks/<name>.yaml`。
@@ -169,7 +171,7 @@ proxystack-agent remove usa2
 
 `add --from-file` 要求输入文件是单个 stack 配置，包含 `name`、`xrelay` 和 `clash`。写入前必须校验文件名和 `name` 一致。
 
-`add` 创建 stack 后默认会打开编辑器并在保存后校验；自动化脚本可使用 `--no-edit` 跳过编辑。独立的 `edit` 命令仍保留，`edit <name>` 用于再次编辑已有 stack，`edit` 不带名称时编辑全局 `config.yaml`。
+`add` 创建 stack 后默认会打开编辑器并在保存后校验；自动化脚本可使用 `--no-edit` 跳过编辑。独立的 `config` 命令用于编辑全局 `config.yaml`；`edit <name>` 用于再次编辑已有 stack，`edit` 不带名称时仍兼容编辑全局 `config.yaml`。
 
 `add` 默认会基于 `config.yaml` 的 `port_ranges` 自动分配 xrelay inbound、xrelay API、clash socks 和 clash controller 端口，避免连续新增 stack 时撞上模板固定端口。需要保留模板端口时使用 `--keep-template-ports`；此时端口仍必须合法、唯一且未被系统占用。
 

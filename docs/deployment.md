@@ -86,7 +86,7 @@ proxystack-agent publish
 
 说明：
 
-- `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`。
+- `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`，默认配置优先来自 `examples/config.yaml`。
 - `setup` 会先执行幂等初始化，再安装代理核心和 geo 数据，最后安装 systemd unit。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
 - `check` 校验配置并展示生成变更预览，不写运行目录、不操作 systemd。
