@@ -456,6 +456,21 @@ def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatc
     assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:19001"
 
 
+def test_agent_add_auto_template_without_members_creates_disabled_draft(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证无 members 的 auto 模板作为禁用草稿创建，避免占位 ref 阻断首次添加。"""
+    config = init_cli_project(tmp_path)
+    monkeypatch.setattr(lifecycle_module, "is_port_available", lambda _host, _port: True)
+
+    result = runner.invoke(agent_app, ["add", "auto", "--template", "auto-url-test", "--no-edit", "-c", str(config)])
+    validate_result = runner.invoke(agent_app, ["validate", "-c", str(config), "--skip-system-ports"])
+
+    assert result.exit_code == 0, result.output
+    stack_data = YAML(typ="safe").load((config.parent / "stacks" / "auto.yaml").read_text(encoding="utf-8"))
+    assert stack_data["enabled"] is False
+    assert [upstream["ref"] for upstream in stack_data["clash"]["upstreams"]] == ["usa1.relay", "usa2.relay"]
+    assert validate_result.exit_code == 0, validate_result.output
+
+
 def test_agent_clone_default_refuses_invalid_duplicate_ports(tmp_path: Path) -> None:
     """验证 clone 默认不写入会破坏全局校验的重复端口配置。"""
     config = copy_example_project(tmp_path)

@@ -178,7 +178,7 @@ proxystack-agent remove usa2
 
 `clone --allocate-ports` 会基于相同端口池重新分配克隆目标的端口。自动分配只选择当前配置未使用且系统未占用的端口；无法分配时命令失败并提示用户修改端口池。手写端口可以在端口池之外，但仍必须合法、唯一且未被系统占用。
 
-`add auto --members usa1,usa2` 会根据成员 stack 的 socks5 inbound 自动生成 `xrelay-socks5` upstream refs。未指定 `--members` 时，模板只生成占位，用户需要手动编辑。
+`add auto --members usa1,usa2` 会根据成员 stack 的 socks5 inbound 自动生成 `xrelay-socks5` upstream refs。未指定 `--members` 时，模板只生成禁用草稿和占位 ref，用户需要手动编辑成员 ref 后再启用。
 
 `clone` 复制规则：
 

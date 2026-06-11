@@ -48,6 +48,7 @@ from proxystack.graph import build_reference_graph
 MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 BUILTIN_TEMPLATES = {"pair", "auto-url-test", "load-balance"}
+AUTO_MEMBER_TEMPLATES = {"auto-url-test", "load-balance"}
 SUB_SERVICE_NAME = "proxystack-sub.service"
 EXAMPLE_CONFIG_PATH = Path(__file__).resolve().parents[3] / "examples" / "config.yaml"
 MANAGED_USER = "proxystack"
@@ -331,6 +332,9 @@ def add_stack(
     rewrite_self_refs(stack_data, source_name, name)
     if members:
         apply_auto_members(stack_data, parse_members(members))
+    elif from_file is None and template_name in AUTO_MEMBER_TEMPLATES:
+        # 未指定成员时 auto 模板保留示例 ref，先作为禁用草稿写入，避免占位 ref 阻断首次创建。
+        stack_data["enabled"] = False
     if allocate_ports:
         allocate_stack_ports(config, stack_data)
     stack = validate_stack_document(stack_data, name, target_path)
