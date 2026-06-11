@@ -227,6 +227,14 @@ class SystemdManager:
             lines.extend(format_success_output(action, service_name, result))
         return lines
 
+    def is_active(self, service_name: str) -> bool:
+        """通过 systemctl is-active 判断服务是否正在运行，供自动重启前探测。"""
+        try:
+            result = self.runner(["systemctl", "is-active", "--quiet", service_name])
+        except OSError:
+            return False
+        return result.returncode == 0
+
     def journalctl(self, service_names: Sequence[str], follow: bool = False) -> list[str]:
         """读取指定服务 journal，follow 时传递 -f。"""
         if not service_names:

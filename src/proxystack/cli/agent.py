@@ -25,6 +25,7 @@ from proxystack.cli.lifecycle import edit_config_or_stack
 from proxystack.cli.lifecycle import ensure_managed_directory
 from proxystack.cli.lifecycle import ensure_managed_file_metadata
 from proxystack.cli.lifecycle import ensure_project_dirs
+from proxystack.cli.lifecycle import file_sha256
 from proxystack.cli.lifecycle import init_project
 from proxystack.cli.lifecycle import list_stacks
 from proxystack.cli.lifecycle import normalize_target
@@ -274,11 +275,49 @@ def config_command(
 ) -> None:
     """安全编辑全局 config.yaml 或 stacks/<name>.yaml。"""
     try:
+        original_sha256 = None
+        if name is not None and not check_only:
+            original_sha256 = stack_config_sha256(config, name)
         path = edit_config_or_stack(config, name, editor, check_only)
+        stack_changed = original_sha256 is not None and file_sha256(path) != original_sha256
+        if name is not None and stack_changed:
+            restart_running_stack_after_config_edit(config, name)
+    except SystemdCommandError as exc:
+        typer.echo(f"自动重启失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
         typer.echo(f"配置编辑失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"编辑校验通过：{path}")
+
+
+def stack_config_sha256(config_path: Path, name: str) -> Optional[str]:
+    """读取编辑前 stack 文件摘要；文件缺失时交给编辑流程输出原有错误。"""
+    stack_path = load_config(config_path).stacks_dir / f"{name}.yaml"
+    if not stack_path.exists():
+        return None
+    return file_sha256(stack_path)
+
+
+def restart_running_stack_after_config_edit(config: Path, name: str) -> None:
+    """stack 配置真实变更后，仅重启当前处于 active 的组件服务。"""
+    step_logger = StepLogger()
+    with step_logger.step("detect running stack services"):
+        runtime_plan = build_runtime_plan(config, name, check_system_ports=False)
+        manager = build_systemd_manager(runtime_plan.config)
+        active_services = tuple(
+            service_name
+            for service_name in runtime_plan.scope.service_names
+            if manager.is_active(service_name)
+        )
+        if active_services:
+            ensure_proxy_binaries_installed(runtime_plan.config, active_services)
+    if not active_services:
+        return
+    with step_logger.step("write runtime files"):
+        apply_runtime_plan(runtime_plan)
+    with step_logger.step("restart running stack services"):
+        run_systemd_with_hint(name, config, lambda: manager.systemctl("restart", active_services))
 
 
 @app.command("export", rich_help_panel=CONFIG_HELP_PANEL)

@@ -8,6 +8,7 @@ import shutil
 import socket
 import sys
 from types import SimpleNamespace
+from typing import Optional
 from typing import Sequence
 from uuid import UUID
 from zipfile import ZipFile
@@ -34,16 +35,27 @@ runner = CliRunner()
 class FakeSystemdRunner:
     """记录 CLI 触发的 systemd 命令，避免调用真实 systemctl。"""
 
-    def __init__(self, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
+    def __init__(
+        self,
+        stdout: str = "",
+        stderr: str = "",
+        returncode: int = 0,
+        active_services: Optional[set[str]] = None,
+    ) -> None:
         """初始化 fake runner 输出。"""
         self.stdout = stdout
         self.stderr = stderr
         self.returncode = returncode
+        self.active_services = active_services
         self.calls: list[tuple[str, ...]] = []
 
     def __call__(self, args: Sequence[str]) -> CommandResult:
         """记录参数数组并返回预设结果。"""
         self.calls.append(tuple(args))
+        is_active_query = len(args) == 4 and tuple(args[:3]) == ("systemctl", "is-active", "--quiet")
+        if is_active_query and self.active_services is not None:
+            returncode = 0 if str(args[3]) in self.active_services else 3
+            return CommandResult(args=tuple(args), returncode=returncode, stdout=self.stdout, stderr=self.stderr)
         return CommandResult(args=tuple(args), returncode=self.returncode, stdout=self.stdout, stderr=self.stderr)
 
 
@@ -833,6 +845,67 @@ path.write_text(text.replace("usa1.clash.socks", "missing.clash.socks"), encodin
     assert result.exit_code == 1
     assert "ref does not exist" in result.output
     assert stack_path.read_text(encoding="utf-8") == original_text
+
+
+def test_agent_config_unchanged_stack_does_not_restart(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 config 编辑后内容未变化时，不探测或重启 systemd 服务。"""
+    config = copy_example_project(tmp_path)
+    fake_runner = FakeSystemdRunner(
+        active_services={
+            "proxystack-clash@usa1.service",
+            "proxystack-xray@usa1.service",
+        }
+    )
+    monkeypatch.setattr(agent_module, "SYSTEMD_RUNNER", fake_runner)
+    monkeypatch.setattr(agent_module, "SYSTEMD_UNIT_DIR_OVERRIDE", tmp_path / "systemd")
+
+    result = runner.invoke(agent_app, ["config", "usa1", "--editor", "true", "-c", str(config)])
+
+    assert result.exit_code == 0, result.output
+    assert fake_runner.calls == []
+    assert "编辑校验通过" in result.output
+
+
+def test_agent_config_restarts_active_stack_after_change(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 config 修改运行中 stack 后，会重新生成配置并重启 active 组件。"""
+    config = copy_example_project(tmp_path)
+    fake_runner = FakeSystemdRunner(
+        active_services={
+            "proxystack-clash@usa1.service",
+            "proxystack-xray@usa1.service",
+        }
+    )
+    monkeypatch.setattr(agent_module, "SYSTEMD_RUNNER", fake_runner)
+    monkeypatch.setattr(agent_module, "SYSTEMD_UNIT_DIR_OVERRIDE", tmp_path / "systemd")
+    editor = tmp_path / "mode_editor.py"
+    editor.write_text(
+        """
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(text.replace("mode: Rule", "mode: Global"), encoding="utf-8")
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(agent_app, ["config", "usa1", "--editor", f"{sys.executable} {editor}", "-c", str(config)])
+
+    assert result.exit_code == 0, result.output
+    assert "detect running stack services .. done" in result.output
+    assert "write runtime files .. done" in result.output
+    assert "restart running stack services .. done" in result.output
+    assert (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
+    clash_path = config.parent / "runtime" / "generated" / "mihomo" / "usa1.yaml"
+    rendered_clash = YAML(typ="safe").load(clash_path.read_text(encoding="utf-8"))
+    assert rendered_clash["mode"] == "Global"
+    assert fake_runner.calls == [
+        ("systemctl", "is-active", "--quiet", "proxystack-clash@usa1.service"),
+        ("systemctl", "is-active", "--quiet", "proxystack-xray@usa1.service"),
+        ("systemctl", "restart", "proxystack-clash@usa1.service"),
+        ("systemctl", "restart", "proxystack-xray@usa1.service"),
+    ]
 
 
 def test_agent_remove_purge_deletes_generated_files(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
