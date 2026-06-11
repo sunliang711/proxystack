@@ -396,7 +396,7 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
 
     assert result.exit_code == 0
     assert "正在执行 proxystack-agent list" not in result.output
-    assert "Name  Enabled  Role" in result.output
+    assert result.output.splitlines()[0].startswith("Name  Running")
     assert "----" in result.output
     assert "Services" in result.output
     assert "xrelay,clash" in result.output
@@ -404,7 +404,8 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     assert "Running" in result.output
     assert "xrelay,clash  xrelay" in result.output
     assert "Xrelay Ports" in result.output
-    assert "alice/socks5:24001,alice/vmess:24101" in result.output
+    assert "socks5:24001,vmess:24101" in result.output
+    assert "alice/socks5:24001" not in result.output
 
 
 def test_agent_list_skips_system_port_check_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

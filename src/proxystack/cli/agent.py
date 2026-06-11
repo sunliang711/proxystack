@@ -1036,11 +1036,11 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
     ]
     columns = [
         ("name", "Name"),
+        ("running", "Running"),
         ("enabled", "Enabled"),
         ("role", "Role"),
         ("services", "Services"),
         ("generated", "Generated"),
-        ("running", "Running"),
         ("xrelay_ports", "Xrelay Ports"),
         ("clash_socks", "Clash Socks"),
         ("clash_controller", "Clash Controller"),

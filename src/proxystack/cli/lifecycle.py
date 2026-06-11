@@ -625,11 +625,10 @@ def format_component_list(components: list[str]) -> str:
 
 
 def format_xrelay_inbounds(inbounds: list[Inbound]) -> str:
-    """把 xrelay inbound 展示为 user/protocol:port，方便 list 一眼区分入口。"""
+    """把 xrelay inbound 展示为 protocol:port，方便 list 紧凑查看入口。"""
     items = []
     for inbound in inbounds:
-        user = inbound.user or "-"
-        items.append(f"{user}/{inbound.protocol}:{inbound.port}")
+        items.append(f"{inbound.protocol}:{inbound.port}")
     return ",".join(items) if items else "-"
 
 
