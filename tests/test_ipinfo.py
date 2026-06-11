@@ -45,8 +45,8 @@ def test_query_ipinfo_uses_stack_clash_socks_listener() -> None:
     assert "IP: 198.51.100.10" in "\n".join(format_ipinfo_report(report))
 
 
-def test_query_ipinfo_filters_default_sources_by_family() -> None:
-    """验证默认来源按 IPv4/IPv6 分组，避免输出已知测不出的来源。"""
+def test_query_ipinfo_uses_default_sources_by_family() -> None:
+    """验证默认来源按 IPv4/IPv6 分组，并为 IPv6 保留通用回退来源。"""
     calls: list[tuple[str, str]] = []
 
     def fake_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResult:
@@ -67,12 +67,14 @@ def test_query_ipinfo_filters_default_sources_by_family() -> None:
     assert calls == [
         ("ipv4", "https://ipinfo.io/json"),
         ("ipv4", "https://myip.ipip.net"),
+        ("ipv6", "https://ipinfo.io/json"),
+        ("ipv6", "https://myip.ipip.net"),
         ("ipv6", "https://ifconfig.me/all.json"),
         ("ipv6", "https://ifconfig.co/json"),
         ("ipv6", "https://api64.ipify.org?format=json"),
     ]
     assert "https://ifconfig.me/all.json" not in sources_for_family("ipv4")
-    assert "https://ipinfo.io/json" not in sources_for_family("ipv6")
+    assert "https://ipinfo.io/json" in sources_for_family("ipv6")
 
 
 def test_listener_proxy_url_normalizes_wildcard_and_ipv6_hosts() -> None:
