@@ -1,3 +1,3 @@
-包内模板供运行时代码通过 package resources 读取。
+内置 stack 模板供运行时代码通过 package resources 读取。
 
-当前内容从仓库根目录 `templates/` 复制而来；后续实现 `add` 命令时，应继续以根目录模板作为开发期来源，并保持这里的运行时模板同步。
+本目录是模板唯一来源；修改 `ps-agent add --template ...` 使用的默认模板时，只需要更新这里的 YAML 文件。

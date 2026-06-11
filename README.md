@@ -24,7 +24,7 @@
 - [开发进度](docs/PROGRESS.md)
 - [全局配置示例](examples/config.yaml)
 - [stack 示例](examples/stacks/usa1.yaml)
-- [add 默认模板](templates/stack.pair.yaml)
+- [add 默认模板](src/proxystack/templates/stack.pair.yaml)
 
 ## 建议技术栈
 

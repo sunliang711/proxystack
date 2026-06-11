@@ -34,8 +34,6 @@ examples/
   config.yaml
   stacks/
     usa1.yaml
-templates/
-  stack.pair.yaml
 ```
 
 约束：
@@ -47,7 +45,7 @@ templates/
 - Pydantic Schema 与运行时生成模型分离，避免把外部输入模型直接传到所有内部模块。
 - 配置加载统一在 `src/proxystack/config`，业务代码不散落调用 `os.getenv()` 读取核心配置。
 - 本地运行目录默认统一在 `/opt/proxystack`，代码中不得硬编码其他配置或运行目录。
-- 根目录 `templates/` 只作为开发期模板源；运行时代码从 `src/proxystack/templates` 读取包内资源，避免两处模板长期分叉。
+- 内置 stack 模板只维护在 `src/proxystack/templates`，运行时代码通过包内资源读取，避免多处模板分叉。
 
 ## 3. 依赖和日志
 
