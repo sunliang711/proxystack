@@ -118,6 +118,9 @@ clash:
         tls: true
         # WebSocket 传输参数。
         ws_opts:
+          headers:
+            # 【按需改】WebSocket Host；需与服务端一致。
+            Host: server.example.com
           # 【按需改】WebSocket 请求路径；需与服务端一致。
           path: /vmess
 
