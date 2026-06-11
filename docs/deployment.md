@@ -75,11 +75,9 @@ sudo scripts/install-agent.sh --install-systemd
 常用流程：
 
 ```bash
-proxystack-agent init
+proxystack-agent setup
 proxystack-agent add usa1
 proxystack-agent edit usa1
-proxystack-agent install all
-proxystack-agent service install
 proxystack-agent check
 proxystack-agent start
 proxystack-agent status
@@ -89,6 +87,7 @@ proxystack-agent publish
 说明：
 
 - `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`。
+- `setup` 会先执行幂等初始化，再安装代理核心和 geo 数据，最后安装 systemd unit。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
 - `check` 校验配置并展示生成变更预览，不写运行目录、不操作 systemd。
 - `start` 先检查 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写入 manifest，最后通过 systemd 启动目标服务；配置变化时会重启受影响服务，并启动目标范围内未变化的服务。

@@ -243,6 +243,30 @@ systemd_units_installed() {
 		[[ -f /etc/systemd/system/proxystack-sub.service ]]
 }
 
+# 输出首次安装完成后的建议命令，避免用户遗漏运行依赖和 unit 安装。
+print_next_steps() {
+	local config_path="${BASE_DIR}/config.yaml"
+	local agent_bin="${BIN_DIR}/ps-agent"
+	local setup_command
+	local add_command
+	local edit_command
+	local check_command
+	local start_command
+
+	setup_command="$(quote_command sudo "${agent_bin}" setup --config "${config_path}" --base-dir "${BASE_DIR}")"
+	add_command="$(quote_command sudo "${agent_bin}" add usa1 --config "${config_path}")"
+	edit_command="$(quote_command sudo "${agent_bin}" edit usa1 --config "${config_path}")"
+	check_command="$(quote_command sudo "${agent_bin}" check usa1 --config "${config_path}")"
+	start_command="$(quote_command sudo "${agent_bin}" start usa1 --config "${config_path}")"
+
+	log "Next steps:"
+	log "  ${setup_command}"
+	log "  ${add_command}"
+	log "  ${edit_command}"
+	log "  ${check_command}"
+	log "  ${start_command}"
+}
+
 # 主入口。
 main() {
 	parse_args "$@"
@@ -260,6 +284,7 @@ main() {
 	maybe_init_project
 	maybe_install_systemd
 	log "Agent installation completed"
+	print_next_steps
 }
 
 main "$@"

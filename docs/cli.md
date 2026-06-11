@@ -7,6 +7,7 @@
 ```text
 proxystack-agent
   init
+  setup
   add
   edit
   list
@@ -81,6 +82,7 @@ systemd unit 文件仍需要安装到系统目录，这是 systemd 的要求；u
 
 ```bash
 proxystack-agent init
+proxystack-agent setup
 proxystack-agent add usa1
 proxystack-agent edit
 proxystack-agent edit usa1
@@ -103,6 +105,7 @@ proxystack-agent doctor
 命令语义：
 
 - `init`：创建 `/opt/proxystack` 目录结构和默认 `config.yaml`；已存在文件默认不覆盖。
+- `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
 - `edit`：编辑 `/opt/proxystack/config.yaml`。
 - `edit <name>`：编辑 `/opt/proxystack/stacks/<name>.yaml`。

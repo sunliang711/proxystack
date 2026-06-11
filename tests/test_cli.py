@@ -73,6 +73,7 @@ def test_agent_lifecycle_command_help_is_available() -> None:
     """验证生命周期命令都提供 help 输出。"""
     commands = [
         ["init"],
+        ["setup"],
         ["add"],
         ["edit"],
         ["list"],
@@ -726,6 +727,48 @@ def test_install_update_group_has_no_unit_install_entry(tmp_path: Path, monkeypa
     assert "service install" not in update_help.output
     assert invalid_install.exit_code != 0
     assert invalid_update.exit_code != 0
+
+
+def test_agent_setup_initializes_runtime_and_units(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 setup 串联 init、install all 和 service install。"""
+    project_dir = tmp_path / "project"
+    config = project_dir / "config.yaml"
+    fake_runner = use_fake_systemd(monkeypatch, tmp_path)
+    installed_targets: list[str] = []
+
+    def fake_install_artifact(global_config, request, operation: str = "install", progress=None):
+        """记录 setup 安装目标，避免测试访问真实下载源。"""
+        installed_targets.append(request.target)
+        if request.target == "geo":
+            installed_path = global_config.resolve_path(global_config.paths.geo) / "geoip.metadb"
+        else:
+            installed_path = global_config.resolve_path(global_config.paths.bin) / request.target
+        installed_path.parent.mkdir(parents=True, exist_ok=True)
+        installed_path.write_text("fake", encoding="utf-8")
+        return agent_module.InstallResult(
+            operation=operation,
+            target=request.target,
+            version=request.version,
+            source=request.source,
+            source_sha256="fake-sha256",
+            installed_paths=(installed_path,),
+            service_plan=tuple(),
+        )
+
+    monkeypatch.setattr(agent_module, "install_artifact", fake_install_artifact)
+
+    result = runner.invoke(agent_app, ["setup", "-c", str(config), "--base-dir", str(project_dir)])
+
+    assert result.exit_code == 0, result.output
+    assert config.exists()
+    assert installed_targets == ["mihomo", "xray", "geo"]
+    assert (tmp_path / "systemd" / "proxystack-xray@.service").exists()
+    assert (tmp_path / "systemd" / "proxystack-clash@.service").exists()
+    assert (tmp_path / "systemd" / "proxystack-sub.service").exists()
+    assert fake_runner.calls == [("systemctl", "daemon-reload")]
+    assert "setup: init" in result.output
+    assert "setup: install all" in result.output
+    assert "setup: service install" in result.output
 
 
 def test_agent_edit_rejects_invalid_stack_before_replacing(tmp_path: Path) -> None:

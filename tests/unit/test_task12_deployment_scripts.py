@@ -103,6 +103,8 @@ def test_install_agent_dry_run_stays_inside_bootstrap_boundary() -> None:
     assert "DRY-RUN:" in output
     assert "proxystack-agent init" in output
     assert "proxystack-agent service install" in output
+    assert "ps-agent setup" in output
+    assert "ps-agent start usa1" in output
     assert "proxystack-agent install all" not in output
     assert "mihomo" not in output
     assert "xray-core" not in output

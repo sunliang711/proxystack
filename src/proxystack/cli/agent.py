@@ -156,6 +156,33 @@ def init(
         typer.echo(f"  - {path}")
 
 
+@app.command(rich_help_panel=INSTALL_HELP_PANEL)
+def setup(
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+    base_dir: Optional[Path] = typer.Option(None, "--base-dir", help="base_dir；缺省使用 config.yaml 所在目录。"),
+    external_host: str = typer.Option("proxy.example.com", "--external-host", help="默认 external_host。"),
+    force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.yaml。"),
+) -> None:
+    """初始化项目，幂等安装代理运行依赖和 systemd unit。"""
+    try:
+        typer.echo("setup: init")
+        paths = init_project(config, base_dir, external_host, force)
+        for path in paths:
+            typer.echo(f"  - {path}")
+
+        typer.echo("setup: install all")
+        install_results = run_artifact_operation("install", "all", None, None, None, None, config)
+        echo_install_results(install_results)
+
+        typer.echo("setup: service install")
+        global_config = load_config(config)
+        service_lines = build_systemd_manager(global_config).install_units(UNIT_NAMES)
+    except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
+        typer.echo(f"setup 失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    echo_service_lines(service_lines)
+
+
 @app.command(rich_help_panel=CONFIG_HELP_PANEL)
 def add(
     name: str = typer.Argument(..., help="新 stack 名称。"),

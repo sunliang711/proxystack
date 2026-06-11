@@ -25,8 +25,8 @@ subscription:
 port_ranges:
   # Only used by add/clone --allocate-ports.
   # Manually configured ports may be outside these ranges if they are valid and unique.
-  xrelay_inbound: 24000-24999
-  clash_socks: 17000-17999
+  xrelay_inbound: 4300-4399
+  clash_socks: 7090-7999
   clash_controller: 19000-19999
 
 defaults:
@@ -60,10 +60,12 @@ security:
 
 install:
   mihomo:
-    version: latest
+    #version: latest
+    version: 1.19.27
     source: auto
   xray:
-    version: latest
+    #version: latest
+    version: 26.3.27
     source: auto
   geo:
     version: latest

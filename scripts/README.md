@@ -22,6 +22,16 @@
 sudo scripts/install-agent.sh
 ```
 
+安装脚本完成后会输出 `Next steps`，首次部署可继续执行：
+
+```bash
+sudo ps-agent setup
+sudo ps-agent add usa1
+sudo ps-agent edit usa1
+sudo ps-agent check usa1
+sudo ps-agent start usa1
+```
+
 安装 systemd unit：
 
 ```bash
