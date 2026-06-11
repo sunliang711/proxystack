@@ -2,6 +2,7 @@
 
 import hashlib
 import gzip
+from io import StringIO
 from pathlib import Path
 from typing import Optional
 from typing import Sequence
@@ -11,6 +12,7 @@ import pytest
 from ruamel.yaml import YAML
 from typer.testing import CliRunner
 
+from proxystack.cli.agent import InstallProgressPrinter
 from proxystack.cli.agent import app as agent_app
 from proxystack.config import load_config
 from proxystack.install import CommandResult
@@ -60,6 +62,29 @@ def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
     assert "source: local file" in result.output
     assert "install: verify mihomo.bin" in result.output
     assert "install: complete mihomo" in result.output
+
+
+def test_install_progress_printer_rewrites_download_line() -> None:
+    """验证交互式下载进度使用回车刷新同一行。"""
+
+    class InteractiveStream(StringIO):
+        """模拟支持 TTY 的 stderr。"""
+
+        def isatty(self) -> bool:
+            """返回 True 以启用交互式输出路径。"""
+            return True
+
+    stream = InteractiveStream()
+    printer = InstallProgressPrinter(stream)
+
+    printer("download: start xray.zip 0 B/10.0 MiB (0%)")
+    printer("download: progress xray.zip 5.0 MiB/10.0 MiB (50%)")
+    printer("download: complete xray.zip 10.0 MiB/10.0 MiB (100%)")
+
+    output = stream.getvalue()
+    assert output.count("\r") == 3
+    assert output.endswith("\n")
+    assert "\ndownload: progress" not in output
 
 
 def test_install_cli_skips_existing_binary_without_download(tmp_path: Path) -> None:

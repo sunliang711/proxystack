@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 import shlex
+import sys
 from typing import Optional
+from typing import TextIO
 
 from pydantic import ValidationError
 import typer
@@ -107,6 +109,7 @@ SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
 SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
 INSTALL_SOURCE_HELP = "安装源。mihomo/xray/geo 可用 auto/github/r2、本地文件或 http(s) URL；geo 默认下载 MetaCubeX geoip.metadb，普通远端 URL 需要 --sha256。"
+DOWNLOAD_PROGRESS_PREFIXES = ("download: start ", "download: progress ", "download: complete ")
 
 
 @app.callback()
@@ -954,22 +957,65 @@ def run_artifact_operation(
         raise ValueError("all target uses config.install.* source, sha256 and archive_member")
     global_config = load_config(config_path)
     results: list[InstallResult] = []
-    for artifact_target in expand_artifact_targets(target):
-        request = build_install_request(
-            global_config,
-            artifact_target,
-            component_version,
-            source,
-            sha256,
-            archive_member,
-        )
-        results.append(install_artifact(global_config, request, operation=operation, progress=echo_install_progress))
+    progress_printer = InstallProgressPrinter()
+    try:
+        for artifact_target in expand_artifact_targets(target):
+            request = build_install_request(
+                global_config,
+                artifact_target,
+                component_version,
+                source,
+                sha256,
+                archive_member,
+            )
+            results.append(install_artifact(global_config, request, operation=operation, progress=progress_printer))
+    finally:
+        progress_printer.finish()
     return results
 
 
-def echo_install_progress(message: str) -> None:
-    """把安装下载进度输出到 stderr，避免遮挡最终结果。"""
-    typer.echo(message, err=True)
+class InstallProgressPrinter:
+    """在交互式终端内单行刷新下载进度，非 TTY 保持逐行日志。"""
+
+    def __init__(self, stream: Optional[TextIO] = None) -> None:
+        """初始化输出流；测试可注入假 stream。"""
+        self.stream = stream or sys.stderr
+        self.current_progress_width = 0
+
+    def __call__(self, message: str) -> None:
+        """按消息类型输出安装进度。"""
+        if self.is_interactive() and is_download_progress_message(message):
+            self.write_download_progress(message)
+            return
+        self.finish()
+        typer.echo(message, err=True)
+
+    def is_interactive(self) -> bool:
+        """判断 stderr 是否支持交互式回车刷新。"""
+        isatty = getattr(self.stream, "isatty", None)
+        return bool(isatty is not None and isatty())
+
+    def write_download_progress(self, message: str) -> None:
+        """用回车覆盖当前下载进度行，完成时换行收尾。"""
+        padded_message = message.ljust(self.current_progress_width)
+        self.stream.write(f"\r{padded_message}")
+        self.stream.flush()
+        self.current_progress_width = max(self.current_progress_width, len(message))
+        if message.startswith("download: complete "):
+            self.finish()
+
+    def finish(self) -> None:
+        """结束尚未换行的下载进度，避免后续日志粘在同一行。"""
+        if self.current_progress_width == 0:
+            return
+        self.stream.write("\n")
+        self.stream.flush()
+        self.current_progress_width = 0
+
+
+def is_download_progress_message(message: str) -> bool:
+    """识别可在终端单行刷新的下载进度消息。"""
+    return any(message.startswith(prefix) for prefix in DOWNLOAD_PROGRESS_PREFIXES)
 
 
 def echo_install_results(results: list[InstallResult]) -> None:
