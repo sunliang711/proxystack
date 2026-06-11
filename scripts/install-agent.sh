@@ -259,12 +259,13 @@ print_next_steps() {
 	check_command="$(quote_command sudo "${agent_bin}" check usa1 --config "${config_path}")"
 	start_command="$(quote_command sudo "${agent_bin}" start usa1 --config "${config_path}")"
 
-	log "Next steps:"
-	log "  ${setup_command}"
-	log "  ${add_command}"
-	log "  ${edit_command}"
-	log "  ${check_command}"
-	log "  ${start_command}"
+	break_step_line
+	printf 'Next steps:\n' >&2
+	printf '  %s\n' "${setup_command}" >&2
+	printf '  %s\n' "${add_command}" >&2
+	printf '  %s\n' "${edit_command}" >&2
+	printf '  %s\n' "${check_command}" >&2
+	printf '  %s\n' "${start_command}" >&2
 }
 
 # 主入口。
@@ -283,7 +284,7 @@ main() {
 	step "link console scripts" link_console_scripts
 	step "handle project config initialization" maybe_init_project
 	step "handle optional systemd unit installation" maybe_install_systemd
-	step "print next steps" print_next_steps
+	print_next_steps
 }
 
 main "$@"

@@ -50,7 +50,7 @@ def test_install_mihomo_from_local_file(tmp_path: Path) -> None:
 
 
 def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
-    """验证 install CLI 只输出目标 step 状态，不展示内部安装细节。"""
+    """验证 install CLI 只输出目标动作状态，不展示内部安装细节。"""
     config = write_install_config(tmp_path)
     source = write_source(tmp_path / "sources" / "mihomo.bin", b"mihomo-binary")
 
@@ -60,8 +60,7 @@ def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert "Step 1 doing: install mihomo" in result.output
-    assert "Step 1 done: install mihomo" in result.output
+    assert "install mihomo .. done" in result.output
     assert "source: local file" not in result.output
     assert "install: verify" not in result.output
 
@@ -125,7 +124,11 @@ def test_install_step_finishes_interactive_download_line_before_done(
         )
 
     monkeypatch.setattr(agent_module, "install_artifact", fake_install_artifact)
-    monkeypatch.setattr(agent_module, "InstallProgressPrinter", lambda: InstallProgressPrinter(stream))
+    monkeypatch.setattr(
+        agent_module,
+        "InstallProgressPrinter",
+        lambda step_logger=None: InstallProgressPrinter(stream, step_logger=step_logger),
+    )
 
     agent_module.run_artifact_operation(
         "install",
@@ -139,7 +142,7 @@ def test_install_step_finishes_interactive_download_line_before_done(
     )
 
     output = stream.getvalue()
-    assert "\nStep 1 done: install mihomo" in output
+    assert "\ninstall mihomo .. done" in output
 
 
 def test_install_cli_skips_existing_binary_without_download(tmp_path: Path) -> None:
@@ -153,8 +156,7 @@ def test_install_cli_skips_existing_binary_without_download(tmp_path: Path) -> N
 
     assert result.exit_code == 0
     assert installed.read_bytes() == b"existing-mihomo"
-    assert "Step 1 doing: install mihomo" in result.output
-    assert "Step 1 done: install mihomo" in result.output
+    assert "install mihomo .. done" in result.output
     assert "already installed" not in result.output
     assert "download:" not in result.output
 
@@ -604,9 +606,9 @@ def test_update_all_does_not_include_self(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "self" not in result.output
-    assert "Step 1 doing: update mihomo" in result.output
-    assert "Step 2 doing: update xray" in result.output
-    assert "Step 3 doing: update geo" in result.output
+    assert "update mihomo .. done" in result.output
+    assert "update xray .. done" in result.output
+    assert "update geo .. done" in result.output
     assert "Service adapter dry-run" not in result.output
 
 

@@ -1047,7 +1047,7 @@ def run_artifact_operation(
     global_config = load_config(config_path)
     results: list[InstallResult] = []
     logger = step_logger or StepLogger()
-    progress_printer = InstallProgressPrinter()
+    progress_printer = InstallProgressPrinter(step_logger=logger)
     try:
         for artifact_target in expand_artifact_targets(target):
             with logger.step(f"{operation} {artifact_target}"):
@@ -1071,15 +1071,18 @@ def run_artifact_operation(
 class InstallProgressPrinter:
     """在交互式终端内单行刷新下载进度，非 TTY 保持逐行日志。"""
 
-    def __init__(self, stream: Optional[TextIO] = None) -> None:
+    def __init__(self, stream: Optional[TextIO] = None, step_logger: Optional[StepLogger] = None) -> None:
         """初始化输出流；测试可注入假 stream。"""
         self.stream = stream or sys.stderr
+        self.step_logger = step_logger
         self.current_progress_width = 0
 
     def __call__(self, message: str) -> None:
         """只输出下载进度，隐藏安装步骤内部细节。"""
         if not is_download_progress_message(message):
             return
+        if self.step_logger is not None:
+            self.step_logger.break_line()
         if self.is_interactive():
             self.write_download_progress(message)
             return

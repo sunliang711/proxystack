@@ -545,7 +545,7 @@ def test_agent_start_repairs_unchanged_generated_metadata_as_root(tmp_path: Path
 
 
 def test_agent_start_applies_changed_target_services_with_step_logs(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 start 写入生成文件，并用 step 状态替代 systemd 内部输出。"""
+    """验证 start 写入生成文件，并用动作状态替代 systemd 内部输出。"""
     config = copy_example_project(tmp_path)
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
@@ -553,12 +553,12 @@ def test_agent_start_applies_changed_target_services_with_step_logs(tmp_path: Pa
     second = runner.invoke(agent_app, ["start", "xrelay/usa1", "-c", str(config)])
 
     assert first.exit_code == 0
-    assert "Step 3 doing: restart changed services" in first.output
+    assert "restart changed services .. done" in first.output
     assert "restart: proxystack-xray@usa1.service" not in first.output
     assert "proxystack-clash@usa1.service" not in first.output
     assert (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
     assert second.exit_code == 0
-    assert "Step 3 doing: start selected services" in second.output
+    assert "start selected services .. done" in second.output
     assert "start: proxystack-xray@usa1.service" not in second.output
     assert fake_runner.calls == [
         ("systemctl", "restart", "proxystack-xray@usa1.service"),
@@ -731,7 +731,7 @@ def test_agent_start_sub_only_starts_sub_without_reading_stack(tmp_path: Path, m
     result = runner.invoke(agent_app, ["start", "sub", "-c", str(config)])
 
     assert result.exit_code == 0
-    assert "Step 1 doing: start subscription service" in result.output
+    assert "start subscription service .. done" in result.output
     assert "start: proxystack-sub.service" not in result.output
     assert fake_runner.calls == [("systemctl", "start", "proxystack-sub.service")]
     assert not (config.parent / "runtime" / "generated").exists()
@@ -791,9 +791,9 @@ def test_agent_setup_initializes_runtime_and_units(tmp_path: Path, monkeypatch: 
     assert (tmp_path / "systemd" / "proxystack-clash@.service").exists()
     assert (tmp_path / "systemd" / "proxystack-sub.service").exists()
     assert fake_runner.calls == [("systemctl", "daemon-reload")]
-    assert "Step 1 doing: initialize project" in result.output
-    assert "Step 2 doing: install mihomo" in result.output
-    assert "Step 5 doing: install systemd units" in result.output
+    assert "initialize project .. done" in result.output
+    assert "install mihomo .. done" in result.output
+    assert "install systemd units .. done" in result.output
 
 
 def test_agent_edit_rejects_invalid_stack_before_replacing(tmp_path: Path) -> None:

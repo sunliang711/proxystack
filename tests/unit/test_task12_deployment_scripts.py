@@ -103,8 +103,10 @@ def test_install_agent_dry_run_stays_inside_bootstrap_boundary() -> None:
     assert "DRY-RUN:" in output
     assert "proxystack-agent init" in output
     assert "proxystack-agent service install" in output
+    assert "Next steps:" in output
     assert "ps-agent setup" in output
     assert "ps-agent start usa1" in output
+    assert "print next steps" not in output
     assert "proxystack-agent install all" not in output
     assert "mihomo" not in output
     assert "xray-core" not in output
@@ -276,10 +278,10 @@ step "probe failure" failing_then_success
     result = run_script(["bash", str(probe)])
 
     assert result.returncode == 7
-    assert "Step 1 failed: command failed with exit code 7" in result.stderr
+    assert "probe failure .. failed: command failed with exit code 7" in result.stderr
     assert "short failure" in result.stderr
     assert "Full output:" not in result.stderr
-    assert "Step 1 done" not in result.stderr
+    assert "probe failure .. done" not in result.stderr
 
 
 def test_step_failure_cleans_internal_state_files(tmp_path: Path) -> None:
@@ -298,7 +300,7 @@ step "probe cleanup" run bash -c 'printf "short failure\\n" >&2; exit 6'
 
     after = {path.name for path in Path("/tmp").glob("proxystack-step*")}
     assert result.returncode == 6
-    assert "Step 1 failed:" in result.stderr
+    assert "probe cleanup .. failed:" in result.stderr
     assert after == before
 
 
@@ -317,7 +319,7 @@ step "stream visible output" run_stream bash -c 'printf "stream progress\\n"'
 
     assert result.returncode == 0, result.stderr
     assert "stream progress" in result.stderr
-    assert "Step 1 done: stream visible output" in result.stderr
+    assert "stream visible output .. done" in result.stderr
 
 
 def test_ensure_pip_available_skips_existing_pip(tmp_path: Path) -> None:

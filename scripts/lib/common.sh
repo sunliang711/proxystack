@@ -4,6 +4,8 @@ set -euo pipefail
 DRY_RUN="${DRY_RUN:-0}"
 PROXYSTACK_STEP_INDEX=0
 PROXYSTACK_CURRENT_STEP_NUMBER=""
+PROXYSTACK_CURRENT_STEP_LABEL=""
+PROXYSTACK_STEP_LINE_OPEN=""
 PROXYSTACK_LAST_ERROR_SUMMARY=""
 PROXYSTACK_LAST_ERROR_FILE=""
 PROXYSTACK_ERROR_STATE_FILE=""
@@ -20,6 +22,7 @@ is_dry_run() {
 # 输出普通日志，日志内容必须保持英文。
 log() {
 	if is_dry_run; then
+		break_step_line
 		printf '[INFO] %s\n' "$*" >&2
 	fi
 }
@@ -27,6 +30,7 @@ log() {
 # 输出警告日志，日志内容必须保持英文。
 warn() {
 	if is_dry_run; then
+		break_step_line
 		printf '[WARN] %s\n' "$*" >&2
 	fi
 }
@@ -84,15 +88,49 @@ load_error_state() {
 # 输出当前 step 的失败摘要和完整输出路径。
 print_step_failure() {
 	local status="${1:-1}"
+	local label="${PROXYSTACK_CURRENT_STEP_LABEL}"
 	local summary="${PROXYSTACK_LAST_ERROR_SUMMARY}"
 
 	if [[ -z "${summary}" ]]; then
 		summary="command exited with status ${status}"
 	fi
-	printf 'Step %s failed: %s\n' "${PROXYSTACK_CURRENT_STEP_NUMBER}" "${summary}" >&2
+	if [[ -z "${label}" ]]; then
+		label="step ${PROXYSTACK_CURRENT_STEP_NUMBER}"
+	fi
+	finish_step_line "${label}" "failed: ${summary}"
 	if [[ -n "${PROXYSTACK_LAST_ERROR_FILE}" ]]; then
 		printf 'Full output: %s\n' "${PROXYSTACK_LAST_ERROR_FILE}" >&2
 	fi
+}
+
+# 输出动作开始文本，等待后续补充 done 或 failed。
+start_step_line() {
+	local label="${1:-}"
+
+	printf '%s ..' "${label}" >&2
+	PROXYSTACK_STEP_LINE_OPEN="1"
+}
+
+# 在 dry-run 明细或下载进度前结束当前动作行。
+break_step_line() {
+	if [[ "${PROXYSTACK_STEP_LINE_OPEN}" != "1" ]]; then
+		return 0
+	fi
+	printf '\n' >&2
+	PROXYSTACK_STEP_LINE_OPEN=""
+}
+
+# 在动作行尾补充状态；若中途换行则重新输出完整动作行。
+finish_step_line() {
+	local label="${1:-}"
+	local status="${2:-done}"
+
+	if [[ "${PROXYSTACK_STEP_LINE_OPEN}" == "1" ]]; then
+		printf ' %s\n' "${status}" >&2
+	else
+		printf '%s .. %s\n' "${label}" "${status}" >&2
+	fi
+	PROXYSTACK_STEP_LINE_OPEN=""
 }
 
 # 输出当前 step 的失败信息，避免 ERR trap 和 die 重复打印。
@@ -136,7 +174,6 @@ restore_err_trap() {
 # 执行一个对外可见步骤，步骤内部输出默认隐藏。
 step() {
 	local label="${1:-}"
-	local current_step
 	local errtrace_was_enabled
 	local previous_err_trap
 	local printed_file
@@ -152,7 +189,7 @@ step() {
 
 	PROXYSTACK_STEP_INDEX=$((PROXYSTACK_STEP_INDEX + 1))
 	PROXYSTACK_CURRENT_STEP_NUMBER="${PROXYSTACK_STEP_INDEX}"
-	current_step="${PROXYSTACK_CURRENT_STEP_NUMBER}"
+	PROXYSTACK_CURRENT_STEP_LABEL="${label}"
 	clear_error
 	state_file="$(mktemp /tmp/proxystack-step.XXXXXX)"
 	printed_file="$(mktemp /tmp/proxystack-step-printed.XXXXXX)"
@@ -165,7 +202,7 @@ step() {
 		*) errtrace_was_enabled="0" ;;
 	esac
 
-	printf 'Step %s doing: %s\n' "${PROXYSTACK_CURRENT_STEP_NUMBER}" "${label}" >&2
+	start_step_line "${label}"
 	trap 'handle_step_error "$?"' ERR
 	set -E
 	"$@"
@@ -176,10 +213,11 @@ step() {
 
 	cleanup_step_state_files
 	PROXYSTACK_CURRENT_STEP_NUMBER=""
+	PROXYSTACK_CURRENT_STEP_LABEL=""
 	PROXYSTACK_ERROR_STATE_FILE=""
 	PROXYSTACK_ERROR_PRINTED_FILE=""
 	clear_error
-	printf 'Step %s done: %s\n' "${current_step}" "${label}" >&2
+	finish_step_line "${label}" "done"
 	return 0
 }
 
@@ -239,6 +277,7 @@ run_stream() {
 	fi
 
 	output_file="$(mktemp /tmp/proxystack-run.XXXXXX)"
+	break_step_line
 	if "$@" 2>&1 | tee "${output_file}" >&2; then
 		rm -f "${output_file}"
 		return 0

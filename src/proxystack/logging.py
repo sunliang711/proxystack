@@ -45,28 +45,54 @@ class ErrorSummary:
 
 
 class StepLogger:
-    """按步骤输出 doing/done/failed 状态，隐藏步骤内部细节。"""
+    """按动作输出开始、完成或失败状态，隐藏步骤内部细节。"""
 
     def __init__(self, stream: TextIO | None = None) -> None:
         """初始化输出流，默认写入 stderr。"""
         self.stream = stream or sys.stderr
         self.step_index = 0
+        self.current_label = ""
+        self.line_open = False
 
     @contextmanager
     def step(self, label: str) -> Iterator[None]:
-        """输出单个步骤状态，并在异常时打印摘要。"""
+        """输出单个动作状态，并在异常时打印摘要。"""
         self.step_index += 1
-        current_step = self.step_index
-        self.write(f"Step {current_step} doing: {label}")
+        self.current_label = label
+        self.start_line(label)
         try:
             yield
         except BaseException as exc:
             summary = summarize_exception(exc)
-            self.write(f"Step {current_step} failed: {summary.text}")
+            self.finish_line(label, f"failed: {summary.text}")
             if summary.detail_path is not None:
                 self.write(f"Full output: {summary.detail_path}")
             raise
-        self.write(f"Step {current_step} done: {label}")
+        self.finish_line(label, "done")
+
+    def start_line(self, label: str) -> None:
+        """输出动作开始文本，等待后续补充 done 或 failed。"""
+        self.stream.write(f"{label} ..")
+        self.stream.flush()
+        self.line_open = True
+
+    def break_line(self) -> None:
+        """在需要输出下载进度前结束当前动作行。"""
+        if not self.line_open:
+            return
+        self.stream.write("\n")
+        self.stream.flush()
+        self.line_open = False
+
+    def finish_line(self, label: str, status: str) -> None:
+        """在动作行尾补充状态；若中途换行则重新输出完整动作行。"""
+        if self.line_open:
+            self.stream.write(f" {status}\n")
+            self.stream.flush()
+        else:
+            self.write(f"{label} .. {status}")
+        self.line_open = False
+        self.current_label = ""
 
     def write(self, message: str) -> None:
         """把 step 日志写入目标流并立即刷新。"""
