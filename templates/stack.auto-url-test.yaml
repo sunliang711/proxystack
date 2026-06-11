@@ -1,29 +1,35 @@
 # auto 实例模板
 # 需要把 usa1/usa2 改成实际已有实例名，把 relay 改成目标 xrelay inbound name。
+# 快速定位：
+# - 搜索【必改】：部署前必须替换的 ref、password、secret 等占位值。
+# - 搜索【按需改】：端口、监听地址、user、remark、测速参数等常见部署参数。
+# - 搜索【一般不改】：默认结构配置，除非明确调整生成逻辑。
+# - 搜索【被引用】：其他配置会引用的名称，改名需同步修改引用方。
 
-# stack 名称；add 时会被替换为用户输入的实例名。
+# 【按需改】stack 名称；add 时会被替换为用户输入的实例名。
 name: auto
-# 是否启用该 stack；false 时不会生成或管理对应服务。
+# 【一般不改】是否启用该 stack；false 时不会生成或管理对应服务。
 enabled: true
-# stack 角色标记；auto 表示聚合或自动选择节点实例。
+# 【一般不改】stack 角色标记；auto 表示聚合或自动选择节点实例。
 role: auto
-# 自定义标签列表；这里标记为自动代理类实例。
+# 【按需改】自定义标签列表；这里标记为自动代理类实例。
 labels: [auto]
 
 # Xray/xrelay 侧配置，用于暴露聚合后的入站入口。
 xrelay:
-  # 是否为该 stack 启用 xrelay 服务。
+  # 【一般不改】是否为该 stack 启用 xrelay 服务。
   enabled: true
 
   # xrelay 入站列表，会生成对应 Xray inbound。
   inbounds:
-    # 入站名称；供客户端或其他 stack 引用。
+    # 【被引用】聚合后的 socks5 入口名称；客户端或其他 stack 可通过 <stack>.relay 引用这里。
+    # 若改名，需要同步修改引用方 ref。
     - name: relay
       # 入站协议；这里提供 socks5 入口。
       protocol: socks5
-      # 入站监听地址；0.0.0.0 表示监听所有网卡。
+      # 【按需改】入站监听地址；0.0.0.0 表示监听所有网卡。
       listen: 0.0.0.0
-      # 入站监听端口；需要避免与其他服务冲突。
+      # 【按需改】入站监听端口；需要避免与其他服务冲突。
       port: 25000
       # 是否允许该 socks5 入站转发 UDP。
       udp: true
@@ -31,63 +37,63 @@ xrelay:
       auth:
         # 认证类型；password 表示使用用户名密码。
         type: password
-        # socks5 用户名；部署前按需替换。
+        # 【按需改】socks5 用户名；部署前按需替换。
         username: auto
-        # socks5 密码；部署前必须替换。
+        # 【必改】socks5 密码；部署前必须替换。
         password: change-me-relay-password
-      # 订阅或统计中的用户标识。
+      # 【按需改】订阅或统计中的用户标识。
       user: demo
-      # 入站备注，会显示在订阅节点名称中。
+      # 【按需改】入站备注，会显示在订阅节点名称中。
       remark: auto relay socks
-      # 是否导出到订阅；true 表示生成订阅节点。
+      # 【按需改】是否导出到订阅；true 表示生成订阅节点。
       sub: true
 
-  # xrelay 出站配置，决定入站流量转发到哪里。
+  # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
   outbound:
     # 出站目标类型；clash 表示转发到本 stack 的 Clash 监听器。
     type: clash
-    # 出站引用；指向 stack.clash.socks 形式的唯一本地 socks 监听。
+    # 【一般不改】出站引用；指向 stack.clash.socks 形式的唯一本地 socks 监听。
     ref: auto.clash.socks
 
 # Clash/mihomo 侧配置，用于自动探测并选择可用上游。
 clash:
-  # 是否为该 stack 启用 Clash 服务。
+  # 【一般不改】是否为该 stack 启用 Clash 服务。
   enabled: true
-  # Clash 运行模式；Rule 表示按规则分流。
+  # 【按需改】Clash 运行模式；Rule 表示按规则分流。
   mode: Rule
 
   # Clash external-controller API 配置。
   controller:
-    # 控制器监听地址；建议只监听本机。
+    # 【按需改】控制器监听地址；建议只监听本机。
     listen: 127.0.0.1:19150
-    # 控制器访问密钥；部署前必须替换。
+    # 【必改】控制器访问密钥；部署前必须替换。
     secret: change-me-clash-api-secret
 
   # Clash 本地监听器配置。
   listeners:
     # socks 监听器列表，供 xrelay 或本机连接。
     socks:
-      # socks 监听器名称；会被 ref 引用。
+      # 【一般不改】socks 监听器名称；会被 ref 引用。
       - name: local
         # socks 监听地址；127.0.0.1 表示仅本机可访问。
         listen: 127.0.0.1
-        # socks 监听端口；需要避免与其他服务冲突。
+        # 【按需改】socks 监听端口；需要避免与其他服务冲突。
         port: 17150
 
   # Clash 上游代理列表。
   upstreams:
-    # 上游代理名称；供代理组引用。
+    # 【被引用】上游代理名称；groups[].proxies 会引用它，改名需同步更新代理组。
     - name: usa1-local
       # 上游类型；表示引用其他 stack 的 xrelay socks5 入站。
       type: xrelay-socks5
-      # 上游引用；指向 usa1 stack 中名为 relay 的入站。
+      # 【必改】上游引用；指向 usa1 stack 中名为 relay 的入站。
       ref: usa1.relay
 
-    # 上游代理名称；供代理组引用。
+    # 【被引用】上游代理名称；groups[].proxies 会引用它，改名需同步更新代理组。
     - name: usa2-local
       # 上游类型；表示引用其他 stack 的 xrelay socks5 入站。
       type: xrelay-socks5
-      # 上游引用；指向 usa2 stack 中名为 relay 的入站。
+      # 【必改】上游引用；指向 usa2 stack 中名为 relay 的入站。
       ref: usa2.relay
 
   # Clash 代理组列表。
@@ -96,18 +102,18 @@ clash:
     - name: AutoProxy
       # 代理组类型；url-test 会按测速结果自动选择延迟最低节点。
       type: url-test
-      # 参与自动测速的上游节点列表。
+      # 【被引用】参与自动测速的上游节点列表，必须与 upstreams[].name 保持一致。
       proxies: [usa1-local, usa2-local]
-      # 测速 URL；用于判断节点延迟和可用性。
+      # 【按需改】测速 URL；用于判断节点延迟和可用性。
       url: http://www.gstatic.com/generate_204
-      # 测速间隔，单位秒。
+      # 【按需改】测速间隔，单位秒。
       interval: 120
 
     # 总代理组名称；提供自动组、单节点和直连选择。
     - name: AllProxy
       # 代理组类型；select 表示手动选择节点。
       type: select
-      # 代理组成员；包含自动组、单节点和直连。
+      # 【被引用】代理组成员；包含自动组、单节点和直连，必须与组名和 upstreams[].name 保持一致。
       proxies: [AutoProxy, usa1-local, usa2-local, DIRECT]
 
   # Clash 规则集选择。
