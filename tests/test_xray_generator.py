@@ -67,6 +67,7 @@ def test_render_xray_vmess_inbound_supports_multiple_users() -> None:
                         {
                             "user": "alice",
                             "uuid": "11111111-1111-4111-8111-111111111111",
+                            "email": "alice@example.com",
                             "remark": "alice vmess",
                         },
                         {
@@ -86,7 +87,7 @@ def test_render_xray_vmess_inbound_supports_multiple_users() -> None:
         {
             "id": "11111111-1111-4111-8111-111111111111",
             "alterId": 0,
-            "email": "alice",
+            "email": "alice@example.com",
         },
         {
             "id": "22222222-2222-4222-8222-222222222222",
@@ -95,6 +96,108 @@ def test_render_xray_vmess_inbound_supports_multiple_users() -> None:
         },
     ]
     assert rendered_config["inbounds"][0]["streamSettings"]["network"] == "raw"
+
+
+def test_render_xray_shadowsocks_inbound_supports_multiple_users() -> None:
+    """验证传统 shadowsocks users 会生成同一个 inbound 下的多个 users。"""
+    stack_set = make_stack_set(
+        make_stack(
+            "ssmulti",
+            {"type": "direct"},
+            [
+                {
+                    "name": "ss",
+                    "protocol": "shadowsocks",
+                    "listen": "0.0.0.0",
+                    "port": 26001,
+                    "method": "aes-256-gcm",
+                    "password": "server-pass",
+                    "sub": True,
+                    "users": [
+                        {
+                            "user": "alice",
+                            "password": "alice-pass",
+                            "method": "aes-128-gcm",
+                            "email": "alice@example.com",
+                        },
+                        {
+                            "user": "bob",
+                            "password": "bob-pass",
+                        },
+                    ],
+                }
+            ],
+        )
+    )
+
+    rendered_config = json.loads(dumps_xray_config(stack_set, "ssmulti"))
+
+    assert rendered_config["inbounds"][0]["settings"] == {
+        "method": "aes-256-gcm",
+        "password": "server-pass",
+        "network": "tcp",
+        "users": [
+            {
+                "password": "alice-pass",
+                "email": "alice@example.com",
+                "method": "aes-128-gcm",
+            },
+            {
+                "password": "bob-pass",
+                "email": "bob",
+                "method": "aes-256-gcm",
+            },
+        ],
+    }
+
+
+def test_render_xray_shadowsocks_2022_inbound_supports_multiple_users() -> None:
+    """验证 SS2022 users 会生成共享 method 的多用户 inbound。"""
+    stack_set = make_stack_set(
+        make_stack(
+            "ss2022",
+            {"type": "direct"},
+            [
+                {
+                    "name": "ss2022",
+                    "protocol": "shadowsocks",
+                    "listen": "0.0.0.0",
+                    "port": 26001,
+                    "method": "2022-blake3-aes-256-gcm",
+                    "password": "server-key",
+                    "sub": True,
+                    "users": [
+                        {
+                            "user": "alice",
+                            "password": "alice-key",
+                        },
+                        {
+                            "user": "bob",
+                            "password": "bob-key",
+                        },
+                    ],
+                }
+            ],
+        )
+    )
+
+    rendered_config = json.loads(dumps_xray_config(stack_set, "ss2022"))
+
+    assert rendered_config["inbounds"][0]["settings"] == {
+        "method": "2022-blake3-aes-256-gcm",
+        "password": "server-key",
+        "network": "tcp",
+        "users": [
+            {
+                "password": "alice-key",
+                "email": "alice",
+            },
+            {
+                "password": "bob-key",
+                "email": "bob",
+            },
+        ],
+    }
 
 
 def test_render_xray_socks5_outbound_matches_golden() -> None:

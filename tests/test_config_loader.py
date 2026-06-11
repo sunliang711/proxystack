@@ -365,8 +365,123 @@ def test_load_stack_rejects_vmess_top_level_user_and_remark(tmp_path: Path) -> N
         load_stack(stack_path)
 
 
-def test_load_stack_rejects_non_vmess_users_even_when_empty(tmp_path: Path) -> None:
-    """验证非 vmess inbound 不能显式配置 users 字段。"""
+def test_load_stack_accepts_shadowsocks_users(tmp_path: Path) -> None:
+    """验证 shadowsocks inbound 可以使用 users 多用户结构。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      sub: false\n    - name: vmess\n",
+            "      sub: false\n"
+            "    - name: ss\n"
+            "      protocol: shadowsocks\n"
+            "      listen: 0.0.0.0\n"
+            "      port: 24002\n"
+            "      method: aes-256-gcm\n"
+            "      password: server-pass\n"
+            "      sub: true\n"
+            "      users:\n"
+            "        - user: alice\n"
+            "          password: alice-pass\n"
+            "          method: aes-128-gcm\n"
+            "          email: alice@example.com\n"
+            "        - user: bob\n"
+            "          password: bob-pass\n"
+            "    - name: vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    stack = load_stack(stack_path)
+
+    inbound = stack.xrelay.inbounds[1]
+    assert [shadowsocks_user.user for shadowsocks_user in inbound.users] == ["alice", "bob"]
+    assert inbound.users[0].email == "alice@example.com"
+
+
+def test_load_stack_accepts_shadowsocks_2022_users(tmp_path: Path) -> None:
+    """验证 SS2022 inbound 可以使用 users 多用户结构。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      sub: false\n    - name: vmess\n",
+            "      sub: false\n"
+            "    - name: ss2022\n"
+            "      protocol: shadowsocks\n"
+            "      listen: 0.0.0.0\n"
+            "      port: 24002\n"
+            "      method: 2022-blake3-aes-256-gcm\n"
+            "      password: server-key\n"
+            "      sub: true\n"
+            "      users:\n"
+            "        - user: alice\n"
+            "          password: alice-key\n"
+            "        - user: bob\n"
+            "          password: bob-key\n"
+            "    - name: vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    stack = load_stack(stack_path)
+
+    inbound = stack.xrelay.inbounds[1]
+    assert [shadowsocks_user.password for shadowsocks_user in inbound.users] == ["alice-key", "bob-key"]
+
+
+def test_load_stack_rejects_shadowsocks_2022_user_method(tmp_path: Path) -> None:
+    """验证 SS2022 多用户不能为单个用户单独设置 method。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      sub: false\n    - name: vmess\n",
+            "      sub: false\n"
+            "    - name: ss2022\n"
+            "      protocol: shadowsocks\n"
+            "      listen: 0.0.0.0\n"
+            "      port: 24002\n"
+            "      method: 2022-blake3-aes-256-gcm\n"
+            "      password: server-key\n"
+            "      sub: true\n"
+            "      users:\n"
+            "        - user: alice\n"
+            "          password: alice-key\n"
+            "          method: aes-256-gcm\n"
+            "    - name: vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="shadowsocks 2022 users must not set method or cipher"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_shadowsocks_user_missing_password(tmp_path: Path) -> None:
+    """验证 shadowsocks users 中每个用户都必须配置 password。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      sub: false\n    - name: vmess\n",
+            "      sub: false\n"
+            "    - name: ss\n"
+            "      protocol: shadowsocks\n"
+            "      listen: 0.0.0.0\n"
+            "      port: 24002\n"
+            "      method: aes-256-gcm\n"
+            "      password: server-pass\n"
+            "      sub: true\n"
+            "      users:\n"
+            "        - user: alice\n"
+            "    - name: vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="password is required for shadowsocks user"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_socks_users_even_when_empty(tmp_path: Path) -> None:
+    """验证 socks/http inbound 不能显式配置 users 字段。"""
     stack_path = tmp_path / "edge.yaml"
     stack_path.write_text(
         valid_stack_yaml("edge").replace(
@@ -378,7 +493,7 @@ def test_load_stack_rejects_non_vmess_users_even_when_empty(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    with pytest.raises(ValidationError, match="users is only supported for vmess inbound"):
+    with pytest.raises(ValidationError, match="users is only supported for vmess or shadowsocks inbound"):
         load_stack(stack_path)
 
 

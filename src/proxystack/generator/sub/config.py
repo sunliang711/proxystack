@@ -23,9 +23,10 @@ from pydantic import model_validator
 from ruamel.yaml import YAML
 
 from proxystack.domain.models import Inbound
-from proxystack.domain.models import InboundVmessUser
+from proxystack.domain.models import InboundUser
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
+from proxystack.domain.models import is_shadowsocks_2022_method
 
 SUPPORTED_INPUT_EXTENSIONS = {".yaml", ".yml", ".json"}
 BUNDLE_SCHEMA = "proxystack.sub-bundle"
@@ -226,6 +227,11 @@ def render_inbound_nodes(stack_set: StackSet, stack: Stack, inbound: Inbound) ->
     """把一个 xrelay inbound 映射为一个或多个订阅节点。"""
     if inbound.protocol == "vmess":
         return [render_vmess_user_node(stack_set, stack, inbound, vmess_user) for vmess_user in inbound.users]
+    if inbound.protocol == "shadowsocks" and inbound.users:
+        return [
+            render_shadowsocks_user_node(stack_set, stack, inbound, shadowsocks_user)
+            for shadowsocks_user in inbound.users
+        ]
     return [render_inbound_node(stack_set, stack, inbound)]
 
 
@@ -259,7 +265,7 @@ def render_vmess_user_node(
     stack_set: StackSet,
     stack: Stack,
     inbound: Inbound,
-    vmess_user: InboundVmessUser,
+    vmess_user: InboundUser,
 ) -> SubscriptionNode:
     """把 vmess users 中的单个用户映射为独立订阅节点。"""
     node_data: dict[str, Any] = {
@@ -276,6 +282,39 @@ def render_vmess_user_node(
     if inbound.udp:
         node_data["udp"] = inbound.udp
     return SubscriptionNode.model_validate(node_data)
+
+
+def render_shadowsocks_user_node(
+    stack_set: StackSet,
+    stack: Stack,
+    inbound: Inbound,
+    shadowsocks_user: InboundUser,
+) -> SubscriptionNode:
+    """把 shadowsocks users 中的单个用户映射为独立订阅节点。"""
+    method = shadowsocks_user.method or shadowsocks_user.cipher or inbound.method or inbound.cipher
+    node_data: dict[str, Any] = {
+        "id": f"{stack.name}:{inbound.name}:{shadowsocks_user.user}",
+        "user": shadowsocks_user.user,
+        "protocol": inbound.protocol,
+        "server": inbound.server or stack_set.config.external_host,
+        "port": inbound.port,
+        "tag": shadowsocks_user.tag or f"{inbound_tag(inbound)}:{shadowsocks_user.user}",
+        "remark": shadowsocks_user.remark or shadowsocks_user.tag or f"{stack.name}-{inbound.name}-{shadowsocks_user.user}",
+        "method": method,
+        "cipher": method,
+        "password": shadowsocks_node_password(inbound, shadowsocks_user),
+    }
+    if inbound.udp:
+        node_data["udp"] = inbound.udp
+    return SubscriptionNode.model_validate(node_data)
+
+
+def shadowsocks_node_password(inbound: Inbound, shadowsocks_user: InboundUser) -> str:
+    """返回订阅侧 shadowsocks 密码；SS2022 需要组合服务端密码和用户密码。"""
+    inbound_method = inbound.method or inbound.cipher or ""
+    if is_shadowsocks_2022_method(inbound_method):
+        return f"{inbound.password}:{shadowsocks_user.password}"
+    return shadowsocks_user.password or ""
 
 
 def inbound_tag(inbound: Inbound) -> str:

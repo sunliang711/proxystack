@@ -269,13 +269,15 @@ xrelay:
 | `port` | 是 | 监听端口，全部 stack 内必须无冲突 |
 | `udp` | 否 | socks5/shadowsocks 可用 |
 | `auth` | 否 | socks5/http 支持 `noauth` 或 `password` |
-| `user` | 非 vmess 可选 | 订阅 URL 中的用户过滤字段；vmess 必须写在 `users[].user` |
+| `user` | socks/http/shadowsocks 单用户可选 | 订阅 URL 中的用户过滤字段；vmess 和 shadowsocks 多用户必须写在 `users[].user` |
 | `server` | 否 | 订阅节点 server 覆盖值；不填使用 `external_host` |
-| `remark` | 非 vmess 可选 | 订阅节点展示名；vmess 必须写在 `users[].remark` |
+| `remark` | socks/http/shadowsocks 单用户可选 | 订阅节点展示名；vmess 和 shadowsocks 多用户必须写在 `users[].remark` |
 | `tag` | 否 | 不填则生成 `protocol:port:name` |
 | `sub` | 是 | 是否进入订阅输出 |
 | `network` | vmess 必填 | vmess 传输网络，例如 `raw` |
-| `users` | vmess 必填 | 非空列表；一个 vmess inbound 下的一个或多个客户端用户 |
+| `method` / `cipher` | shadowsocks 必填 | shadowsocks 加密方法；`cipher` 兼容旧写法 |
+| `password` | shadowsocks 必填 | shadowsocks 单用户密码，或 SS2022 多用户的服务端密码 |
+| `users` | vmess 必填，shadowsocks 可选 | vmess 必须非空；shadowsocks 非空时启用多用户 |
 
 ### vmess users
 
@@ -283,7 +285,8 @@ vmess 只支持 `users` 结构；单用户也写成一条 `users` 记录。
 
 - 不支持 inbound 顶层 `uuid`。
 - vmess 的 `user` 和 `remark` 必须写在 `users[]` 中。
-- `users` 只能用于 vmess；同一 inbound 内 `users[].user`、`users[].uuid` 和最终订阅 tag 不能重复。
+- `users[].email` 可选，用于 Xray 用户统计；不填时使用 `users[].user`。
+- `users` 只能用于 vmess；同一 inbound 内 `users[].user`、`users[].uuid`、最终 email 和最终订阅 tag 不能重复。
 
 ```yaml
 - name: vmess
@@ -295,10 +298,45 @@ vmess 只支持 `users` 结构；单用户也写成一条 `users` 记录。
   users:
     - user: alice
       uuid: 11111111-1111-4111-8111-111111111111
+      email: alice@example.com
       remark: alice vmess
     - user: bob
       uuid: 22222222-2222-4222-8222-222222222222
       remark: bob vmess
+```
+
+### shadowsocks users
+
+shadowsocks 可以继续使用顶层 `method/password/user/remark` 表达单用户，也可以使用 `users` 表达多用户。
+
+- 传统 SS 多用户：inbound 顶层 `method/password` 仍要配置；`users[].method` 可覆盖单个用户的 method，未配置时继承 inbound method。
+- SS2022 多用户：inbound 顶层 `method` 必须是 SS2022 method，顶层 `password` 是 ServerPassword；`users[].password` 是 UserPassword；订阅侧密码会生成 `ServerPassword:UserPassword`。
+- SS2022 users 不允许配置 `users[].method` 或 `users[].cipher`。
+- shadowsocks 多用户不使用 inbound 顶层 `user/remark`，必须写在 `users[]` 中。
+- 同一 inbound 内 `users[].user`、最终 email 和最终订阅 tag 不能重复。
+
+支持的 method 全集：
+
+- SS2022：`2022-blake3-aes-128-gcm`、`2022-blake3-aes-256-gcm`、`2022-blake3-chacha20-poly1305`
+- 传统 SS：`aes-256-gcm`、`aes-128-gcm`、`chacha20-poly1305`、`chacha20-ietf-poly1305`、`xchacha20-poly1305`、`xchacha20-ietf-poly1305`、`none`、`plain`
+
+```yaml
+- name: ss2022
+  protocol: shadowsocks
+  listen: 0.0.0.0
+  port: 4302
+  method: 2022-blake3-aes-256-gcm
+  password: server-key
+  udp: true
+  sub: true
+  users:
+    - user: alice
+      password: alice-key
+      email: alice@example.com
+      remark: alice ss2022
+    - user: bob
+      password: bob-key
+      remark: bob ss2022
 ```
 
 ### socks/http 鉴权

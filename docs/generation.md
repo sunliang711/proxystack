@@ -79,16 +79,26 @@ API listen 必须是 loopback 地址，避免把 Xray API 暴露到公网。
 <protocol>:<port>:<name>
 ```
 
-用户显式配置 `tag` 时使用用户值；否则自动生成。tag 用于 Xray inbound 标识；vmess 订阅节点可以用 `users[].tag` 覆盖。
+用户显式配置 `tag` 时使用用户值；否则自动生成。tag 用于 Xray inbound 标识；vmess 和 shadowsocks 多用户订阅节点可以用 `users[].tag` 覆盖。
 
 vmess 规则：
 
 - 必须提供 `network`。
 - 必须提供非空 `users`；单用户也写成一条 `users` 记录。
 - 不支持顶层 `uuid`，顶层 `user` 和 `remark` 也不用于 vmess。
-- `users` 结构使用 `users[].user`、`users[].uuid`、`users[].remark` 和可选 `users[].tag`；`users` 只能用于 vmess。
-- 同一 inbound 内 `users[].user`、`users[].uuid` 和最终订阅 tag 不能重复。
+- `users` 结构使用 `users[].user`、`users[].uuid`、`users[].remark`、可选 `users[].tag` 和可选 `users[].email`；`users` 只能用于 vmess。
+- 同一 inbound 内 `users[].user`、`users[].uuid`、最终 email 和最终订阅 tag 不能重复。
 - 多用户 vmess 生成一个 Xray inbound，`settings.clients` 中每个用户生成一个 client，包含 `id`、`alterId: 0` 和用于用户统计的 `email`。
+
+shadowsocks 规则：
+
+- 必须提供 `method` 或 `cipher`，生成到 Xray `settings.method`。
+- 必须提供 `password`，单用户时作为客户端密码；多用户时仍写入 Xray `settings.password`。
+- `users` 非空时启用多用户，生成到 Xray `settings.users[]`。
+- 传统 SS 多用户允许 `users[].method` 或 `users[].cipher` 覆盖单个用户 method，未配置时继承 inbound method。
+- SS2022 多用户不允许配置 `users[].method` 或 `users[].cipher`，统一使用 inbound method。
+- SS2022 订阅节点密码使用 `ServerPassword:UserPassword`，其中 ServerPassword 来自 inbound `password`，UserPassword 来自 `users[].password`。
+- 支持 method：`2022-blake3-aes-128-gcm`、`2022-blake3-aes-256-gcm`、`2022-blake3-chacha20-poly1305`、`aes-256-gcm`、`aes-128-gcm`、`chacha20-poly1305`、`chacha20-ietf-poly1305`、`xchacha20-poly1305`、`xchacha20-ietf-poly1305`、`none`、`plain`。
 
 socks5/http 规则：
 
@@ -269,9 +279,9 @@ stacks/*.yaml xrelay.inbounds[] where sub == true
 
 - `server`：默认使用 `config.yaml` 中的 `external_host`，允许 inbound 覆盖。
 - `port`：xrelay inbound 的 `port`。
-- `user`：非 vmess 使用 inbound 的 `user`；vmess 使用 `users[].user`。
-- `tag`：非 vmess 优先使用 inbound 显式 `tag`，否则生成 `<protocol>:<port>:<inbound.name>`；vmess 优先使用 `users[].tag`，否则生成 `<inbound tag>:<users[].user>`。
-- `remark`：非 vmess 优先 `remark`，其次 `tag`，最后 `<stack>-<inbound.name>`；vmess 优先 `users[].remark`，其次 `users[].tag`，最后 `<stack>-<inbound.name>-<users[].user>`。
+- `user`：普通单用户 inbound 使用 inbound 的 `user`；vmess 和 shadowsocks 多用户使用 `users[].user`。
+- `tag`：普通单用户 inbound 优先使用 inbound 显式 `tag`，否则生成 `<protocol>:<port>:<inbound.name>`；多用户优先使用 `users[].tag`，否则生成 `<inbound tag>:<users[].user>`。
+- `remark`：普通单用户 inbound 优先 `remark`，其次 `tag`，最后 `<stack>-<inbound.name>`；多用户优先 `users[].remark`，其次 `users[].tag`，最后 `<stack>-<inbound.name>-<users[].user>`。
 - 协议参数：来自 inbound 本身。
 
 不会读取：

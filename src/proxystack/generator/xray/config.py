@@ -7,7 +7,7 @@ from typing import Any
 from typing import Optional
 
 from proxystack.domain.models import Inbound
-from proxystack.domain.models import InboundVmessUser
+from proxystack.domain.models import InboundUser
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import XrelayApiConfig
@@ -16,6 +16,8 @@ from proxystack.domain.models import XrelayPolicyConfig
 from proxystack.domain.models import XrelayPolicyLevelConfig
 from proxystack.domain.models import XrelayPolicySystemConfig
 from proxystack.domain.models import XrelayStatsConfig
+from proxystack.domain.models import inbound_user_email
+from proxystack.domain.models import is_shadowsocks_2022_method
 from proxystack.domain.models import resolve_xrelay_api_config
 from proxystack.domain.models import resolve_xrelay_policy_config
 from proxystack.domain.models import resolve_xrelay_stats_config
@@ -195,24 +197,39 @@ def render_vmess_clients(inbound: Inbound) -> list[dict[str, Any]]:
     return [render_vmess_user_client(vmess_user) for vmess_user in inbound.users]
 
 
-def render_vmess_user_client(vmess_user: InboundVmessUser) -> dict[str, Any]:
+def render_vmess_user_client(vmess_user: InboundUser) -> dict[str, Any]:
     """生成 vmess 多用户 client，并写入 email 供 Xray 用户统计使用。"""
     return {
         "id": vmess_user.uuid,
         "alterId": 0,
-        "email": vmess_user.user,
+        "email": inbound_user_email(vmess_user),
     }
 
 
 def render_shadowsocks_inbound(inbound: Inbound) -> dict[str, Any]:
-    """生成 shadowsocks inbound 配置。"""
+    """生成 shadowsocks inbound 配置，支持传统 SS 和 SS2022 多用户。"""
     config = base_inbound_config(inbound, "shadowsocks")
-    config["settings"] = {
+    settings: dict[str, Any] = {
         "method": inbound.method or inbound.cipher,
         "password": inbound.password,
         "network": "tcp,udp" if inbound.udp else "tcp",
     }
+    if inbound.users:
+        settings["users"] = [render_shadowsocks_user(inbound, shadowsocks_user) for shadowsocks_user in inbound.users]
+    config["settings"] = settings
     return config
+
+
+def render_shadowsocks_user(inbound: Inbound, shadowsocks_user: InboundUser) -> dict[str, Any]:
+    """生成 shadowsocks 多用户 UserObject，SS2022 统一使用 inbound 级 method。"""
+    inbound_method = inbound.method or inbound.cipher or ""
+    user_config = {
+        "password": shadowsocks_user.password,
+        "email": inbound_user_email(shadowsocks_user),
+    }
+    if not is_shadowsocks_2022_method(inbound_method):
+        user_config["method"] = shadowsocks_user.method or shadowsocks_user.cipher or inbound_method
+    return user_config
 
 
 def render_socks_inbound(inbound: Inbound) -> dict[str, Any]:

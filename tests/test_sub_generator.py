@@ -105,6 +105,93 @@ def test_render_stack_input_expands_vmess_users() -> None:
     assert nodes["edge:vmess:bob"].tag == "shared-vmess:bob"
 
 
+def test_render_stack_input_expands_shadowsocks_users() -> None:
+    """验证传统 shadowsocks users 会展开为多个订阅节点。"""
+    stack_set = StackSet(
+        config=load_config(Path("examples/config.yaml")),
+        stacks=[
+            make_stack(
+                [
+                    {
+                        "name": "ss",
+                        "protocol": "shadowsocks",
+                        "listen": "0.0.0.0",
+                        "port": 24001,
+                        "method": "aes-256-gcm",
+                        "password": "server-pass",
+                        "tag": "shared-ss",
+                        "sub": True,
+                        "users": [
+                            {
+                                "user": "alice",
+                                "password": "alice-pass",
+                                "method": "aes-128-gcm",
+                                "remark": "alice ss",
+                            },
+                            {
+                                "user": "bob",
+                                "password": "bob-pass",
+                            },
+                        ],
+                    }
+                ]
+            )
+        ],
+    )
+
+    subscription_input = render_stack_input(stack_set, "local")
+    nodes = {node.id: node for node in subscription_input.nodes}
+
+    assert list(nodes) == ["edge:ss:alice", "edge:ss:bob"]
+    assert nodes["edge:ss:alice"].user == "alice"
+    assert nodes["edge:ss:alice"].method == "aes-128-gcm"
+    assert nodes["edge:ss:alice"].password == "alice-pass"
+    assert nodes["edge:ss:alice"].remark == "alice ss"
+    assert nodes["edge:ss:bob"].method == "aes-256-gcm"
+    assert nodes["edge:ss:bob"].password == "bob-pass"
+    assert nodes["edge:ss:bob"].tag == "shared-ss:bob"
+
+
+def test_render_stack_input_expands_shadowsocks_2022_users() -> None:
+    """验证 SS2022 users 订阅节点会使用 ServerPassword:UserPassword。"""
+    stack_set = StackSet(
+        config=load_config(Path("examples/config.yaml")),
+        stacks=[
+            make_stack(
+                [
+                    {
+                        "name": "ss2022",
+                        "protocol": "shadowsocks",
+                        "listen": "0.0.0.0",
+                        "port": 24001,
+                        "method": "2022-blake3-aes-256-gcm",
+                        "password": "server-key",
+                        "sub": True,
+                        "users": [
+                            {
+                                "user": "alice",
+                                "password": "alice-key",
+                            },
+                            {
+                                "user": "bob",
+                                "password": "bob-key",
+                            },
+                        ],
+                    }
+                ]
+            )
+        ],
+    )
+
+    subscription_input = render_stack_input(stack_set, "local")
+    nodes = {node.id: node for node in subscription_input.nodes}
+
+    assert list(nodes) == ["edge:ss2022:alice", "edge:ss2022:bob"]
+    assert nodes["edge:ss2022:alice"].method == "2022-blake3-aes-256-gcm"
+    assert nodes["edge:ss2022:alice"].password == "server-key:alice-key"
+    assert nodes["edge:ss2022:bob"].password == "server-key:bob-key"
+
+
 def test_render_stack_input_does_not_include_clash_config() -> None:
     """验证订阅 input 不包含 clash upstream/group/rules/mode/controller 信息。"""
     rendered_input = input_to_yaml(render_stack_input(make_stack_set(), "local"))

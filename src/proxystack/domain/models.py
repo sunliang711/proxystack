@@ -18,6 +18,11 @@ from pydantic import model_validator
 Port = Annotated[int, Field(ge=1, le=65535)]
 Name = Annotated[str, Field(min_length=1)]
 BUILTIN_RULE_TARGETS = {"DIRECT", "REJECT"}
+SHADOWSOCKS_2022_METHODS = {
+    "2022-blake3-aes-128-gcm",
+    "2022-blake3-aes-256-gcm",
+    "2022-blake3-chacha20-poly1305",
+}
 
 
 class ProxystackModel(BaseModel):
@@ -282,19 +287,24 @@ class InboundAuth(ProxystackModel):
         return self
 
 
-class InboundVmessUser(ProxystackModel):
-    """xrelay vmess inbound 的单个客户端用户配置。"""
+class InboundUser(ProxystackModel):
+    """xrelay vmess/shadowsocks inbound 的单个客户端用户配置。"""
 
     user: Name
-    uuid: str
+    uuid: Optional[str] = None
+    password: Optional[str] = None
+    method: Optional[str] = None
+    cipher: Optional[str] = None
+    email: Optional[str] = None
     remark: Optional[str] = None
     tag: Optional[Name] = None
 
     @field_validator("uuid")
     @classmethod
-    def validate_user_uuid(cls, value: str) -> str:
-        """校验 vmess 多用户客户端 UUID 格式。"""
-        validate_uuid(value, "uuid is required for vmess user")
+    def validate_user_uuid(cls, value: Optional[str]) -> Optional[str]:
+        """校验 vmess 客户端 UUID 格式，未配置时交给协议级校验处理。"""
+        if value is not None:
+            validate_uuid(value, "uuid is required for vmess user")
         return value
 
 
@@ -313,7 +323,7 @@ class Inbound(ProxystackModel):
     tag: Optional[str] = None
     sub: bool
     uuid: Optional[str] = None
-    users: list[InboundVmessUser] = Field(default_factory=list)
+    users: list[InboundUser] = Field(default_factory=list)
     network: Optional[str] = None
     password: Optional[str] = None
     method: Optional[str] = None
@@ -322,14 +332,14 @@ class Inbound(ProxystackModel):
     @model_validator(mode="before")
     @classmethod
     def validate_users_field_protocol(cls, value: Any) -> Any:
-        """校验 users 字段只能显式用于 vmess inbound。"""
+        """校验 users 字段只能显式用于 vmess 或 shadowsocks inbound。"""
         if (
             isinstance(value, dict)
             and value.get("protocol") is not None
-            and value.get("protocol") != "vmess"
+            and value.get("protocol") not in {"vmess", "shadowsocks"}
             and "users" in value
         ):
-            raise ValueError("users is only supported for vmess inbound")
+            raise ValueError("users is only supported for vmess or shadowsocks inbound")
         return value
 
     @field_validator("name")
@@ -352,27 +362,62 @@ class Inbound(ProxystackModel):
             self.validate_vmess_users()
             if not self.network:
                 raise ValueError("network is required for vmess inbound")
-        if self.protocol != "vmess" and self.users:
-            raise ValueError("users is only supported for vmess inbound")
         if self.protocol == "shadowsocks":
             if not self.password:
                 raise ValueError("password is required for shadowsocks inbound")
             if not (self.method or self.cipher):
                 raise ValueError("method or cipher is required for shadowsocks inbound")
+            if self.users:
+                if self.user or self.remark:
+                    raise ValueError("user and remark must be configured under shadowsocks users")
+                self.validate_shadowsocks_users()
         if self.protocol in {"socks5", "http"} and self.sub:
             if not self.auth or self.auth.type != "password":
                 raise ValueError("password auth is required when socks/http inbound is published")
         return self
 
     def validate_vmess_users(self) -> None:
-        """校验 vmess 多用户配置中的用户、UUID 和最终订阅 tag 不重复。"""
+        """校验 vmess 多用户配置中的用户、UUID、email 和最终订阅 tag 不重复。"""
         ensure_unique([vmess_user.user for vmess_user in self.users], "duplicate vmess user")
-        ensure_unique([vmess_user.uuid.lower() for vmess_user in self.users], "duplicate vmess uuid")
+        for vmess_user in self.users:
+            if not vmess_user.uuid:
+                raise ValueError("uuid is required for vmess user")
+        ensure_unique([vmess_user.uuid.lower() for vmess_user in self.users if vmess_user.uuid], "duplicate vmess uuid")
+        ensure_unique([inbound_user_email(vmess_user) for vmess_user in self.users], "duplicate vmess user email")
         base_tag = self.tag or f"{self.protocol}:{self.port}:{self.name}"
         ensure_unique(
             [vmess_user.tag or f"{base_tag}:{vmess_user.user}" for vmess_user in self.users],
             "duplicate vmess user tag",
         )
+
+    def validate_shadowsocks_users(self) -> None:
+        """校验 shadowsocks 多用户配置中的用户、email、密码、method 和最终订阅 tag。"""
+        ensure_unique([shadowsocks_user.user for shadowsocks_user in self.users], "duplicate shadowsocks user")
+        ensure_unique(
+            [inbound_user_email(shadowsocks_user) for shadowsocks_user in self.users],
+            "duplicate shadowsocks user email",
+        )
+        base_tag = self.tag or f"{self.protocol}:{self.port}:{self.name}"
+        ensure_unique(
+            [shadowsocks_user.tag or f"{base_tag}:{shadowsocks_user.user}" for shadowsocks_user in self.users],
+            "duplicate shadowsocks user tag",
+        )
+        inbound_method = self.method or self.cipher or ""
+        for shadowsocks_user in self.users:
+            if not shadowsocks_user.password:
+                raise ValueError("password is required for shadowsocks user")
+            if is_shadowsocks_2022_method(inbound_method) and (shadowsocks_user.method or shadowsocks_user.cipher):
+                raise ValueError("shadowsocks 2022 users must not set method or cipher")
+
+
+def inbound_user_email(inbound_user: InboundUser) -> str:
+    """返回 Xray 用户统计 email，未显式配置时使用业务 user 标识。"""
+    return inbound_user.email or inbound_user.user
+
+
+def is_shadowsocks_2022_method(method: str) -> bool:
+    """判断 shadowsocks method 是否属于 SS2022 方法。"""
+    return method in SHADOWSOCKS_2022_METHODS
 
 
 class XrelayOutbound(ProxystackModel):
