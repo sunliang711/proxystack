@@ -77,7 +77,7 @@ sudo scripts/install-agent.sh --install-systemd
 ```bash
 proxystack-agent setup
 proxystack-agent add usa1
-proxystack-agent edit usa1
+proxystack-agent config usa1
 proxystack-agent check
 proxystack-agent start
 proxystack-agent status

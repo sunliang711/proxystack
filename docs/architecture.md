@@ -123,7 +123,7 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 
 - `proxystack-agent init`
 - `proxystack-agent add <name> [--template pair|auto-url-test|load-balance] [--members usa1,usa2] [--keep-template-ports]`
-- `proxystack-agent edit [name]`
+- `proxystack-agent config [name]`
 - `proxystack-agent list`
 - `proxystack-agent remove <name> [--purge]`
 - `proxystack-agent clone <source> <target> [--allocate-ports]`

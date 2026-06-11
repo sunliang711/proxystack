@@ -27,7 +27,7 @@ sudo scripts/install-agent.sh
 ```bash
 sudo ps-agent setup
 sudo ps-agent add usa1
-sudo ps-agent edit usa1
+sudo ps-agent config usa1
 sudo ps-agent check usa1
 sudo ps-agent start usa1
 ```

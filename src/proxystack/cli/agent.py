@@ -265,31 +265,16 @@ def remove(
         typer.echo(f"  - {path}")
 
 
-@app.command(rich_help_panel=CONFIG_HELP_PANEL)
-def edit(
-    name: Optional[str] = typer.Argument(None, help="stack 名称；缺省编辑 config.yaml。"),
+@app.command("config", rich_help_panel=CONFIG_HELP_PANEL)
+def config_command(
+    name: Optional[str] = typer.Argument(None, help="stack 名称；缺省编辑全局 config.yaml。"),
     editor: Optional[str] = typer.Option(None, "--editor", help="覆盖 EDITOR，例如 --editor true。"),
     check_only: bool = typer.Option(False, "--check-only", help="只校验目标文件，不启动编辑器。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
-    """安全编辑 config.yaml 或 stacks/<name>.yaml。"""
+    """安全编辑全局 config.yaml 或 stacks/<name>.yaml。"""
     try:
         path = edit_config_or_stack(config, name, editor, check_only)
-    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"编辑失败：\n{exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"编辑校验通过：{path}")
-
-
-@app.command("config", rich_help_panel=CONFIG_HELP_PANEL)
-def config_command(
-    editor: Optional[str] = typer.Option(None, "--editor", help="覆盖 EDITOR，例如 --editor true。"),
-    check_only: bool = typer.Option(False, "--check-only", help="只校验 config.yaml，不启动编辑器。"),
-    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-) -> None:
-    """安全编辑全局 config.yaml。"""
-    try:
-        path = edit_config_or_stack(config, None, editor, check_only)
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
         typer.echo(f"配置编辑失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc

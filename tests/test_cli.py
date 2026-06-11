@@ -75,7 +75,6 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["init"],
         ["setup"],
         ["add"],
-        ["edit"],
         ["config"],
         ["list"],
         ["remove"],
@@ -119,7 +118,7 @@ def test_agent_lifecycle_command_help_is_available() -> None:
 
         assert result.exit_code == 0, command
 
-    for removed_command in ["up", "down", "plan", "apply"]:
+    for removed_command in ["up", "down", "plan", "apply", "edit"]:
         result = runner.invoke(agent_app, [removed_command, "--help"])
 
         assert result.exit_code != 0, removed_command
@@ -191,11 +190,11 @@ def test_agent_validate_missing_config_reports_friendly_error(tmp_path: Path) ->
     assert "Traceback" not in result.output
 
 
-def test_agent_edit_missing_stack_reports_friendly_error(tmp_path: Path) -> None:
+def test_agent_config_missing_stack_reports_friendly_error(tmp_path: Path) -> None:
     """验证缺失 stack 不会向用户暴露 traceback。"""
     config = copy_example_project(tmp_path)
 
-    result = runner.invoke(agent_app, ["edit", "missing", "--check-only", "-c", str(config)])
+    result = runner.invoke(agent_app, ["config", "missing", "--check-only", "-c", str(config)])
 
     assert result.exit_code == 1
     assert "file does not exist" in result.output
@@ -796,8 +795,8 @@ def test_agent_setup_initializes_runtime_and_units(tmp_path: Path, monkeypatch: 
     assert "install systemd units .. done" in result.output
 
 
-def test_agent_edit_rejects_invalid_stack_before_replacing(tmp_path: Path) -> None:
-    """验证 edit 保存前会做全局校验，失败时不替换原 stack。"""
+def test_agent_config_rejects_invalid_stack_before_replacing(tmp_path: Path) -> None:
+    """验证 config 编辑 stack 保存前会做全局校验，失败时不替换原 stack。"""
     config = copy_example_project(tmp_path)
     stack_path = config.parent / "stacks" / "usa1.yaml"
     original_text = stack_path.read_text(encoding="utf-8")
@@ -814,7 +813,7 @@ path.write_text(text.replace("usa1.clash.socks", "missing.clash.socks"), encodin
         encoding="utf-8",
     )
 
-    result = runner.invoke(agent_app, ["edit", "usa1", "--editor", f"{sys.executable} {editor}", "-c", str(config)])
+    result = runner.invoke(agent_app, ["config", "usa1", "--editor", f"{sys.executable} {editor}", "-c", str(config)])
 
     assert result.exit_code == 1
     assert "ref does not exist" in result.output
@@ -839,19 +838,19 @@ def test_agent_remove_purge_deletes_generated_files(tmp_path: Path, monkeypatch:
     assert "mihomo/usa1.yaml" not in manifest["files"]
 
 
-def test_agent_check_edit_check_only_and_doctor(tmp_path: Path) -> None:
-    """验证 check、edit --check-only 和 doctor 的基础输出。"""
+def test_agent_check_config_check_only_and_doctor(tmp_path: Path) -> None:
+    """验证 check、config --check-only 和 doctor 的基础输出。"""
     config = copy_example_project(tmp_path)
 
     check_result = runner.invoke(agent_app, ["check", "usa1", "-c", str(config), "--skip-system-ports"])
-    edit_result = runner.invoke(agent_app, ["edit", "usa1", "--check-only", "-c", str(config)])
+    stack_config_result = runner.invoke(agent_app, ["config", "usa1", "--check-only", "-c", str(config)])
     config_result = runner.invoke(agent_app, ["config", "--check-only", "-c", str(config)])
     doctor_result = runner.invoke(agent_app, ["doctor", "-c", str(config)])
 
     assert check_result.exit_code == 0
     assert "配置校验通过" in check_result.output
-    assert edit_result.exit_code == 0
-    assert "编辑校验通过" in edit_result.output
+    assert stack_config_result.exit_code == 0
+    assert "编辑校验通过" in stack_config_result.output
     assert config_result.exit_code == 0
     assert f"编辑校验通过：{config}" in config_result.output
     assert doctor_result.exit_code == 0

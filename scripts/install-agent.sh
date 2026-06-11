@@ -255,7 +255,7 @@ print_next_steps() {
 
 	setup_command="$(quote_command sudo "${agent_bin}" setup --config "${config_path}" --base-dir "${BASE_DIR}")"
 	add_command="$(quote_command sudo "${agent_bin}" add usa1 --config "${config_path}")"
-	edit_command="$(quote_command sudo "${agent_bin}" edit usa1 --config "${config_path}")"
+	edit_command="$(quote_command sudo "${agent_bin}" config usa1 --config "${config_path}")"
 	check_command="$(quote_command sudo "${agent_bin}" check usa1 --config "${config_path}")"
 	start_command="$(quote_command sudo "${agent_bin}" start usa1 --config "${config_path}")"
 

@@ -9,7 +9,7 @@ proxystack-agent
   init
   setup
   add
-  edit
+  config [name]
   list
   remove
   clone
@@ -85,8 +85,7 @@ proxystack-agent init
 proxystack-agent setup
 proxystack-agent config
 proxystack-agent add usa1
-proxystack-agent edit
-proxystack-agent edit usa1
+proxystack-agent config usa1
 proxystack-agent list
 proxystack-agent clone usa1 usa2
 proxystack-agent export
@@ -157,7 +156,7 @@ proxystack-agent add auto-balance --template load-balance
 proxystack-agent add usa2 --from-file ./usa2.yaml
 proxystack-agent add usa3 --no-edit
 proxystack-agent add fixed --keep-template-ports
-proxystack-agent edit usa1
+proxystack-agent config usa1
 proxystack-agent clone usa1 usa2
 proxystack-agent clone usa1 usa2 --allocate-ports
 proxystack-agent remove usa2
