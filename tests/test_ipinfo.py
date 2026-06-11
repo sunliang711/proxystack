@@ -77,6 +77,47 @@ def test_query_ipinfo_uses_default_sources_by_family() -> None:
     assert "https://ipinfo.io/json" in sources_for_family("ipv6")
 
 
+def test_query_ipinfo_emits_progress_lines_per_source() -> None:
+    """验证 ipinfo 查询每完成一个来源就通过回调输出对应结果。"""
+    progress_lines: list[str] = []
+
+    def fake_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResult:
+        """按来源返回成功或失败结果，便于断言渐进式输出顺序。"""
+        if url.endswith("/failed"):
+            return CurlResult(returncode=28, stdout="", stderr="timeout")
+        return CurlResult(
+            returncode=0,
+            stdout='{"ip": "198.51.100.10", "city": "Tokyo", "country": "JP"}',
+            stderr="",
+        )
+
+    report = query_ipinfo(
+        Path("examples/config.yaml"),
+        "usa1",
+        family="ipv4",
+        sources=("https://ipinfo.example/ok", "https://ipinfo.example/failed"),
+        curl_runner=fake_curl,
+        line_callback=progress_lines.append,
+    )
+
+    assert report.families[0].ip == "198.51.100.10"
+    assert progress_lines[:6] == [
+        "Stack: usa1",
+        "Proxy: socks5://127.0.0.1:17091",
+        "",
+        "IPv4:",
+        "  - https://ipinfo.example/ok [ok]",
+        "    IP: 198.51.100.10",
+    ]
+    assert "  - https://ipinfo.example/failed [failed]" in progress_lines
+    assert "    Error: timeout" in progress_lines
+    assert progress_lines[-3:] == [
+        "  IPv4:",
+        "    IP: 198.51.100.10",
+        "    Region: Tokyo / JP",
+    ]
+
+
 def test_listener_proxy_url_normalizes_wildcard_and_ipv6_hosts() -> None:
     """验证 wildcard 监听地址会转成本机地址，IPv6 地址会补方括号。"""
     wildcard_listener = SocksListener(name="local", listen="0.0.0.0", port=17090)

@@ -84,6 +84,7 @@ class IpInfoReport:
 
 
 CurlRunner = Callable[[str, str, str, float], CurlResult]
+LineCallback = Callable[[str], None]
 
 
 def query_ipinfo(
@@ -93,6 +94,7 @@ def query_ipinfo(
     timeout: float = 8.0,
     sources: Optional[tuple[str, ...]] = None,
     curl_runner: Optional[CurlRunner] = None,
+    line_callback: Optional[LineCallback] = None,
 ) -> IpInfoReport:
     """查询指定 stack 的 mihomo 出口 IP，默认同时检查 IPv4 和 IPv6。"""
     normalized_family = family.lower()
@@ -104,11 +106,28 @@ def query_ipinfo(
     runner = curl_runner or run_curl
     proxy_url = resolve_proxy_url(config_path, stack_name)
     families = ("ipv4", "ipv6") if normalized_family == "all" else (normalized_family,)
-    family_results = tuple(
-        query_family(proxy_url, query_family_name, sources_for_family(query_family_name, sources), timeout, runner)
-        for query_family_name in families
-    )
-    return IpInfoReport(stack_name=stack_name, proxy_url=proxy_url, families=family_results)
+    if line_callback is not None:
+        emit_lines(line_callback, format_ipinfo_header(stack_name, proxy_url))
+    family_results = []
+    for query_family_name in families:
+        if line_callback is not None:
+            line_callback(f"{FAMILY_LABELS[query_family_name]}:")
+        family_result = query_family(
+            proxy_url,
+            query_family_name,
+            sources_for_family(query_family_name, sources),
+            timeout,
+            runner,
+            line_callback=line_callback,
+        )
+        family_results.append(family_result)
+        if line_callback is not None:
+            emit_lines(line_callback, format_family_footer(family_result))
+            line_callback("")
+    report = IpInfoReport(stack_name=stack_name, proxy_url=proxy_url, families=tuple(family_results))
+    if line_callback is not None:
+        emit_lines(line_callback, format_ipinfo_summary(report))
+    return report
 
 
 def sources_for_family(family: str, override_sources: Optional[tuple[str, ...]] = None) -> tuple[str, ...]:
@@ -162,6 +181,7 @@ def query_family(
     sources: tuple[str, ...],
     timeout: float,
     curl_runner: CurlRunner,
+    line_callback: Optional[LineCallback] = None,
 ) -> FamilyResult:
     """按 IP family 逐个查询来源，并保留首个可解析 IP 和地域。"""
     best_ip: Optional[str] = None
@@ -172,7 +192,8 @@ def query_family(
         result = curl_runner(proxy_url, url, family, timeout)
         body = result.stdout.strip()
         if result.returncode != 0:
-            source_results.append(
+            record_source_result(
+                source_results,
                 SourceResult(
                     url=url,
                     status="failed",
@@ -180,7 +201,8 @@ def query_family(
                     region=None,
                     body=body,
                     error=result.stderr.strip() or f"curl exited with code {result.returncode}",
-                )
+                ),
+                line_callback,
             )
             continue
 
@@ -192,7 +214,8 @@ def query_family(
 
         parsed = bool(ip_value or region_value)
         status = "wrong-family" if wrong_family else "ok" if parsed else "raw"
-        source_results.append(
+        record_source_result(
+            source_results,
             SourceResult(
                 url=url,
                 status=status,
@@ -200,7 +223,8 @@ def query_family(
                 region=region_value,
                 body=body,
                 error="",
-            )
+            ),
+            line_callback,
         )
 
     return FamilyResult(
@@ -210,6 +234,17 @@ def query_family(
         ip=best_ip,
         region=best_region,
     )
+
+
+def record_source_result(
+    source_results: list[SourceResult],
+    source_result: SourceResult,
+    line_callback: Optional[LineCallback],
+) -> None:
+    """保存单个来源结果，并在流式模式下立即输出该来源的格式化行。"""
+    source_results.append(source_result)
+    if line_callback is not None:
+        emit_lines(line_callback, format_source_result(source_result))
 
 
 def run_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResult:
@@ -346,34 +381,63 @@ def extract_region_from_text(text: str) -> Optional[str]:
     return None
 
 
-def format_ipinfo_report(report: IpInfoReport) -> list[str]:
-    """把查询报告格式化为 CLI 友好的多行文本。"""
-    lines = [
-        f"Stack: {report.stack_name}",
-        f"Proxy: {report.proxy_url}",
+def emit_lines(line_callback: LineCallback, lines: list[str]) -> None:
+    """把格式化后的多行文本逐行交给调用方输出。"""
+    for line in lines:
+        line_callback(line)
+
+
+def format_ipinfo_header(stack_name: str, proxy_url: str) -> list[str]:
+    """格式化 ipinfo 报告头部，供完整输出和流式输出复用。"""
+    return [
+        f"Stack: {stack_name}",
+        f"Proxy: {proxy_url}",
         "",
     ]
-    for family in report.families:
-        lines.append(f"{family.label}:")
-        for source in family.sources:
-            lines.append(f"  - {source.url} [{source.status}]")
-            if source.ip:
-                lines.append(f"    IP: {source.ip}")
-            if source.region:
-                lines.append(f"    Region: {source.region}")
-            if source.status == "failed" and source.error:
-                lines.append(f"    Error: {source.error}")
-            if source.status == "raw" and source.body:
-                lines.append(f"    Body: {source.body}")
-        if family.ip is None:
-            lines.append("  IP: 未解析到")
-        if family.region is None:
-            lines.append("  Region: 未解析到")
-        lines.append("")
 
-    lines.append("Summary:")
+
+def format_source_result(source: SourceResult) -> list[str]:
+    """格式化单个来源结果，流式模式下每个来源完成后立即输出。"""
+    lines = [f"  - {source.url} [{source.status}]"]
+    if source.ip:
+        lines.append(f"    IP: {source.ip}")
+    if source.region:
+        lines.append(f"    Region: {source.region}")
+    if source.status == "failed" and source.error:
+        lines.append(f"    Error: {source.error}")
+    if source.status == "raw" and source.body:
+        lines.append(f"    Body: {source.body}")
+    return lines
+
+
+def format_family_footer(family: FamilyResult) -> list[str]:
+    """格式化单个 IP family 的兜底解析结果提示。"""
+    lines = []
+    if family.ip is None:
+        lines.append("  IP: 未解析到")
+    if family.region is None:
+        lines.append("  Region: 未解析到")
+    return lines
+
+
+def format_ipinfo_summary(report: IpInfoReport) -> list[str]:
+    """格式化 ipinfo 最终汇总。"""
+    lines = ["Summary:"]
     for family in report.families:
         lines.append(f"  {family.label}:")
         lines.append(f"    IP: {family.ip or '未解析到'}")
         lines.append(f"    Region: {family.region or '未解析到'}")
+    return lines
+
+
+def format_ipinfo_report(report: IpInfoReport) -> list[str]:
+    """把查询报告格式化为 CLI 友好的多行文本。"""
+    lines = format_ipinfo_header(report.stack_name, report.proxy_url)
+    for family in report.families:
+        lines.append(f"{family.label}:")
+        for source in family.sources:
+            lines.extend(format_source_result(source))
+        lines.extend(format_family_footer(family))
+        lines.append("")
+    lines.extend(format_ipinfo_summary(report))
     return lines

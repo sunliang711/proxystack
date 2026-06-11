@@ -26,6 +26,7 @@ from proxystack.cli.sub import app as sub_app
 from proxystack.diagnostics.ipinfo import FamilyResult
 from proxystack.diagnostics.ipinfo import IpInfoReport
 from proxystack.diagnostics.ipinfo import SourceResult
+from proxystack.diagnostics.ipinfo import format_ipinfo_report
 from proxystack.systemd import CommandResult
 from scripts.build_package import clean_build_state
 
@@ -147,11 +148,19 @@ def test_agent_version_is_available() -> None:
 def test_agent_ipinfo_outputs_report(monkeypatch: MonkeyPatch) -> None:
     """验证 ipinfo 命令会输出指定 stack 的出口 IP 报告。"""
     calls: list[tuple[Path, str, str, float]] = []
+    stream_callbacks: list[bool] = []
 
-    def fake_query_ipinfo(config: Path, name: str, family: str, timeout: float) -> IpInfoReport:
+    def fake_query_ipinfo(
+        config: Path,
+        name: str,
+        family: str,
+        timeout: float,
+        line_callback=None,
+    ) -> IpInfoReport:
         """记录 CLI 入参并返回固定报告，避免测试访问外网。"""
         calls.append((config, name, family, timeout))
-        return IpInfoReport(
+        stream_callbacks.append(line_callback is not None)
+        report = IpInfoReport(
             stack_name=name,
             proxy_url="socks5://127.0.0.1:17091",
             families=(
@@ -173,6 +182,10 @@ def test_agent_ipinfo_outputs_report(monkeypatch: MonkeyPatch) -> None:
                 ),
             ),
         )
+        if line_callback is not None:
+            for line in format_ipinfo_report(report):
+                line_callback(line)
+        return report
 
     monkeypatch.setattr(agent_module, "query_ipinfo", fake_query_ipinfo)
 
@@ -183,6 +196,7 @@ def test_agent_ipinfo_outputs_report(monkeypatch: MonkeyPatch) -> None:
     assert "Proxy: socks5://127.0.0.1:17091" in result.output
     assert "IP: 198.51.100.10" in result.output
     assert calls == [(Path("examples/config.yaml"), "usa1", "ipv4", 2.0)]
+    assert stream_callbacks == [True]
 
 
 def test_agent_validate_examples() -> None:

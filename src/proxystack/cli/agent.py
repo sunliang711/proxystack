@@ -600,13 +600,28 @@ def ipinfo(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
     """通过 stack 的 mihomo socks listener 查询出口 IP。"""
+    has_streamed_output = False
+
+    def echo_ipinfo_line(line: str) -> None:
+        """逐行输出 ipinfo 查询进度，避免等待所有来源完成后才展示。"""
+        nonlocal has_streamed_output
+        has_streamed_output = True
+        typer.echo(line)
+
     try:
-        report = query_ipinfo(config, name, family=family, timeout=timeout)
+        report = query_ipinfo(
+            config,
+            name,
+            family=family,
+            timeout=timeout,
+            line_callback=echo_ipinfo_line,
+        )
     except (ValidationError, ConfigValidationError, IpInfoError, ValueError, OSError) as exc:
         typer.echo(f"查询出口 IP 失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
-    for line in format_ipinfo_report(report):
-        typer.echo(line)
+    if not has_streamed_output:
+        for line in format_ipinfo_report(report):
+            typer.echo(line)
 
 
 @app.command(rich_help_panel=SERVICE_HELP_PANEL)
