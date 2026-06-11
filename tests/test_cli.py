@@ -203,8 +203,8 @@ def test_agent_edit_missing_stack_reports_friendly_error(tmp_path: Path) -> None
     assert "Traceback" not in result.output
 
 
-def test_cli_subcommands_print_progress_messages(tmp_path: Path) -> None:
-    """验证子命令执行时会输出过程提示，便于观察执行进度。"""
+def test_cli_subcommands_do_not_print_generic_progress_messages(tmp_path: Path) -> None:
+    """验证普通结果型命令不输出泛化过程提示。"""
     input_dir = tmp_path / "inputs"
     input_dir.mkdir()
     write_cli_input(input_dir / "manual.yaml")
@@ -214,12 +214,11 @@ def test_cli_subcommands_print_progress_messages(tmp_path: Path) -> None:
     sub_result = runner.invoke(sub_app, ["version"])
 
     assert validate_result.exit_code == 0
-    assert "正在执行 proxystack-agent validate ..." in validate_result.output
+    assert "正在执行" not in validate_result.output
     assert agent_sub_result.exit_code == 0
-    assert "正在执行 proxystack-agent sub ..." in agent_sub_result.output
-    assert "正在执行 proxystack-agent sub validate-inputs ..." in agent_sub_result.output
+    assert "正在执行" not in agent_sub_result.output
     assert sub_result.exit_code == 0
-    assert "正在执行 proxystack-sub version ..." in sub_result.output
+    assert "正在执行" not in sub_result.output
 
 
 def test_agent_check_examples() -> None:
@@ -545,8 +544,8 @@ def test_agent_start_repairs_unchanged_generated_metadata_as_root(tmp_path: Path
     assert (manifest, 123, 456) in chown_calls
 
 
-def test_agent_start_applies_and_reports_changed_target_services(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 start 写入生成文件，并只报告目标范围内受影响服务。"""
+def test_agent_start_applies_changed_target_services_with_step_logs(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 start 写入生成文件，并用 step 状态替代 systemd 内部输出。"""
     config = copy_example_project(tmp_path)
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
@@ -554,11 +553,13 @@ def test_agent_start_applies_and_reports_changed_target_services(tmp_path: Path,
     second = runner.invoke(agent_app, ["start", "xrelay/usa1", "-c", str(config)])
 
     assert first.exit_code == 0
-    assert "restart: proxystack-xray@usa1.service" in first.output
+    assert "Step 3 doing: restart changed services" in first.output
+    assert "restart: proxystack-xray@usa1.service" not in first.output
     assert "proxystack-clash@usa1.service" not in first.output
     assert (config.parent / "runtime" / "generated" / "xray" / "usa1.json").exists()
     assert second.exit_code == 0
-    assert "start: proxystack-xray@usa1.service" in second.output
+    assert "Step 3 doing: start selected services" in second.output
+    assert "start: proxystack-xray@usa1.service" not in second.output
     assert fake_runner.calls == [
         ("systemctl", "restart", "proxystack-xray@usa1.service"),
         ("systemctl", "start", "proxystack-xray@usa1.service"),
@@ -730,7 +731,8 @@ def test_agent_start_sub_only_starts_sub_without_reading_stack(tmp_path: Path, m
     result = runner.invoke(agent_app, ["start", "sub", "-c", str(config)])
 
     assert result.exit_code == 0
-    assert "start: proxystack-sub.service" in result.output
+    assert "Step 1 doing: start subscription service" in result.output
+    assert "start: proxystack-sub.service" not in result.output
     assert fake_runner.calls == [("systemctl", "start", "proxystack-sub.service")]
     assert not (config.parent / "runtime" / "generated").exists()
 
@@ -789,9 +791,9 @@ def test_agent_setup_initializes_runtime_and_units(tmp_path: Path, monkeypatch: 
     assert (tmp_path / "systemd" / "proxystack-clash@.service").exists()
     assert (tmp_path / "systemd" / "proxystack-sub.service").exists()
     assert fake_runner.calls == [("systemctl", "daemon-reload")]
-    assert "setup: init" in result.output
-    assert "setup: install all" in result.output
-    assert "setup: service install" in result.output
+    assert "Step 1 doing: initialize project" in result.output
+    assert "Step 2 doing: install mihomo" in result.output
+    assert "Step 5 doing: install systemd units" in result.output
 
 
 def test_agent_edit_rejects_invalid_stack_before_replacing(tmp_path: Path) -> None:

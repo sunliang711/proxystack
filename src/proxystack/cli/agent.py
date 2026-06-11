@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import shlex
 import sys
+from typing import Callable
 from typing import Optional
 from typing import TextIO
 
@@ -69,6 +70,8 @@ from proxystack.install import expand_artifact_targets
 from proxystack.install import install_artifact
 from proxystack.install import run_self_update
 from proxystack.logging import configure_logging
+from proxystack.logging import StepLogger
+from proxystack.logging import summarize_exception
 from proxystack.systemd import CLASH_TEMPLATE_UNIT
 from proxystack.systemd import SUB_UNIT
 from proxystack.systemd import SYSTEMD_UNIT_DIR
@@ -135,10 +138,16 @@ def service_main(ctx: typer.Context) -> None:
 
 
 def echo_command_progress(command_prefix: str, subcommand: Optional[str]) -> None:
-    """统一输出 CLI 执行过程提示，机器可读子命令保持 stdout 干净。"""
-    if subcommand is None or subcommand in SCRIPTABLE_SUBCOMMANDS:
-        return
-    typer.echo(f"正在执行 {command_prefix} {subcommand} ...", err=True)
+    """保留回调入口，实际进度由具体命令的 step 日志输出。"""
+    return
+
+
+def echo_command_error(exc: BaseException) -> None:
+    """输出未进入 step 前的命令错误摘要。"""
+    summary = summarize_exception(exc)
+    typer.echo(f"Command failed: {summary.text}", err=True)
+    if summary.detail_path is not None:
+        typer.echo(f"Full output: {summary.detail_path}", err=True)
 
 
 @app.command(rich_help_panel=CONFIG_HELP_PANEL)
@@ -167,23 +176,18 @@ def setup(
     force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.yaml。"),
 ) -> None:
     """初始化项目，幂等安装代理运行依赖和 systemd unit。"""
+    step_logger = StepLogger()
     try:
-        typer.echo("setup: init")
-        paths = init_project(config, base_dir, external_host, force)
-        for path in paths:
-            typer.echo(f"  - {path}")
-
-        typer.echo("setup: install all")
-        install_results = run_artifact_operation("install", "all", None, None, None, None, config)
-        echo_install_results(install_results)
-
-        typer.echo("setup: service install")
-        global_config = load_config(config)
-        service_lines = build_systemd_manager(global_config).install_units(UNIT_NAMES)
+        with step_logger.step("initialize project"):
+            init_project(config, base_dir, external_host, force)
+        run_artifact_operation("install", "all", None, None, None, None, config, step_logger=step_logger)
+        with step_logger.step("install systemd units"):
+            global_config = load_config(config)
+            build_systemd_manager(global_config).install_units(UNIT_NAMES)
     except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
-        typer.echo(f"setup 失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    echo_service_lines(service_lines)
 
 
 @app.command(rich_help_panel=CONFIG_HELP_PANEL)
@@ -363,12 +367,13 @@ def install(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
     """安装 mihomo、xray 或 geo 数据；all 不安装 systemd unit。"""
+    step_logger = StepLogger()
     try:
-        results = run_artifact_operation("install", target, component_version, sha256, source, archive_member, config)
+        run_artifact_operation("install", target, component_version, sha256, source, archive_member, config, step_logger=step_logger)
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"安装失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    echo_install_results(results)
 
 
 @app.command(rich_help_panel=INSTALL_HELP_PANEL)
@@ -383,24 +388,25 @@ def update(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
     """更新代理核心、geo 数据或 proxystack 自身；all 不包含 self。"""
+    step_logger = StepLogger()
     try:
         if target == "self":
             if source is not None or archive_member is not None or component_version is not None:
                 raise ValueError("update self only supports --wheel, package spec and --sha256")
             global_config = load_config(config)
-            result = run_self_update(
-                global_config,
-                SelfUpdateRequest(wheel=wheel, package_spec=package_spec, sha256=sha256),
-            )
-            typer.echo(f"self update 完成：{result.args[-1]}")
+            with step_logger.step("update proxystack package"):
+                run_self_update(
+                    global_config,
+                    SelfUpdateRequest(wheel=wheel, package_spec=package_spec, sha256=sha256),
+                )
             return
         if wheel is not None or package_spec is not None:
             raise ValueError("--wheel and package spec are only supported by update self")
-        results = run_artifact_operation("update", target, component_version, sha256, source, archive_member, config)
+        run_artifact_operation("update", target, component_version, sha256, source, archive_member, config, step_logger=step_logger)
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"更新失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    echo_install_results(results)
 
 
 @app.command(rich_help_panel=VALIDATE_HELP_PANEL)
@@ -444,38 +450,53 @@ def start(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
     """先写入生成配置，再重启变化服务并启动未变化服务。"""
+    step_logger = StepLogger()
     try:
         if normalize_target(target) == "sub":
-            global_config = load_config(config)
-            echo_service_lines(build_systemd_manager(global_config).systemctl("start", (SUB_SERVICE_NAME,)))
+            with step_logger.step("start subscription service"):
+                global_config = load_config(config)
+                run_systemd_with_hint(
+                    target,
+                    config,
+                    lambda: build_systemd_manager(global_config).systemctl("start", (SUB_SERVICE_NAME,)),
+                )
             return
-        runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
-        service_scope = resolve_service_scope(config, target, check_system_ports=False)
-        ensure_proxy_binaries_installed(runtime_plan.config, service_scope.service_names)
-        apply_runtime_plan(runtime_plan)
+        with step_logger.step("build runtime plan"):
+            runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
+            service_scope = resolve_service_scope(config, target, check_system_ports=False)
+            ensure_proxy_binaries_installed(runtime_plan.config, service_scope.service_names)
+        with step_logger.step("write runtime files"):
+            apply_runtime_plan(runtime_plan)
     except SystemdCommandError as exc:
-        typer.echo(f"启动失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(ValueError(format_systemd_command_error(exc, target, config)))
         raise typer.Exit(code=1) from exc
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"启动失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
     service_names = set(service_scope.service_names)
     restart_services = [service_name for service_name in runtime_plan.changed_services if service_name in service_names]
     start_services = [service_name for service_name in service_scope.service_names if service_name not in restart_services]
     if not restart_services and not start_services:
-        typer.echo("start: no services selected")
+        with step_logger.step("start selected services"):
+            pass
         return
     try:
         manager = build_systemd_manager(runtime_plan.config)
         if restart_services:
-            echo_service_lines(manager.systemctl("restart", restart_services))
+            with step_logger.step("restart changed services"):
+                run_systemd_with_hint(target, config, lambda: manager.systemctl("restart", restart_services))
         if start_services:
-            echo_service_lines(manager.systemctl("start", start_services))
+            with step_logger.step("start selected services"):
+                run_systemd_with_hint(target, config, lambda: manager.systemctl("start", start_services))
     except SystemdCommandError as exc:
-        typer.echo(f"启动失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(ValueError(format_systemd_command_error(exc, target, config)))
         raise typer.Exit(code=1) from exc
     except OSError as exc:
-        typer.echo(f"启动失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
 
 
@@ -496,21 +517,33 @@ def restart(
     skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
 ) -> None:
     """先写入生成配置，再重启目标 systemd 服务。"""
+    step_logger = StepLogger()
     try:
         if normalize_target(target) == "sub":
-            global_config = load_config(config)
-            echo_service_lines(build_systemd_manager(global_config).systemctl("restart", (SUB_SERVICE_NAME,)))
+            with step_logger.step("restart subscription service"):
+                global_config = load_config(config)
+                run_systemd_with_hint(
+                    target,
+                    config,
+                    lambda: build_systemd_manager(global_config).systemctl("restart", (SUB_SERVICE_NAME,)),
+                )
             return
-        runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
-        service_scope = resolve_service_scope(config, target, check_system_ports=False)
-        ensure_proxy_binaries_installed(runtime_plan.config, service_scope.service_names)
-        apply_runtime_plan(runtime_plan)
-        echo_service_lines(build_systemd_manager(runtime_plan.config).systemctl("restart", service_scope.service_names))
+        with step_logger.step("build runtime plan"):
+            runtime_plan = build_runtime_plan(config, target, check_system_ports=False)
+            service_scope = resolve_service_scope(config, target, check_system_ports=False)
+            ensure_proxy_binaries_installed(runtime_plan.config, service_scope.service_names)
+        with step_logger.step("write runtime files"):
+            apply_runtime_plan(runtime_plan)
+        with step_logger.step("restart selected services"):
+            manager = build_systemd_manager(runtime_plan.config)
+            run_systemd_with_hint(target, config, lambda: manager.systemctl("restart", service_scope.service_names))
     except SystemdCommandError as exc:
-        typer.echo(f"重启失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(ValueError(format_systemd_command_error(exc, target, config)))
         raise typer.Exit(code=1) from exc
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"重启失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
 
 
@@ -741,6 +774,14 @@ def format_service_install_hint(target: Optional[str], config: Path) -> str:
     return " ".join(shlex.quote(part) for part in command_parts)
 
 
+def run_systemd_with_hint(target: Optional[str], config: Path, action: Callable[[], object]) -> object:
+    """执行 systemd 操作，并把 unit 缺失错误转换为带安装提示的摘要。"""
+    try:
+        return action()
+    except SystemdCommandError as exc:
+        raise SystemdCommandError(format_systemd_command_error(exc, target, config)) from exc
+
+
 def ensure_proxy_binaries_installed(config: GlobalConfig, service_names: tuple[str, ...]) -> None:
     """校验启动目标需要的代理核心二进制已安装且带可执行权限。"""
     required_binaries = required_proxy_binaries(service_names)
@@ -794,37 +835,54 @@ def run_service_adapter(
     follow: bool = False,
 ) -> None:
     """解析顶层生命周期目标并调用真实 systemd runner。"""
+    step_logger = StepLogger()
     try:
-        scope = resolve_service_scope(config, target, check_system_ports=False)
-        global_config = load_config(config)
-        manager = build_systemd_manager(global_config)
         if action == "log":
+            scope = resolve_service_scope(config, target, check_system_ports=False)
+            global_config = load_config(config)
+            manager = build_systemd_manager(global_config)
             lines = manager.journalctl(scope.service_names, follow=follow)
-        else:
+            echo_service_lines(lines)
+            return
+        if action == "status":
+            scope = resolve_service_scope(config, target, check_system_ports=False)
+            global_config = load_config(config)
+            manager = build_systemd_manager(global_config)
             lines = manager.systemctl(action, scope.service_names)
+            echo_service_lines(lines)
+            return
+        else:
+            with step_logger.step(f"{action} selected services"):
+                scope = resolve_service_scope(config, target, check_system_ports=False)
+                global_config = load_config(config)
+                manager = build_systemd_manager(global_config)
+                run_systemd_with_hint(target, config, lambda: manager.systemctl(action, scope.service_names))
     except SystemdCommandError as exc:
-        typer.echo(f"服务操作失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(ValueError(format_systemd_command_error(exc, target, config)))
         raise typer.Exit(code=1) from exc
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"服务操作失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    echo_service_lines(lines)
 
 
 def run_unit_operation(operation: str, target: Optional[str], config: Path) -> None:
     """执行 systemd unit 安装或卸载操作。"""
+    step_logger = StepLogger()
     try:
-        global_config = load_config(config)
-        manager = build_systemd_manager(global_config)
-        unit_names = resolve_unit_names(config, target)
-        if operation == "install":
-            lines = manager.install_units(unit_names)
-        else:
-            lines = manager.uninstall_units(unit_names)
+        with step_logger.step(f"{operation} systemd units"):
+            global_config = load_config(config)
+            manager = build_systemd_manager(global_config)
+            unit_names = resolve_unit_names(config, target)
+            if operation == "install":
+                manager.install_units(unit_names)
+            else:
+                manager.uninstall_units(unit_names)
     except (ValidationError, ConfigValidationError, ValueError, OSError, SystemdCommandError) as exc:
-        typer.echo(f"unit {operation} 失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    echo_service_lines(lines)
 
 
 def run_service_group_action(
@@ -834,21 +892,36 @@ def run_service_group_action(
     follow: bool = False,
 ) -> None:
     """执行 service 分组下的 systemd 生命周期命令。"""
+    step_logger = StepLogger()
     try:
-        scope = resolve_service_group_scope(config, target)
-        global_config = load_config(config)
-        manager = build_systemd_manager(global_config)
         if action == "log":
+            scope = resolve_service_group_scope(config, target)
+            global_config = load_config(config)
+            manager = build_systemd_manager(global_config)
             lines = manager.journalctl(scope.service_names, follow=follow)
-        else:
+            echo_service_lines(lines)
+            return
+        if action == "status":
+            scope = resolve_service_group_scope(config, target)
+            global_config = load_config(config)
+            manager = build_systemd_manager(global_config)
             lines = manager.systemctl(action, scope.service_names)
+            echo_service_lines(lines)
+            return
+        else:
+            with step_logger.step(f"{action} selected services"):
+                scope = resolve_service_group_scope(config, target)
+                global_config = load_config(config)
+                manager = build_systemd_manager(global_config)
+                run_systemd_with_hint(target, config, lambda: manager.systemctl(action, scope.service_names))
     except SystemdCommandError as exc:
-        typer.echo(f"服务操作失败：\n{format_systemd_command_error(exc, target, config)}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(ValueError(format_systemd_command_error(exc, target, config)))
         raise typer.Exit(code=1) from exc
     except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
-        typer.echo(f"服务操作失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    echo_service_lines(lines)
 
 
 def build_systemd_manager(global_config: GlobalConfig) -> SystemdManager:
@@ -964,6 +1037,7 @@ def run_artifact_operation(
     source: Optional[str],
     archive_member: Optional[str],
     config_path: Path,
+    step_logger: Optional[StepLogger] = None,
 ) -> list[InstallResult]:
     """执行 install/update 代理核心和 geo 数据，all 只读取配置内分目标来源。"""
     if target == "all" and component_version is not None:
@@ -972,18 +1046,23 @@ def run_artifact_operation(
         raise ValueError("all target uses config.install.* source, sha256 and archive_member")
     global_config = load_config(config_path)
     results: list[InstallResult] = []
+    logger = step_logger or StepLogger()
     progress_printer = InstallProgressPrinter()
     try:
         for artifact_target in expand_artifact_targets(target):
-            request = build_install_request(
-                global_config,
-                artifact_target,
-                component_version,
-                source,
-                sha256,
-                archive_member,
-            )
-            results.append(install_artifact(global_config, request, operation=operation, progress=progress_printer))
+            with logger.step(f"{operation} {artifact_target}"):
+                try:
+                    request = build_install_request(
+                        global_config,
+                        artifact_target,
+                        component_version,
+                        source,
+                        sha256,
+                        archive_member,
+                    )
+                    results.append(install_artifact(global_config, request, operation=operation, progress=progress_printer))
+                finally:
+                    progress_printer.finish()
     finally:
         progress_printer.finish()
     return results
@@ -998,8 +1077,10 @@ class InstallProgressPrinter:
         self.current_progress_width = 0
 
     def __call__(self, message: str) -> None:
-        """按消息类型输出安装进度。"""
-        if self.is_interactive() and is_download_progress_message(message):
+        """只输出下载进度，隐藏安装步骤内部细节。"""
+        if not is_download_progress_message(message):
+            return
+        if self.is_interactive():
             self.write_download_progress(message)
             return
         self.finish()

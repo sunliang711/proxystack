@@ -2,6 +2,12 @@
 set -euo pipefail
 
 DRY_RUN="${DRY_RUN:-0}"
+PROXYSTACK_STEP_INDEX=0
+PROXYSTACK_CURRENT_STEP_NUMBER=""
+PROXYSTACK_LAST_ERROR_SUMMARY=""
+PROXYSTACK_LAST_ERROR_FILE=""
+PROXYSTACK_ERROR_STATE_FILE=""
+PROXYSTACK_ERROR_PRINTED_FILE=""
 
 # 判断当前是否处于 dry-run 预览模式。
 is_dry_run() {
@@ -13,18 +19,168 @@ is_dry_run() {
 
 # 输出普通日志，日志内容必须保持英文。
 log() {
-	printf '[INFO] %s\n' "$*" >&2
+	if is_dry_run; then
+		printf '[INFO] %s\n' "$*" >&2
+	fi
 }
 
 # 输出警告日志，日志内容必须保持英文。
 warn() {
-	printf '[WARN] %s\n' "$*" >&2
+	if is_dry_run; then
+		printf '[WARN] %s\n' "$*" >&2
+	fi
 }
 
 # 输出错误日志并退出，日志内容必须保持英文。
 die() {
-	printf '[ERROR] %s\n' "$*" >&2
+	record_error "$*" ""
+	if [[ -n "${PROXYSTACK_CURRENT_STEP_NUMBER}" ]]; then
+		print_step_failure_once "1"
+		cleanup_step_state_files
+	elif [[ -z "${PROXYSTACK_CURRENT_STEP_NUMBER}" ]]; then
+		printf 'Command failed: %s\n' "$*" >&2
+	fi
 	exit 1
+}
+
+# 记录最近一次内部失败，供 step 输出摘要。
+record_error() {
+	PROXYSTACK_LAST_ERROR_SUMMARY="${1:-}"
+	PROXYSTACK_LAST_ERROR_FILE="${2:-}"
+	if [[ -n "${PROXYSTACK_ERROR_STATE_FILE}" ]]; then
+		{
+			printf '%s\n' "${PROXYSTACK_LAST_ERROR_FILE}"
+			printf '%s\n' "${PROXYSTACK_LAST_ERROR_SUMMARY}"
+		} >"${PROXYSTACK_ERROR_STATE_FILE}"
+	fi
+}
+
+# 清理最近一次失败状态。
+clear_error() {
+	PROXYSTACK_LAST_ERROR_SUMMARY=""
+	PROXYSTACK_LAST_ERROR_FILE=""
+}
+
+# 清理 step 自身状态文件，不删除命令详情输出文件。
+cleanup_step_state_files() {
+	if [[ -n "${PROXYSTACK_ERROR_STATE_FILE}" ]]; then
+		rm -f "${PROXYSTACK_ERROR_STATE_FILE}"
+	fi
+	if [[ -n "${PROXYSTACK_ERROR_PRINTED_FILE}" ]]; then
+		rm -f "${PROXYSTACK_ERROR_PRINTED_FILE}"
+	fi
+}
+
+# 从 step 子 shell 写出的状态文件恢复失败摘要。
+load_error_state() {
+	local state_file="${1:-}"
+	if [[ -z "${state_file}" || ! -s "${state_file}" ]]; then
+		return 0
+	fi
+	PROXYSTACK_LAST_ERROR_FILE="$(sed -n '1p' "${state_file}")"
+	PROXYSTACK_LAST_ERROR_SUMMARY="$(sed '1d' "${state_file}")"
+}
+
+# 输出当前 step 的失败摘要和完整输出路径。
+print_step_failure() {
+	local status="${1:-1}"
+	local summary="${PROXYSTACK_LAST_ERROR_SUMMARY}"
+
+	if [[ -z "${summary}" ]]; then
+		summary="command exited with status ${status}"
+	fi
+	printf 'Step %s failed: %s\n' "${PROXYSTACK_CURRENT_STEP_NUMBER}" "${summary}" >&2
+	if [[ -n "${PROXYSTACK_LAST_ERROR_FILE}" ]]; then
+		printf 'Full output: %s\n' "${PROXYSTACK_LAST_ERROR_FILE}" >&2
+	fi
+}
+
+# 输出当前 step 的失败信息，避免 ERR trap 和 die 重复打印。
+print_step_failure_once() {
+	local status="${1:-1}"
+
+	if [[ -n "${PROXYSTACK_ERROR_STATE_FILE}" ]]; then
+		load_error_state "${PROXYSTACK_ERROR_STATE_FILE}"
+	fi
+	if [[ -n "${PROXYSTACK_ERROR_PRINTED_FILE}" ]]; then
+		if [[ -e "${PROXYSTACK_ERROR_PRINTED_FILE}" ]]; then
+			return 0
+		fi
+		: >"${PROXYSTACK_ERROR_PRINTED_FILE}"
+	fi
+	print_step_failure "${status}"
+}
+
+# 在 step 内部命令失败时输出摘要并保持原退出码。
+handle_step_error() {
+	local status="${1:-1}"
+
+	if [[ -n "${PROXYSTACK_CURRENT_STEP_NUMBER}" ]]; then
+		print_step_failure_once "${status}"
+		cleanup_step_state_files
+	fi
+	exit "${status}"
+}
+
+# 恢复进入 step 前已有的 ERR trap。
+restore_err_trap() {
+	local previous_err_trap="${1:-}"
+
+	if [[ -n "${previous_err_trap}" ]]; then
+		eval "${previous_err_trap}"
+	else
+		trap - ERR
+	fi
+}
+
+# 执行一个对外可见步骤，步骤内部输出默认隐藏。
+step() {
+	local label="${1:-}"
+	local current_step
+	local errtrace_was_enabled
+	local previous_err_trap
+	local printed_file
+	local state_file
+
+	if [[ -z "${label}" ]]; then
+		die "step requires a label"
+	fi
+	shift || die "step requires a command"
+	if [[ "$#" -eq 0 ]]; then
+		die "step requires a command"
+	fi
+
+	PROXYSTACK_STEP_INDEX=$((PROXYSTACK_STEP_INDEX + 1))
+	PROXYSTACK_CURRENT_STEP_NUMBER="${PROXYSTACK_STEP_INDEX}"
+	current_step="${PROXYSTACK_CURRENT_STEP_NUMBER}"
+	clear_error
+	state_file="$(mktemp /tmp/proxystack-step.XXXXXX)"
+	printed_file="$(mktemp /tmp/proxystack-step-printed.XXXXXX)"
+	rm -f "${printed_file}"
+	PROXYSTACK_ERROR_STATE_FILE="${state_file}"
+	PROXYSTACK_ERROR_PRINTED_FILE="${printed_file}"
+	previous_err_trap="$(trap -p ERR || true)"
+	case "$-" in
+		*E*) errtrace_was_enabled="1" ;;
+		*) errtrace_was_enabled="0" ;;
+	esac
+
+	printf 'Step %s doing: %s\n' "${PROXYSTACK_CURRENT_STEP_NUMBER}" "${label}" >&2
+	trap 'handle_step_error "$?"' ERR
+	set -E
+	"$@"
+	restore_err_trap "${previous_err_trap}"
+	if [[ "${errtrace_was_enabled}" != "1" ]]; then
+		set +E
+	fi
+
+	cleanup_step_state_files
+	PROXYSTACK_CURRENT_STEP_NUMBER=""
+	PROXYSTACK_ERROR_STATE_FILE=""
+	PROXYSTACK_ERROR_PRINTED_FILE=""
+	clear_error
+	printf 'Step %s done: %s\n' "${current_step}" "${label}" >&2
+	return 0
 }
 
 # 把命令参数转为安全可读的 shell 展示形式，仅用于日志。
@@ -48,14 +204,109 @@ run() {
 	fi
 
 	local command_text
+	local output_file
+	local status
 	command_text="$(quote_command "$@")"
 	if is_dry_run; then
 		log "DRY-RUN: ${command_text}"
 		return 0
 	fi
 
-	log "RUN: ${command_text}"
-	"$@"
+	output_file="$(mktemp /tmp/proxystack-run.XXXXXX)"
+	if "$@" >"${output_file}" 2>&1; then
+		rm -f "${output_file}"
+		return 0
+	else
+		status="$?"
+	fi
+	record_command_failure "${status}" "${command_text}" "${output_file}"
+	return "${status}"
+}
+
+# 通过参数数组执行下载类命令，实时输出进度并保留失败摘要。
+run_stream() {
+	if [[ "$#" -eq 0 ]]; then
+		die "run_stream requires at least one argument"
+	fi
+
+	local command_text
+	local output_file
+	local status
+	command_text="$(quote_command "$@")"
+	if is_dry_run; then
+		log "DRY-RUN: ${command_text}"
+		return 0
+	fi
+
+	output_file="$(mktemp /tmp/proxystack-run.XXXXXX)"
+	if "$@" 2>&1 | tee "${output_file}" >&2; then
+		rm -f "${output_file}"
+		return 0
+	else
+		status="$?"
+	fi
+	record_command_failure "${status}" "${command_text}" "${output_file}"
+	return "${status}"
+}
+
+# 记录命令失败摘要；短输出不暴露 /tmp 详情路径。
+record_command_failure() {
+	local status="${1:-1}"
+	local command_text="${2:-}"
+	local output_file="${3:-}"
+	local detail_file=""
+	local summary
+
+	summary="$(summarize_output_file "${output_file}")"
+	if output_file_needs_detail "${output_file}"; then
+		detail_file="${output_file}"
+	else
+		rm -f "${output_file}"
+	fi
+	if [[ -n "${summary}" ]]; then
+		record_error "command failed with exit code ${status}: ${command_text}"$'\n'"${summary}" "${detail_file}"
+	else
+		record_error "command failed with exit code ${status}: ${command_text}" "${detail_file}"
+	fi
+}
+
+# 从完整命令输出中提取少量非空行作为屏幕摘要。
+summarize_output_file() {
+	local output_file="${1:-}"
+	local summary
+
+	if [[ -z "${output_file}" || ! -f "${output_file}" ]]; then
+		return 0
+	fi
+	summary="$(awk 'NF { print; count++ } count >= 8 { exit }' "${output_file}")"
+	if [[ -z "${summary}" ]]; then
+		return 0
+	fi
+	if [[ "${#summary}" -gt 800 ]]; then
+		summary="${summary:0:800}"
+	fi
+	if output_file_needs_detail "${output_file}"; then
+		summary="${summary}"$'\n... truncated ...'
+	fi
+	printf '%s' "${summary}"
+}
+
+# 判断完整输出是否需要保留到 /tmp 供排查。
+output_file_needs_detail() {
+	local output_file="${1:-}"
+	local file_size
+	local non_empty_count
+
+	if [[ -z "${output_file}" || ! -f "${output_file}" ]]; then
+		return 1
+	fi
+	file_size="$(wc -c <"${output_file}")"
+	file_size="${file_size//[[:space:]]/}"
+	non_empty_count="$(awk 'NF { count++ } END { print count + 0 }' "${output_file}")"
+	if [[ "${file_size}" -gt 800 || "${non_empty_count}" -gt 8 ]]; then
+		return 0
+	fi
+	return 1
 }
 
 # 检查外部命令是否存在；dry-run 时允许缺失以便预览。
@@ -132,8 +383,8 @@ install_os_packages() {
 	case " ${os_id} ${os_like} " in
 		*" debian "*|*" ubuntu "*)
 			require_cmd apt-get
-			run env DEBIAN_FRONTEND=noninteractive apt-get update
-			run env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
+			run_stream env DEBIAN_FRONTEND=noninteractive apt-get update
+			run_stream env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
 			;;
 		*)
 			die "Unsupported OS for automatic dependency installation; install manually: ${packages[*]}"
@@ -501,6 +752,36 @@ run_as_user() {
 	die "Required command not found: runuser or sudo"
 }
 
+# 以指定用户执行下载类命令，实时保留进度输出。
+run_stream_as_user() {
+	local target_user="${1:-}"
+	shift || die "run_stream_as_user needs a user and a command"
+	if [[ "$#" -eq 0 ]]; then
+		die "run_stream_as_user needs a command"
+	fi
+	if [[ -z "${target_user}" ]]; then
+		run_stream "$@"
+		return $?
+	fi
+	if ! is_dry_run && [[ "$(id -un)" == "${target_user}" ]]; then
+		run_stream "$@"
+		return $?
+	fi
+	if command -v runuser >/dev/null 2>&1; then
+		run_stream runuser -u "${target_user}" -- "$@"
+		return $?
+	fi
+	if command -v sudo >/dev/null 2>&1; then
+		run_stream sudo -u "${target_user}" -- "$@"
+		return $?
+	fi
+	if is_dry_run; then
+		run_stream runuser -u "${target_user}" -- "$@"
+		return $?
+	fi
+	die "Required command not found: runuser or sudo"
+}
+
 # 计算标准输入的 sha256；兼容 Linux sha256sum 和 macOS shasum。
 checksum_stream() {
 	local output
@@ -745,7 +1026,7 @@ pip_install_with_fallback() {
 
 	while IFS= read -r index_url; do
 		log "Trying pip index: ${index_url}"
-		if run_as_user "${target_user}" "${python_bin}" -m pip install --index-url "${index_url}" "$@"; then
+		if run_stream_as_user "${target_user}" "${python_bin}" -m pip install --index-url "${index_url}" "$@"; then
 			return 0
 		fi
 		warn "Pip install failed with index: ${index_url}"

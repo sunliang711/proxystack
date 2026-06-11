@@ -16,6 +16,8 @@ from proxystack.generator.sub import extract_bundle_inputs
 from proxystack.generator.sub import index_to_json
 from proxystack.generator.sub import merge_input_files
 from proxystack.logging import configure_logging
+from proxystack.logging import StepLogger
+from proxystack.logging import summarize_exception
 from proxystack.subserver import create_app
 
 DEFAULT_DATA_DIR = Path("/opt/proxystack/sub")
@@ -37,10 +39,16 @@ def main(
 
 
 def echo_command_progress(subcommand: str | None) -> None:
-    """统一输出 proxystack-sub 子命令执行过程提示。"""
-    if subcommand is None:
-        return
-    typer.echo(f"正在执行 proxystack-sub {subcommand} ...", err=True)
+    """保留回调入口，实际进度由具体命令的 step 日志输出。"""
+    return
+
+
+def echo_command_error(exc: BaseException) -> None:
+    """输出未进入 step 前的命令错误摘要。"""
+    summary = summarize_exception(exc)
+    typer.echo(f"Command failed: {summary.text}", err=True)
+    if summary.detail_path is not None:
+        typer.echo(f"Full output: {summary.detail_path}", err=True)
 
 
 @app.command()
@@ -56,15 +64,19 @@ def import_bundle(
     no_rebuild: bool = typer.Option(False, "--no-rebuild", help="仅导入 inputs，不自动 rebuild。"),
 ) -> None:
     """导入订阅发布包，校验 manifest 和 input hash。"""
+    step_logger = StepLogger()
     try:
-        manifest = extract_bundle_inputs(bundle_path, data_dir)
-        write_access_file(data_dir, manifest.access)
+        with step_logger.step("import subscription bundle"):
+            manifest = extract_bundle_inputs(bundle_path, data_dir)
+        with step_logger.step("write access metadata"):
+            write_access_file(data_dir, manifest.access)
         if not no_rebuild:
-            rebuild_data_dir(data_dir)
+            with step_logger.step("rebuild subscription index"):
+                rebuild_data_dir(data_dir)
     except (OSError, SubscriptionGeneratorError) as exc:
-        typer.echo(f"订阅发布包导入失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"订阅发布包已导入：{bundle_path}")
 
 
 @app.command("rebuild")
@@ -72,12 +84,14 @@ def rebuild(
     data_dir: Path = typer.Option(DEFAULT_DATA_DIR, "--data-dir", help="订阅服务数据目录。"),
 ) -> None:
     """扫描 data_dir/inputs 并原子写入 current/index.json。"""
+    step_logger = StepLogger()
     try:
-        index_path = rebuild_data_dir(data_dir)
+        with step_logger.step("rebuild subscription index"):
+            rebuild_data_dir(data_dir)
     except (OSError, SubscriptionGeneratorError) as exc:
-        typer.echo(f"订阅索引重建失败：\n{exc}", err=True)
+        if step_logger.step_index == 0:
+            echo_command_error(exc)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"订阅索引已重建：{index_path}")
 
 
 @app.command("serve")
@@ -87,7 +101,9 @@ def serve(
     data_dir: Path = typer.Option(DEFAULT_DATA_DIR, "--data-dir", help="订阅服务数据目录。"),
 ) -> None:
     """启动只读取 current/index.json 的订阅 HTTP 服务。"""
-    uvicorn.run(create_app(data_dir), host=host, port=port)
+    step_logger = StepLogger()
+    with step_logger.step("start subscription server"):
+        uvicorn.run(create_app(data_dir), host=host, port=port)
 
 
 def rebuild_data_dir(data_dir: Path) -> Path:

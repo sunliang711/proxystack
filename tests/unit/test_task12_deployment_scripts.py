@@ -237,7 +237,7 @@ def test_pip_install_with_fallback_tries_next_index(tmp_path: Path) -> None:
     probe.write_text(
         f"""
 source scripts/lib/common.sh
-run_as_user() {{
+run_stream_as_user() {{
 	printf '%s\\n' "$*" >>"{call_log}"
 	case "$*" in
 		*pypi.org*) return 1 ;;
@@ -256,6 +256,68 @@ pip_install_with_fallback proxystack /venv/bin/python proxystack
     output = call_log.read_text(encoding="utf-8")
     assert "https://pypi.org/simple" in output
     assert "https://pypi.tuna.tsinghua.edu.cn/simple" in output
+
+
+def test_step_fails_when_internal_run_fails_before_success(tmp_path: Path) -> None:
+    """验证 step 内部首个 run 失败不会被后续成功命令吞掉。"""
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        """
+source scripts/lib/common.sh
+failing_then_success() {
+	run bash -c 'printf "short failure\\n" >&2; exit 7'
+	run true
+}
+step "probe failure" failing_then_success
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 7
+    assert "Step 1 failed: command failed with exit code 7" in result.stderr
+    assert "short failure" in result.stderr
+    assert "Full output:" not in result.stderr
+    assert "Step 1 done" not in result.stderr
+
+
+def test_step_failure_cleans_internal_state_files(tmp_path: Path) -> None:
+    """验证 step 失败不会遗留内部状态临时文件。"""
+    probe = tmp_path / "probe.sh"
+    before = {path.name for path in Path("/tmp").glob("proxystack-step*")}
+    probe.write_text(
+        """
+source scripts/lib/common.sh
+step "probe cleanup" run bash -c 'printf "short failure\\n" >&2; exit 6'
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    after = {path.name for path in Path("/tmp").glob("proxystack-step*")}
+    assert result.returncode == 6
+    assert "Step 1 failed:" in result.stderr
+    assert after == before
+
+
+def test_run_stream_prints_progress_output(tmp_path: Path) -> None:
+    """验证下载类命令可通过 run_stream 实时输出进度。"""
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        """
+source scripts/lib/common.sh
+step "stream visible output" run_stream bash -c 'printf "stream progress\\n"'
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = run_script(["bash", str(probe)])
+
+    assert result.returncode == 0, result.stderr
+    assert "stream progress" in result.stderr
+    assert "Step 1 done: stream visible output" in result.stderr
 
 
 def test_ensure_pip_available_skips_existing_pip(tmp_path: Path) -> None:
@@ -280,7 +342,7 @@ ensure_pip_available proxystack /venv/bin/python
     output = call_log.read_text(encoding="utf-8")
     assert "find_spec" in output
     assert "ensurepip" not in output
-    assert "SKIP: Python package already installed: pip" in result.stderr
+    assert result.stderr == ""
 
 
 def test_ensure_pip_available_installs_missing_pip(tmp_path: Path) -> None:
@@ -390,8 +452,7 @@ ensure_dir "{existing_dir}" 0750 "" none
     result = run_script(["bash", str(probe)])
 
     assert result.returncode == 0, result.stderr
-    assert "SKIP: directory already exists" in result.stderr
-    assert "RUN: install -d" not in result.stderr
+    assert result.stderr == ""
 
 
 def test_ensure_symlink_skips_existing_link(tmp_path: Path) -> None:
@@ -412,8 +473,7 @@ ensure_symlink "{target}" "{link}" none
     result = run_script(["bash", str(probe)])
 
     assert result.returncode == 0, result.stderr
-    assert "SKIP: symlink already exists" in result.stderr
-    assert "RUN: ln -sf" not in result.stderr
+    assert result.stderr == ""
 
 
 def test_stage_python_source_propagates_failure_when_captured(tmp_path: Path) -> None:

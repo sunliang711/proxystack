@@ -270,21 +270,20 @@ print_next_steps() {
 # 主入口。
 main() {
 	parse_args "$@"
-	validate_args
-	require_root
-	require_cmd ln
-	ensure_python_venv_available "${PYTHON_BIN}"
+	step "validate arguments" validate_args
+	step "check root permission" require_root
+	step "check link command" require_cmd ln
+	step "check Python venv support" ensure_python_venv_available "${PYTHON_BIN}"
 
-	ensure_group
-	ensure_user
-	ensure_agent_dirs
-	ensure_venv "${BASE_DIR}/.venv" "${PYTHON_BIN}" "${INSTALL_USER}"
-	install_python_package
-	link_console_scripts
-	maybe_init_project
-	maybe_install_systemd
-	log "Agent installation completed"
-	print_next_steps
+	step "prepare system group" ensure_group
+	step "prepare system user" ensure_user
+	step "prepare agent directories" ensure_agent_dirs
+	step "prepare Python venv" ensure_venv "${BASE_DIR}/.venv" "${PYTHON_BIN}" "${INSTALL_USER}"
+	step "install Python package" install_python_package
+	step "link console scripts" link_console_scripts
+	step "handle project config initialization" maybe_init_project
+	step "handle optional systemd unit installation" maybe_install_systemd
+	step "print next steps" print_next_steps
 }
 
 main "$@"

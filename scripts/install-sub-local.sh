@@ -258,22 +258,21 @@ maybe_start_service() {
 # 主入口。
 main() {
 	parse_args "$@"
-	validate_args
-	require_root
-	require_cmd ln
-	ensure_python_venv_available "${PYTHON_BIN}"
+	step "validate arguments" validate_args
+	step "check root permission" require_root
+	step "check link command" require_cmd ln
+	step "check Python venv support" ensure_python_venv_available "${PYTHON_BIN}"
 
-	ensure_group
-	ensure_user
-	ensure_sub_dirs
-	ensure_venv "${BASE_DIR}/.venv" "${PYTHON_BIN}" "${INSTALL_USER}"
-	install_python_package
-	link_console_scripts
-	ensure_config
-	maybe_import_bundle
-	maybe_install_systemd
-	maybe_start_service
-	log "Local subscription installation completed"
+	step "prepare system group" ensure_group
+	step "prepare system user" ensure_user
+	step "prepare subscription directories" ensure_sub_dirs
+	step "prepare Python venv" ensure_venv "${BASE_DIR}/.venv" "${PYTHON_BIN}" "${INSTALL_USER}"
+	step "install Python package" install_python_package
+	step "link console scripts" link_console_scripts
+	step "ensure agent config" ensure_config
+	step "handle optional subscription bundle import" maybe_import_bundle
+	step "handle optional systemd unit installation" maybe_install_systemd
+	step "handle optional subscription service start" maybe_start_service
 }
 
 main "$@"

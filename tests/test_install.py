@@ -12,6 +12,7 @@ import pytest
 from ruamel.yaml import YAML
 from typer.testing import CliRunner
 
+import proxystack.cli.agent as agent_module
 from proxystack.cli.agent import InstallProgressPrinter
 from proxystack.cli.agent import app as agent_app
 from proxystack.config import load_config
@@ -26,6 +27,7 @@ from proxystack.install.service import atomic_replace_file
 from proxystack.install.service import download_url_with_opener
 from proxystack.install.service import file_sha256
 from proxystack.install.service import validate_download_url
+from proxystack.logging import StepLogger
 
 runner = CliRunner()
 
@@ -48,7 +50,7 @@ def test_install_mihomo_from_local_file(tmp_path: Path) -> None:
 
 
 def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
-    """验证 install CLI 会输出准备、来源、校验和安装进度。"""
+    """验证 install CLI 只输出目标 step 状态，不展示内部安装细节。"""
     config = write_install_config(tmp_path)
     source = write_source(tmp_path / "sources" / "mihomo.bin", b"mihomo-binary")
 
@@ -58,10 +60,10 @@ def test_install_cli_reports_progress_for_local_file(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert "install: prepare mihomo" in result.output
-    assert "source: local file" in result.output
-    assert "install: verify mihomo.bin" in result.output
-    assert "install: complete mihomo" in result.output
+    assert "Step 1 doing: install mihomo" in result.output
+    assert "Step 1 done: install mihomo" in result.output
+    assert "source: local file" not in result.output
+    assert "install: verify" not in result.output
 
 
 def test_install_progress_printer_rewrites_download_line() -> None:
@@ -87,6 +89,59 @@ def test_install_progress_printer_rewrites_download_line() -> None:
     assert "\ndownload: progress" not in output
 
 
+def test_install_step_finishes_interactive_download_line_before_done(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证 artifact step 完成前先收尾交互式下载进度行。"""
+
+    class InteractiveStream(StringIO):
+        """模拟支持 TTY 的 stderr。"""
+
+        def isatty(self) -> bool:
+            """返回 True 以启用交互式输出路径。"""
+            return True
+
+    stream = InteractiveStream()
+    config = write_install_config(tmp_path)
+    source = write_source(tmp_path / "sources" / "mihomo.bin", b"mihomo-binary")
+
+    def fake_install_artifact(global_config, request, operation: str = "install", progress=None):
+        """输出交互式下载进度并返回 fake 安装结果。"""
+        assert progress is not None
+        installed_path = global_config.resolve_path(global_config.paths.bin) / request.target
+        progress("download: start mihomo.bin 0 B/10 B (0%)")
+        progress("download: progress mihomo.bin 5 B/10 B (50%)")
+        installed_path.parent.mkdir(parents=True, exist_ok=True)
+        installed_path.write_text("fake", encoding="utf-8")
+        return agent_module.InstallResult(
+            operation=operation,
+            target=request.target,
+            version=request.version,
+            source=request.source,
+            source_sha256="fake-sha256",
+            installed_paths=(installed_path,),
+            service_plan=tuple(),
+        )
+
+    monkeypatch.setattr(agent_module, "install_artifact", fake_install_artifact)
+    monkeypatch.setattr(agent_module, "InstallProgressPrinter", lambda: InstallProgressPrinter(stream))
+
+    agent_module.run_artifact_operation(
+        "install",
+        "mihomo",
+        None,
+        file_sha256(source),
+        str(source),
+        None,
+        config,
+        step_logger=StepLogger(stream),
+    )
+
+    output = stream.getvalue()
+    assert "\nStep 1 done: install mihomo" in output
+
+
 def test_install_cli_skips_existing_binary_without_download(tmp_path: Path) -> None:
     """验证 install CLI 遇到已安装二进制时跳过下载流程。"""
     config = write_install_config(tmp_path)
@@ -98,8 +153,9 @@ def test_install_cli_skips_existing_binary_without_download(tmp_path: Path) -> N
 
     assert result.exit_code == 0
     assert installed.read_bytes() == b"existing-mihomo"
-    assert "install: skip mihomo already installed" in result.output
-    assert "mihomo install 跳过：已存在" in result.output
+    assert "Step 1 doing: install mihomo" in result.output
+    assert "Step 1 done: install mihomo" in result.output
+    assert "already installed" not in result.output
     assert "download:" not in result.output
 
 
@@ -541,16 +597,17 @@ def test_install_all_does_not_include_self(tmp_path: Path) -> None:
 
 
 def test_update_all_does_not_include_self(tmp_path: Path) -> None:
-    """验证 update all 只更新代理核心和 geo，并输出服务计划。"""
+    """验证 update all 只更新代理核心和 geo，并只输出 step 状态。"""
     config = write_config_with_sources(tmp_path)
 
     result = runner.invoke(agent_app, ["update", "all", "-c", str(config)])
 
     assert result.exit_code == 0
     assert "self" not in result.output
-    assert "Service adapter dry-run" in result.output
-    assert "proxystack-xray@*.service" in result.output
-    assert "proxystack-clash@*.service" in result.output
+    assert "Step 1 doing: update mihomo" in result.output
+    assert "Step 2 doing: update xray" in result.output
+    assert "Step 3 doing: update geo" in result.output
+    assert "Service adapter dry-run" not in result.output
 
 
 @pytest.mark.parametrize("command", ["install", "update"])

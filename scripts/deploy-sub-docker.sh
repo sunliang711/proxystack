@@ -188,7 +188,7 @@ maybe_pull_image() {
 	if [[ "${PULL_IMAGE}" != "1" ]]; then
 		return 0
 	fi
-	run docker pull "${IMAGE}"
+	run_stream docker pull "${IMAGE}"
 }
 
 # 确认镜像可用后再替换旧容器，避免拉取失败时先中断旧服务。
@@ -238,16 +238,15 @@ run_container() {
 # 主入口。
 main() {
 	parse_args "$@"
-	validate_args
-	require_cmd docker
+	step "validate arguments" validate_args
+	step "check Docker command" require_cmd docker
 
-	check_container_conflict_before_writes
-	ensure_data_dirs
-	maybe_pull_image
-	ensure_image_available
-	replace_existing_container_after_image_ready
-	run_container
-	log "Docker subscription deployment completed"
+	step "check container conflict" check_container_conflict_before_writes
+	step "prepare data directories" ensure_data_dirs
+	step "handle optional Docker image pull" maybe_pull_image
+	step "check Docker image" ensure_image_available
+	step "handle optional container replacement" replace_existing_container_after_image_ready
+	step "start Docker container" run_container
 }
 
 main "$@"

@@ -231,7 +231,7 @@ remove_unit_files() {
 		if [[ -z "${unit_path}" ]]; then
 			continue
 		fi
-		if [[ -e "${unit_path}" || -L "${unit_path}" || is_dry_run ]]; then
+		if [[ -e "${unit_path}" || -L "${unit_path}" ]] || is_dry_run; then
 			run rm -f "${unit_path}"
 		else
 			log "Unit file already absent: ${unit_path}"
@@ -313,17 +313,16 @@ maybe_remove_user() {
 # 主入口。
 main() {
 	parse_args "$@"
-	validate_args
-	require_root
-	require_cmd systemctl
-	require_cmd rm
+	step "validate arguments" validate_args
+	step "check root permission" require_root
+	step "check systemctl command" require_cmd systemctl
+	step "check remove command" require_cmd rm
 
-	stop_and_disable_services
-	remove_unit_files
-	remove_bin_links
-	maybe_purge_data
-	maybe_remove_user
-	log "Local uninstallation completed"
+	step "stop and disable services" stop_and_disable_services
+	step "remove systemd units" remove_unit_files
+	step "handle optional console link removal" remove_bin_links
+	step "handle optional data purge" maybe_purge_data
+	step "handle optional system user removal" maybe_remove_user
 }
 
 main "$@"
