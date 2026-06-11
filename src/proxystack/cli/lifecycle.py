@@ -360,7 +360,7 @@ def load_stack_source_data(name: str, template_name: str, from_file: Optional[Pa
 
 
 def replace_template_vmess_uuids(stack_data: dict[str, Any]) -> None:
-    """把内置模板中的 xrelay vmess 占位 UUID 替换为随机 UUID。"""
+    """把内置模板中的 xrelay vmess users 占位 UUID 替换为随机 UUID。"""
     xrelay_data = stack_data.get("xrelay")
     if not isinstance(xrelay_data, dict):
         return
@@ -370,8 +370,14 @@ def replace_template_vmess_uuids(stack_data: dict[str, Any]) -> None:
     for inbound_data in inbounds:
         if not isinstance(inbound_data, dict):
             continue
-        if inbound_data.get("protocol") == "vmess" and inbound_data.get("uuid") == VMESS_UUID_PLACEHOLDER:
-            inbound_data["uuid"] = str(uuid4())
+        if inbound_data.get("protocol") != "vmess":
+            continue
+        users_data = inbound_data.get("users")
+        if not isinstance(users_data, list):
+            continue
+        for user_data in users_data:
+            if isinstance(user_data, dict) and user_data.get("uuid") == VMESS_UUID_PLACEHOLDER:
+                user_data["uuid"] = str(uuid4())
 
 
 def read_builtin_template(template_name: str) -> str:

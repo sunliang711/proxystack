@@ -34,4 +34,4 @@ Task 03。
 
 ## 风险
 
-vmess 多用户合并可以后置；首期先保证一条 inbound 一组配置正确。
+vmess 使用 `users` 结构表达一个或多个客户端；生成器需保持一个 inbound 对应多个 clients 的输出正确。

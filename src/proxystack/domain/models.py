@@ -282,6 +282,22 @@ class InboundAuth(ProxystackModel):
         return self
 
 
+class InboundVmessUser(ProxystackModel):
+    """xrelay vmess inbound 的单个客户端用户配置。"""
+
+    user: Name
+    uuid: str
+    remark: Optional[str] = None
+    tag: Optional[Name] = None
+
+    @field_validator("uuid")
+    @classmethod
+    def validate_user_uuid(cls, value: str) -> str:
+        """校验 vmess 多用户客户端 UUID 格式。"""
+        validate_uuid(value, "uuid is required for vmess user")
+        return value
+
+
 class Inbound(ProxystackModel):
     """xrelay inbound 配置。"""
 
@@ -297,10 +313,24 @@ class Inbound(ProxystackModel):
     tag: Optional[str] = None
     sub: bool
     uuid: Optional[str] = None
+    users: list[InboundVmessUser] = Field(default_factory=list)
     network: Optional[str] = None
     password: Optional[str] = None
     method: Optional[str] = None
     cipher: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_users_field_protocol(cls, value: Any) -> Any:
+        """校验 users 字段只能显式用于 vmess inbound。"""
+        if (
+            isinstance(value, dict)
+            and value.get("protocol") is not None
+            and value.get("protocol") != "vmess"
+            and "users" in value
+        ):
+            raise ValueError("users is only supported for vmess inbound")
+        return value
 
     @field_validator("name")
     @classmethod
@@ -313,9 +343,17 @@ class Inbound(ProxystackModel):
     def validate_protocol_credentials(self) -> "Inbound":
         """校验不同协议所需的明文凭据字段。"""
         if self.protocol == "vmess":
-            validate_uuid(self.uuid, "uuid is required for vmess inbound")
+            if self.uuid:
+                raise ValueError("uuid is not supported for vmess inbound; use users instead")
+            if self.user or self.remark:
+                raise ValueError("user and remark must be configured under vmess users")
+            if not self.users:
+                raise ValueError("users is required for vmess inbound")
+            self.validate_vmess_users()
             if not self.network:
                 raise ValueError("network is required for vmess inbound")
+        if self.protocol != "vmess" and self.users:
+            raise ValueError("users is only supported for vmess inbound")
         if self.protocol == "shadowsocks":
             if not self.password:
                 raise ValueError("password is required for shadowsocks inbound")
@@ -325,6 +363,16 @@ class Inbound(ProxystackModel):
             if not self.auth or self.auth.type != "password":
                 raise ValueError("password auth is required when socks/http inbound is published")
         return self
+
+    def validate_vmess_users(self) -> None:
+        """校验 vmess 多用户配置中的用户、UUID 和最终订阅 tag 不重复。"""
+        ensure_unique([vmess_user.user for vmess_user in self.users], "duplicate vmess user")
+        ensure_unique([vmess_user.uuid.lower() for vmess_user in self.users], "duplicate vmess uuid")
+        base_tag = self.tag or f"{self.protocol}:{self.port}:{self.name}"
+        ensure_unique(
+            [vmess_user.tag or f"{base_tag}:{vmess_user.user}" for vmess_user in self.users],
+            "duplicate vmess user tag",
+        )
 
 
 class XrelayOutbound(ProxystackModel):

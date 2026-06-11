@@ -23,6 +23,7 @@ from pydantic import model_validator
 from ruamel.yaml import YAML
 
 from proxystack.domain.models import Inbound
+from proxystack.domain.models import InboundVmessUser
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 
@@ -212,13 +213,20 @@ def render_stack_input(stack_set: StackSet, source: str) -> SubscriptionInput:
         for inbound in stack.xrelay.inbounds:
             if not inbound.sub:
                 continue
-            nodes.append(render_inbound_node(stack_set, stack, inbound))
+            nodes.extend(render_inbound_nodes(stack_set, stack, inbound))
     return SubscriptionInput(
         input_version=INPUT_VERSION,
         source=source,
         generated_at=now_iso(),
         nodes=nodes,
     )
+
+
+def render_inbound_nodes(stack_set: StackSet, stack: Stack, inbound: Inbound) -> list[SubscriptionNode]:
+    """把一个 xrelay inbound 映射为一个或多个订阅节点。"""
+    if inbound.protocol == "vmess":
+        return [render_vmess_user_node(stack_set, stack, inbound, vmess_user) for vmess_user in inbound.users]
+    return [render_inbound_node(stack_set, stack, inbound)]
 
 
 def render_inbound_node(stack_set: StackSet, stack: Stack, inbound: Inbound) -> SubscriptionNode:
@@ -234,9 +242,6 @@ def render_inbound_node(stack_set: StackSet, stack: Stack, inbound: Inbound) -> 
     }
     if inbound.udp:
         node_data["udp"] = inbound.udp
-    if inbound.protocol == "vmess":
-        node_data["uuid"] = inbound.uuid
-        node_data["network"] = inbound.network
     if inbound.protocol == "shadowsocks":
         node_data["method"] = inbound.method or inbound.cipher
         node_data["cipher"] = inbound.cipher or inbound.method
@@ -247,6 +252,29 @@ def render_inbound_node(stack_set: StackSet, stack: Stack, inbound: Inbound) -> 
             "username": inbound.auth.username,
             "password": inbound.auth.password,
         }
+    return SubscriptionNode.model_validate(node_data)
+
+
+def render_vmess_user_node(
+    stack_set: StackSet,
+    stack: Stack,
+    inbound: Inbound,
+    vmess_user: InboundVmessUser,
+) -> SubscriptionNode:
+    """把 vmess users 中的单个用户映射为独立订阅节点。"""
+    node_data: dict[str, Any] = {
+        "id": f"{stack.name}:{inbound.name}:{vmess_user.user}",
+        "user": vmess_user.user,
+        "protocol": inbound.protocol,
+        "server": inbound.server or stack_set.config.external_host,
+        "port": inbound.port,
+        "tag": vmess_user.tag or f"{inbound_tag(inbound)}:{vmess_user.user}",
+        "remark": vmess_user.remark or vmess_user.tag or f"{stack.name}-{inbound.name}-{vmess_user.user}",
+        "uuid": vmess_user.uuid,
+        "network": inbound.network,
+    }
+    if inbound.udp:
+        node_data["udp"] = inbound.udp
     return SubscriptionNode.model_validate(node_data)
 
 

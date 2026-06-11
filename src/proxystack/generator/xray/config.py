@@ -7,6 +7,7 @@ from typing import Any
 from typing import Optional
 
 from proxystack.domain.models import Inbound
+from proxystack.domain.models import InboundVmessUser
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import XrelayApiConfig
@@ -178,20 +179,29 @@ def inbound_tag(inbound: Inbound) -> str:
 
 
 def render_vmess_inbound(inbound: Inbound) -> dict[str, Any]:
-    """生成单用户 vmess inbound 配置。"""
+    """生成 vmess inbound 配置，按 users 输出一个或多个客户端。"""
     config = base_inbound_config(inbound, "vmess")
     config["settings"] = {
-        "clients": [
-            {
-                "id": inbound.uuid,
-                "alterId": 0,
-            }
-        ],
+        "clients": render_vmess_clients(inbound),
     }
     config["streamSettings"] = {
         "network": inbound.network,
     }
     return config
+
+
+def render_vmess_clients(inbound: Inbound) -> list[dict[str, Any]]:
+    """把 vmess inbound 的 users 列表转换为 Xray clients。"""
+    return [render_vmess_user_client(vmess_user) for vmess_user in inbound.users]
+
+
+def render_vmess_user_client(vmess_user: InboundVmessUser) -> dict[str, Any]:
+    """生成 vmess 多用户 client，并写入 email 供 Xray 用户统计使用。"""
+    return {
+        "id": vmess_user.uuid,
+        "alterId": 0,
+        "email": vmess_user.user,
+    }
 
 
 def render_shadowsocks_inbound(inbound: Inbound) -> dict[str, Any]:

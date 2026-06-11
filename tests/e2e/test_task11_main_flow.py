@@ -82,7 +82,7 @@ def test_init_add_validate_start_publish_import_serve_main_flow(tmp_path: Path, 
     assert import_result.exit_code == 0
     assert serve_result.exit_code == 0
     current_index = json.loads((config.parent / "sub" / "current" / "index.json").read_text(encoding="utf-8"))
-    assert current_index["users"]["demo"][0]["id"] == "edge:vmess"
+    assert current_index["users"]["demo"][0]["id"] == "edge:vmess:demo"
     assert served["host"] == "127.0.0.1"
     assert served["port"] == 3003
 

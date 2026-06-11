@@ -168,15 +168,217 @@ def test_load_stack_rejects_out_of_range_port(tmp_path: Path) -> None:
         load_stack(stack_path)
 
 
-def test_load_stack_rejects_missing_vmess_uuid(tmp_path: Path) -> None:
-    """验证 vmess inbound 缺少 UUID 会失败。"""
+def test_load_stack_rejects_missing_vmess_users(tmp_path: Path) -> None:
+    """验证 vmess inbound 缺少 users 会失败。"""
     stack_path = tmp_path / "edge.yaml"
     stack_path.write_text(
-        valid_stack_yaml("edge").replace("      uuid: 11111111-1111-4111-8111-111111111111\n", ""),
+        valid_stack_yaml("edge").replace(
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: edge vmess\n",
+            "",
+        ),
         encoding="utf-8",
     )
 
-    with pytest.raises(ValidationError, match="uuid is required for vmess inbound"):
+    with pytest.raises(ValidationError, match="users is required for vmess inbound"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_users_missing_network(tmp_path: Path) -> None:
+    """验证 vmess users 多用户结构仍必须提供 network。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace("      network: raw\n", ""),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="network is required for vmess inbound"):
+        load_stack(stack_path)
+
+
+def test_load_stack_accepts_vmess_users(tmp_path: Path) -> None:
+    """验证 vmess inbound 可以使用 users 多用户结构。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: edge vmess\n",
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: alice vmess\n"
+            "        - user: bob\n"
+            "          uuid: 22222222-2222-4222-8222-222222222222\n"
+            "          remark: bob vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    stack = load_stack(stack_path)
+
+    inbound = stack.xrelay.inbounds[1]
+    assert [vmess_user.user for vmess_user in inbound.users] == ["alice", "bob"]
+    assert inbound.users[0].remark == "alice vmess"
+
+
+def test_load_stack_rejects_vmess_users_invalid_uuid(tmp_path: Path) -> None:
+    """验证 vmess users 中每个 UUID 都必须合法。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "          uuid: 11111111-1111-4111-8111-111111111111\n",
+            "          uuid: bad-uuid\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="uuid must be a valid UUID"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_users_duplicate_user(tmp_path: Path) -> None:
+    """验证同一 vmess inbound 内 users.user 不能重复。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: edge vmess\n",
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "        - user: alice\n"
+            "          uuid: 22222222-2222-4222-8222-222222222222\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="duplicate vmess user: alice"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_users_duplicate_uuid(tmp_path: Path) -> None:
+    """验证同一 vmess inbound 内 users.uuid 不能重复。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: edge vmess\n",
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "        - user: bob\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="duplicate vmess uuid: 11111111-1111-4111-8111-111111111111"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_users_duplicate_tag(tmp_path: Path) -> None:
+    """验证同一 vmess inbound 内 users.tag 不能重复。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: edge vmess\n",
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          tag: shared-vmess\n"
+            "        - user: bob\n"
+            "          uuid: 22222222-2222-4222-8222-222222222222\n"
+            "          tag: shared-vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="duplicate vmess user tag: shared-vmess"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_users_generated_tag_collision(tmp_path: Path) -> None:
+    """验证 vmess users 的最终订阅 tag 不能与显式 tag 冲突。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "          remark: edge vmess\n",
+            "      tag: shared-vmess\n"
+            "      users:\n"
+            "        - user: alice\n"
+            "          uuid: 11111111-1111-4111-8111-111111111111\n"
+            "        - user: bob\n"
+            "          uuid: 22222222-2222-4222-8222-222222222222\n"
+            "          tag: shared-vmess:alice\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="duplicate vmess user tag: shared-vmess:alice"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_top_level_uuid(tmp_path: Path) -> None:
+    """验证 vmess inbound 不再支持顶层 uuid。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      network: raw\n",
+            "      network: raw\n"
+            "      uuid: 22222222-2222-4222-8222-222222222222\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="uuid is not supported for vmess inbound; use users instead"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_vmess_top_level_user_and_remark(tmp_path: Path) -> None:
+    """验证 vmess inbound 的 user 和 remark 必须写在 users 中。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      sub: true\n",
+            "      sub: true\n"
+            "      user: alice\n"
+            "      remark: edge vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="user and remark must be configured under vmess users"):
+        load_stack(stack_path)
+
+
+def test_load_stack_rejects_non_vmess_users_even_when_empty(tmp_path: Path) -> None:
+    """验证非 vmess inbound 不能显式配置 users 字段。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "      sub: false\n    - name: vmess\n",
+            "      sub: false\n"
+            "      users: []\n"
+            "    - name: vmess\n",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="users is only supported for vmess inbound"):
         load_stack(stack_path)
 
 
@@ -486,9 +688,12 @@ xrelay:
       protocol: vmess
       listen: 0.0.0.0
       port: 24101
-      uuid: 11111111-1111-4111-8111-111111111111
       network: raw
       sub: true
+      users:
+        - user: alice
+          uuid: 11111111-1111-4111-8111-111111111111
+          remark: edge vmess
 clash:
   enabled: true
   mode: Rule

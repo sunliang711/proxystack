@@ -49,6 +49,54 @@ def test_render_xray_inbound_matrix_matches_golden() -> None:
     assert dumps_xray_config(stack_set, "matrix") == (GOLDEN_DIR / "matrix.json").read_text(encoding="utf-8")
 
 
+def test_render_xray_vmess_inbound_supports_multiple_users() -> None:
+    """验证 vmess users 会生成同一个 inbound 下的多个 clients。"""
+    stack_set = make_stack_set(
+        make_stack(
+            "multi",
+            {"type": "direct"},
+            [
+                {
+                    "name": "vmess",
+                    "protocol": "vmess",
+                    "listen": "0.0.0.0",
+                    "port": 26001,
+                    "network": "raw",
+                    "sub": True,
+                    "users": [
+                        {
+                            "user": "alice",
+                            "uuid": "11111111-1111-4111-8111-111111111111",
+                            "remark": "alice vmess",
+                        },
+                        {
+                            "user": "bob",
+                            "uuid": "22222222-2222-4222-8222-222222222222",
+                            "remark": "bob vmess",
+                        },
+                    ],
+                }
+            ],
+        )
+    )
+
+    rendered_config = json.loads(dumps_xray_config(stack_set, "multi"))
+
+    assert rendered_config["inbounds"][0]["settings"]["clients"] == [
+        {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "alterId": 0,
+            "email": "alice",
+        },
+        {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "alterId": 0,
+            "email": "bob",
+        },
+    ]
+    assert rendered_config["inbounds"][0]["streamSettings"]["network"] == "raw"
+
+
 def test_render_xray_socks5_outbound_matches_golden() -> None:
     """验证外部 socks5 outbound 的生成结果。"""
     stack_set = make_stack_set(
@@ -327,10 +375,15 @@ def inbound_matrix() -> list[dict[str, Any]]:
             "protocol": "vmess",
             "listen": "127.0.0.1",
             "port": 26001,
-            "uuid": "22222222-2222-4222-8222-222222222222",
             "network": "raw",
             "tag": "custom-vmess",
             "sub": True,
+            "users": [
+                {
+                    "user": "alice",
+                    "uuid": "22222222-2222-4222-8222-222222222222",
+                }
+            ],
         },
         {
             "name": "ss-in",

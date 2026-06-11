@@ -269,11 +269,37 @@ xrelay:
 | `port` | 是 | 监听端口，全部 stack 内必须无冲突 |
 | `udp` | 否 | socks5/shadowsocks 可用 |
 | `auth` | 否 | socks5/http 支持 `noauth` 或 `password` |
-| `user` | 否 | 订阅 URL 中的用户过滤字段 |
+| `user` | 非 vmess 可选 | 订阅 URL 中的用户过滤字段；vmess 必须写在 `users[].user` |
 | `server` | 否 | 订阅节点 server 覆盖值；不填使用 `external_host` |
-| `remark` | 否 | 订阅节点展示名 |
+| `remark` | 非 vmess 可选 | 订阅节点展示名；vmess 必须写在 `users[].remark` |
 | `tag` | 否 | 不填则生成 `protocol:port:name` |
 | `sub` | 是 | 是否进入订阅输出 |
+| `network` | vmess 必填 | vmess 传输网络，例如 `raw` |
+| `users` | vmess 必填 | 非空列表；一个 vmess inbound 下的一个或多个客户端用户 |
+
+### vmess users
+
+vmess 只支持 `users` 结构；单用户也写成一条 `users` 记录。
+
+- 不支持 inbound 顶层 `uuid`。
+- vmess 的 `user` 和 `remark` 必须写在 `users[]` 中。
+- `users` 只能用于 vmess；同一 inbound 内 `users[].user`、`users[].uuid` 和最终订阅 tag 不能重复。
+
+```yaml
+- name: vmess
+  protocol: vmess
+  listen: 0.0.0.0
+  port: 4301
+  network: raw
+  sub: true
+  users:
+    - user: alice
+      uuid: 11111111-1111-4111-8111-111111111111
+      remark: alice vmess
+    - user: bob
+      uuid: 22222222-2222-4222-8222-222222222222
+      remark: bob vmess
+```
 
 ### socks/http 鉴权
 

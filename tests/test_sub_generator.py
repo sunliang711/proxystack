@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from zipfile import ZipFile
 
 import pytest
@@ -34,9 +35,9 @@ def test_render_stack_input_filters_sub_true_and_protocol_fields() -> None:
     subscription_input = render_stack_input(make_stack_set(), "local")
     nodes = {node.id: node for node in subscription_input.nodes}
 
-    assert list(nodes) == ["edge:vmess", "edge:ss", "edge:socks", "edge:http"]
-    assert nodes["edge:vmess"].uuid == "22222222-2222-4222-8222-222222222222"
-    assert nodes["edge:vmess"].network == "raw"
+    assert list(nodes) == ["edge:vmess:alice", "edge:ss", "edge:socks", "edge:http"]
+    assert nodes["edge:vmess:alice"].uuid == "22222222-2222-4222-8222-222222222222"
+    assert nodes["edge:vmess:alice"].network == "raw"
     assert nodes["edge:ss"].method == "chacha20-ietf-poly1305"
     assert nodes["edge:ss"].cipher == "chacha20-ietf-poly1305"
     assert nodes["edge:ss"].password == "ss-pass"
@@ -52,8 +53,56 @@ def test_render_stack_input_uses_external_host_and_inbound_override() -> None:
     subscription_input = render_stack_input(make_stack_set(), "local")
     nodes = {node.id: node for node in subscription_input.nodes}
 
-    assert nodes["edge:vmess"].server == "proxy.example.com"
+    assert nodes["edge:vmess:alice"].server == "proxy.example.com"
     assert nodes["edge:ss"].server == "ss.example.com"
+
+
+def test_render_stack_input_expands_vmess_users() -> None:
+    """验证 vmess users 会展开为多个订阅节点。"""
+    stack_set = StackSet(
+        config=load_config(Path("examples/config.yaml")),
+        stacks=[
+            make_stack(
+                [
+                    {
+                        "name": "vmess",
+                        "protocol": "vmess",
+                        "listen": "0.0.0.0",
+                        "port": 24001,
+                        "network": "raw",
+                        "tag": "shared-vmess",
+                        "sub": True,
+                        "users": [
+                            {
+                                "user": "alice",
+                                "uuid": "11111111-1111-4111-8111-111111111111",
+                                "remark": "alice vmess",
+                                "tag": "alice-vmess",
+                            },
+                            {
+                                "user": "bob",
+                                "uuid": "22222222-2222-4222-8222-222222222222",
+                                "remark": "bob vmess",
+                            },
+                        ],
+                    }
+                ]
+            )
+        ],
+    )
+
+    subscription_input = render_stack_input(stack_set, "local")
+    nodes = {node.id: node for node in subscription_input.nodes}
+
+    assert list(nodes) == ["edge:vmess:alice", "edge:vmess:bob"]
+    assert nodes["edge:vmess:alice"].user == "alice"
+    assert nodes["edge:vmess:alice"].uuid == "11111111-1111-4111-8111-111111111111"
+    assert nodes["edge:vmess:alice"].remark == "alice vmess"
+    assert nodes["edge:vmess:alice"].tag == "alice-vmess"
+    assert nodes["edge:vmess:bob"].user == "bob"
+    assert nodes["edge:vmess:bob"].uuid == "22222222-2222-4222-8222-222222222222"
+    assert nodes["edge:vmess:bob"].remark == "bob vmess"
+    assert nodes["edge:vmess:bob"].tag == "shared-vmess:bob"
 
 
 def test_render_stack_input_does_not_include_clash_config() -> None:
@@ -433,7 +482,7 @@ def make_stack_set() -> StackSet:
     return StackSet(config=load_config(Path("examples/config.yaml")), stacks=[make_stack()])
 
 
-def make_stack() -> Stack:
+def make_stack(inbounds: list[dict[str, Any]] | None = None) -> Stack:
     """生成测试用 stack 模型。"""
     return Stack.model_validate(
         {
@@ -444,16 +493,20 @@ def make_stack() -> Stack:
             "xrelay": {
                 "enabled": True,
                 "outbound": {"type": "direct"},
-                "inbounds": [
+                "inbounds": inbounds or [
                     {
                         "name": "vmess",
                         "protocol": "vmess",
                         "listen": "0.0.0.0",
                         "port": 24001,
-                        "uuid": "22222222-2222-4222-8222-222222222222",
                         "network": "raw",
-                        "user": "alice",
                         "sub": True,
+                        "users": [
+                            {
+                                "user": "alice",
+                                "uuid": "22222222-2222-4222-8222-222222222222",
+                            }
+                        ],
                     },
                     {
                         "name": "ss",
