@@ -2,7 +2,7 @@
 
 ## 目标
 
-实现 `init`、`add/edit/list/remove/clone/check/start/stop/restart/status/logs/enable/disable/publish/doctor` 常用命令，以及 `validate`、`render` 高级命令。
+实现 `init`、`add/edit/list/remove/clone/check/start/stop/restart/status/logs/enable/disable/doctor` 常用命令，以及 `validate`、`render` 和 `sub export` 高级命令。
 
 ## 技术方案
 
@@ -32,7 +32,7 @@
 7. 实现 `add` 使用默认模板或 `--from-file` 创建 `stacks/<name>.yaml`，默认自动分配端口，并支持 auto 模板的 `--members`。
 8. 实现 `edit [name]` 打开 `config.yaml` 或指定 stack 文件，保存后校验并写回。
 9. 实现 `clone <source> <target>` 复制已有 stack 文件为新 stack，支持 `--allocate-ports` 基于端口池重分配监听端口。
-10. 实现 `list`、`remove`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`publish`、`doctor` 常用包装命令。
+10. 实现 `list`、`remove`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor` 常用包装命令，以及 `sub export` 订阅发布包导出命令。
 
 ## 验收标准
 

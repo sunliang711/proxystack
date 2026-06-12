@@ -1,5 +1,7 @@
 # Task10 发布构建与订阅包交付记录
 
+> 历史记录：本次交付中的“从 inputs 发布、sub 导入重建”流程已被后续 `proxystack-agent sub export [stack]`、`proxystack-sub import/serve` 动态 inputs reload 流程替换；当前用法以 `docs/generation.md` 和 `docs/deployment.md` 为准。
+
 ## 变更摘要
 
 - 补强 subscription input 和 sub bundle 的 schema/version 元数据，并在导入发布包时校验 bundle 内 input 内容。

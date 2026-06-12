@@ -43,7 +43,7 @@ proxystack-agent check -c ./examples/config.yaml
 - 每个 `stacks/<name>.yaml` 只描述一个 stack，必须包含 `name`、`xrelay` 和 `clash`。
 - `stacks/<name>.yaml` 中的 `name` 必须与文件名一致，避免日志和 systemd 服务名混乱。
 - xrelay 可以写在 clash 之前，解析器基于全部 stack 文件构建引用图，不依赖 YAML 顺序。
-- 用户只编辑 `config.yaml` 和 `stacks/*.yaml`；生成的 Xray JSON、mihomo YAML 和订阅索引不作为长期人工维护入口。
+- 用户只编辑 `config.yaml` 和 `stacks/*.yaml`；生成的 Xray JSON、mihomo YAML 和订阅 input/index 不作为长期人工维护入口。
 
 ## 2. 全局 config.yaml
 
@@ -115,15 +115,15 @@ install:
 - `paths.geo`：geo 数据目录，默认 `/opt/proxystack/geo`。
 - `paths.stacks`：stack 配置目录，默认相对 `base_dir`。
 - `paths.runtime`：manifest、锁文件和运行状态目录。
-- `paths.generated`：生成的 Xray JSON、mihomo YAML、订阅索引目录。
+- `paths.generated`：生成的 Xray JSON、mihomo YAML、订阅 input/index 目录。
 - `paths.publish`：订阅发布包输出目录。
 - `install.mihomo.source` / `install.xray.source` / `install.geo.source`：可填 `auto`、`github`、`r2` 或普通文件/URL；`auto` 按 GitHub Release 优先、Cloudflare R2 回退下载。
 - `install.geo.source` 使用托管源别名时默认下载 `MetaCubeX/meta-rules-dat` 的 `geoip.metadb`；本地 `.dat`、`.mmdb`、`.metadb`、zip/tar 文件或普通 URL 仍可显式指定。
 - `paths.downloads`：mihomo、xray-core 和 geo 数据下载缓存。
 - `paths.sub`：本地非 Docker 订阅服务数据目录，默认 `/opt/proxystack/sub`。
 - `external_host`：订阅节点默认对外 host。
-- `subscription`：本地订阅服务和发布包默认参数。
-- `subscription.access`：订阅访问控制。P0 支持 `type: none` 和 `type: token`；公网部署必须使用 token 或由反向代理鉴权。
+- `subscription`：agent 生成订阅 input/index、导出发布包和初始化 ps-sub 配置时使用的默认参数。
+- `subscription.access`：agent 本地订阅预览和初始化 ps-sub 配置时使用的访问控制。实际 HTTP 服务只读取 `sub/config.yaml` 中的 `access`；公网部署必须使用 token 或由反向代理鉴权。
 - `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
@@ -79,6 +80,52 @@ class SubscriptionGeneratorError(ValueError):
 
 class SubscriptionTemplateError(SubscriptionGeneratorError):
     """订阅模板读取或渲染失败异常。"""
+
+
+@dataclass(frozen=True)
+class SubscriptionInputSummary:
+    """描述一个订阅 input 的非敏感摘要，供 CLI 和日志输出。"""
+
+    name: str
+    source: str
+    nodes: int
+    users: int
+
+
+@dataclass(frozen=True)
+class SubscriptionBundleSummary:
+    """描述订阅发布包内容的非敏感摘要。"""
+
+    source: str
+    inputs: tuple[SubscriptionInputSummary, ...]
+    users: int
+
+    @property
+    def input_count(self) -> int:
+        """返回发布包包含的 input 文件数量。"""
+        return len(self.inputs)
+
+    @property
+    def node_count(self) -> int:
+        """返回发布包包含的订阅节点总数。"""
+        return sum(input_summary.nodes for input_summary in self.inputs)
+
+    @property
+    def user_count(self) -> int:
+        """返回发布包包含的去重用户数量。"""
+        return self.users
+
+
+@dataclass(frozen=True)
+class BundleImportResult:
+    """描述发布包导入结果，避免 CLI 重新扫描 zip 或泄露凭据。"""
+
+    manifest: "BundleManifest"
+    summary: SubscriptionBundleSummary
+    written_inputs: tuple[str, ...]
+    replaced_inputs: tuple[str, ...]
+    removed_inputs: tuple[str, ...]
+    replace_all: bool
 
 
 class SubscriptionAuth(BaseModel):
@@ -448,6 +495,32 @@ def load_inputs(input_dir: Path) -> list[tuple[Path, SubscriptionInput]]:
     return [(path, load_input_file(path)) for path in scan_input_files(input_dir)]
 
 
+def summarize_subscription_inputs(
+    source: str,
+    inputs: list[tuple[Path, SubscriptionInput]],
+) -> SubscriptionBundleSummary:
+    """生成多个订阅 input 的非敏感摘要，供导入、导出和日志复用。"""
+    input_summaries = tuple(input_summary(input_path.name, subscription_input) for input_path, subscription_input in inputs)
+    users = {node.user for _input_path, subscription_input in inputs for node in subscription_input.nodes}
+    return SubscriptionBundleSummary(source=source, inputs=input_summaries, users=len(users))
+
+
+def summarize_input_files(source: str, input_files: list[tuple[str, bytes]]) -> SubscriptionBundleSummary:
+    """从发布包候选 input 内容生成非敏感摘要。"""
+    loaded_inputs = [(Path(name), load_input_content(name, content)) for name, content in input_files]
+    return summarize_subscription_inputs(source, loaded_inputs)
+
+
+def input_summary(name: str, subscription_input: SubscriptionInput) -> SubscriptionInputSummary:
+    """生成单个订阅 input 的非敏感摘要。"""
+    return SubscriptionInputSummary(
+        name=name,
+        source=subscription_input.source,
+        nodes=len(subscription_input.nodes),
+        users=len({node.user for node in subscription_input.nodes}),
+    )
+
+
 def merge_input_files(input_dir: Path, access: Optional[SubscriptionAccess] = None) -> SubscriptionIndex:
     """扫描并合并 inputs 目录，供 agent 和 sub 共享。"""
     return merge_inputs(load_inputs(input_dir), access=access)
@@ -588,6 +661,22 @@ def load_subscription_template(
         return files("proxystack").joinpath("templates", SUB_TEMPLATE_DIR_NAME, template_name).read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise SubscriptionTemplateError(f"subscription template is missing: {template_name}") from exc
+
+
+def find_subscription_template_source(
+    template_name: str,
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> str:
+    """返回模板将从哪个位置读取，用于启动日志摘要。"""
+    validate_subscription_template_name(template_name)
+    for template_path in subscription_template_paths(template_name, template_dir=template_dir, data_dir=data_dir):
+        try:
+            if template_path.is_file():
+                return str(template_path)
+        except OSError as exc:
+            raise SubscriptionTemplateError(f"subscription template could not be read: {template_path}") from exc
+    return f"builtin:{SUB_TEMPLATE_DIR_NAME}/{template_name}"
 
 
 def validate_subscription_template_name(template_name: str) -> None:
@@ -909,6 +998,15 @@ def validate_zip_member(member: ZipInfo) -> None:
 
 def extract_bundle_inputs(bundle_path: Path, data_dir: Path, replace_all: bool = False) -> BundleManifest:
     """校验发布包并把 inputs 增量解包到 data_dir/inputs。"""
+    return extract_bundle_inputs_with_result(bundle_path, data_dir, replace_all=replace_all).manifest
+
+
+def extract_bundle_inputs_with_result(
+    bundle_path: Path,
+    data_dir: Path,
+    replace_all: bool = False,
+) -> BundleImportResult:
+    """校验发布包、写入 inputs，并返回本次导入的非敏感摘要。"""
     try:
         zip_file = ZipFile(bundle_path, "r")
     except BadZipFile as exc:
@@ -933,10 +1031,15 @@ def extract_bundle_inputs(bundle_path: Path, data_dir: Path, replace_all: bool =
             if actual_hash != manifest.inputs_sha256[name]:
                 raise SubscriptionGeneratorError(f"input hash mismatch: {name}")
         loaded_inputs = [(Path(name), load_input_content(name, content)) for name, content in input_members.items()]
+        import_summary = summarize_subscription_inputs(manifest.source, loaded_inputs)
         input_dir = data_dir / "inputs"
         input_dir.mkdir(parents=True, exist_ok=True)
+        existing_input_names = {path.name for path in scan_input_files(input_dir)}
+        replaced_inputs = tuple(sorted(name for name in input_members if name in existing_input_names))
+        removed_inputs: tuple[str, ...] = ()
         if replace_all:
             merge_inputs(loaded_inputs)
+            removed_inputs = tuple(sorted(name for name in existing_input_names if name not in input_members))
             clear_managed_input_files(input_dir)
         else:
             existing_inputs = [
@@ -947,11 +1050,18 @@ def extract_bundle_inputs(bundle_path: Path, data_dir: Path, replace_all: bool =
             merge_inputs([*existing_inputs, *loaded_inputs])
         for name, content in input_members.items():
             write_input_atomically(input_dir / name, content)
-    return manifest
+    return BundleImportResult(
+        manifest=manifest,
+        summary=import_summary,
+        written_inputs=tuple(sorted(input_members)),
+        replaced_inputs=replaced_inputs,
+        removed_inputs=removed_inputs,
+        replace_all=replace_all,
+    )
 
 
 def clear_managed_input_files(input_dir: Path) -> None:
-    """清理旧订阅 input，确保导入发布包后 current 只来自本次 bundle。"""
+    """清理旧订阅 input，确保 replace-all 后 inputs 只来自本次 bundle。"""
     for path in scan_input_files(input_dir):
         path.unlink()
 

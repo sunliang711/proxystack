@@ -6,17 +6,18 @@
 
 - Xray JSON：`/opt/proxystack/runtime/generated/xray/<stack>.json`
 - mihomo YAML：`/opt/proxystack/runtime/generated/clash/<stack>.yaml`
-- 订阅索引：`/opt/proxystack/runtime/generated/sub/index.json`
-- 订阅输入：`/opt/proxystack/runtime/generated/sub/inputs/<source>.yaml`
-- 订阅发布包：`/opt/proxystack/publish/sub-bundle.zip`
+- 本地订阅输入：`/opt/proxystack/runtime/generated/sub/inputs/<source>.yaml`
+- 本地订阅索引：`/opt/proxystack/runtime/generated/sub/index.json`
 - manifest：`/opt/proxystack/runtime/manifest.json`
+
+订阅发布包不由 `start` 隐式生成，需显式执行 `proxystack-agent sub export`，默认输出 `/opt/proxystack/publish/sub-bundle.zip`。
 
 生成器必须满足：
 
 - 同一份 config 和 stack 文件多次生成结果稳定。
 - 未变化的生成文件不改写，避免无意义重启服务。
 - 生成前先执行完整校验。
-- `sub` 只影响订阅索引，不影响 Xray inbound 是否生成。
+- `sub` 只影响订阅 input/index 和发布包，不影响 Xray inbound 是否生成。
 - clash 信息不进入订阅索引。
 - 订阅服务只消费订阅输入/发布包，不读取 stack 或 clash 配置。
 
@@ -269,7 +270,7 @@ rules:
 
 ## 5. 订阅生成
 
-订阅索引只来自启用的 xrelay inbound：
+订阅 input/index 只来自启用的 xrelay inbound：
 
 ```text
 stacks/*.yaml xrelay.inbounds[] where sub == true
@@ -317,15 +318,17 @@ Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含
 
 订阅访问控制：
 
-- `subscription.access.type: token` 时，HTTP 路由必须校验 `token` query 参数或等价的反向代理鉴权头。
-- `subscription.access.type: none` 只允许本地监听或明确的公网风险确认。
+- agent 全局 `subscription.access` 只用于本地 `render sub` 预览和生成初始 sub 配置。
+- `proxystack-sub serve` 的 HTTP 鉴权只读取 ps-sub 配置文件中的 `access` 字段。
+- `access.type: token` 时，HTTP 路由必须校验 `token` query 参数或等价的反向代理鉴权头。
+- `access.type: none` 只允许本地监听或明确的公网风险确认。
 - token 只用于访问订阅 HTTP 服务，不写入订阅节点。
 
 用户不存在或没有订阅节点时返回 `404` 和统一 JSON 错误结构。
 
 ## 6. 订阅输入和多文件合并
 
-Subscription input 是 agent 和 sub 共享的格式。`proxystack-sub` 支持类似 `clashsub` 的 inputs 目录，`proxystack-agent` 也可以直接读取同一目录来校验、合并和导出发布包：
+Subscription input 是 agent 和 sub 共享的格式。`proxystack-sub` 支持类似 `clashsub` 的 inputs 目录，`proxystack-agent` 也可以直接读取同一目录来校验和预览合并结果：
 
 ```text
 <data_dir>/
@@ -378,9 +381,10 @@ nodes:
 ```bash
 proxystack-agent sub export
 proxystack-agent sub export usa1
+proxystack-agent sub export usa1 --summary
 ```
 
-`sub export` 缺省导出全部 stack，包内按 stack 写入 `inputs/<stack>.yaml`；指定 stack 时只导出该 stack，并默认写到 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
+`sub export` 缺省导出全部 stack，包内按 stack 写入 `inputs/<stack>.yaml`；指定 stack 时只导出该 stack，并默认写到 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。`--summary` 或 `--dry-run` 只输出将写入发布包的 input、node 和 user 数量，不写 zip。
 
 agent 仍可以只读消费已有 inputs 目录用于校验或预览：
 
@@ -400,7 +404,7 @@ sub-bundle.zip
     <stack>.yaml
 ```
 
-P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `manifest.json` 和 `inputs/*.yaml|*.yml|*.json`，导入时会拒绝绝对路径、反斜杠、`..` 和其他未知成员。
+发布包只允许包含 `manifest.json` 和 `inputs/*.yaml|*.yml|*.json`，导入时会拒绝绝对路径、反斜杠、`..` 和其他未知成员。
 
 `manifest.json` 示例：
 
@@ -428,10 +432,13 @@ P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `
 - 不包含 clash upstream、proxy-groups、rules、mode。
 - 不包含 mihomo controller 配置。
 - 不包含本地运行目录和 systemd 信息。
+- manifest 中的 `access` 保留为 schema 字段，但当前 `write_bundle` 固定写入 `none`，`proxystack-sub import` 不用它配置订阅服务 token。
 - 不包含订阅服务 access token；token 只在 ps-sub 配置文件中配置。
 - manifest 必须是 `bundle_schema: proxystack.sub-bundle`、`bundle_version: 1`；缺少 `bundle_schema` 的 v1 发布包按兼容输入读取，原生备份包等其他 schema 会被拒绝。
 
-`proxystack-sub import sub-bundle.zip` 校验 manifest 和 hash 后，把 bundle 内的 inputs 增量解包到 `<data_dir>/inputs/`；同名 input 会被原子替换，其它 input 会保留，适合多个 agent/stack 发布包连续导入。需要清空旧 inputs 后全量替换时使用 `--replace-all`。`proxystack-sub serve` 从内存索引响应请求，运行中的服务会在 inputs 变化后自动 reload。
+`proxystack-sub import sub-bundle.zip` 校验 manifest 和 hash 后，把 bundle 内的 inputs 增量解包到 `<data_dir>/inputs/`；同名 input 会被原子替换，其它 input 会保留，适合多个 agent/stack 发布包连续导入。导入成功会输出 source、input、node、user、写入/覆盖和 `--replace-all` 删除信息。需要清空旧 inputs 后全量替换时使用 `--replace-all`。`proxystack-sub serve` 从内存索引响应请求，运行中的服务会在 inputs 变化后自动 reload。
+
+`proxystack-sub serve` 启动时会输出 data_dir、input_dir、listen、access 类型、模板来源、input/source/node/user 统计；reload 成功时输出 input/source/node/user 统计，reload 失败时只输出错误类型并保留上一份可用内存索引。
 
 本地部署默认数据目录是 `/opt/proxystack/sub`。Docker 部署默认数据目录是容器内 `/data`，需要由宿主机 volume 持久化。
 

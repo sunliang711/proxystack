@@ -107,14 +107,17 @@ systemd unit 文件需要安装到 `/etc/systemd/system/`，这是 systemd 的�
 /opt/proxystack/sub/
   config.yaml
   inputs/
+  templates/
 ```
+
+`config.yaml` 可参考 [examples/sub-config.yaml](../examples/sub-config.yaml)，最小生产配置应显式配置 `listen` 和 `access`，需要本地覆盖订阅模板时配置 `templates_dir`。
 
 导入发布包并启动：
 
 ```bash
 proxystack-agent sub export
 proxystack-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/proxystack/sub
-proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
+proxystack-sub serve --config /opt/proxystack/sub/config.yaml
 ```
 
 本地订阅服务可使用 `scripts/install-sub-local.sh` 部署，脚本封装 sub 数据目录创建、可选发布包导入、可选 systemd 安装和启动。
@@ -129,15 +132,16 @@ sudo scripts/install-sub-local.sh \
 服务启动命令建议：
 
 ```bash
-proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
+proxystack-sub serve --config /opt/proxystack/sub/config.yaml
 ```
 
 本地部署要求：
 
 - `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装使用 `proxystack-agent service install sub`，常用启停使用 `proxystack-agent start sub`、`proxystack-agent stop sub` 和 `proxystack-agent restart sub`。
 - 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认增量覆盖同名 input。需要清空旧 inputs 时使用 `--replace-all`。
+- `proxystack-sub import` 成功后会输出写入、覆盖和删除的 input 摘要，便于确认本次变更范围。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
-- 服务进程启动时读取 `/opt/proxystack/sub/config.yaml` 和 `/opt/proxystack/sub/inputs/`，请求处理只使用内存索引，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
+- 服务进程启动时读取 `/opt/proxystack/sub/config.yaml` 和 `/opt/proxystack/sub/inputs/`，并在日志中输出 data_dir、input_dir、listen、access 类型、模板来源和 input/source/node/user 统计；请求处理只使用内存索引，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
 
 ## 4. 本地卸载
 
@@ -179,7 +183,7 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
 
 - `proxystack-agent` 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/*.yaml`。
 - `config.yaml` 运行期只读；只有 `init` 和 `edit` 这类配置管理命令可以写。
-- `proxystack-sub` 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址和 access token。
+- `proxystack-sub` 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址、access token 和可选 `templates_dir`。
 - `proxystack-agent sub export` 只生成 `/opt/proxystack/publish/sub-bundle.zip` 或指定 stack 的 `/opt/proxystack/publish/<stack>-sub-bundle.zip`，不直接改 `sub/inputs/`。
 - `proxystack-sub import` 从发布包复制 inputs 到 `sub/inputs/`，运行中的服务由 watcher 自动 reload。
 
@@ -242,7 +246,7 @@ mkdir -p /opt/proxystack/sub
 vi /opt/proxystack/sub/config.yaml
 ```
 
-`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。
+`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。完整示例见 [examples/sub-config.yaml](../examples/sub-config.yaml)。
 
 ```bash
 docker run -d \
@@ -304,12 +308,8 @@ services:
     command:
       - proxystack-sub
       - serve
-      - --host
-      - 0.0.0.0
-      - --port
-      - "3003"
-      - --data-dir
-      - /data
+      - --config
+      - /data/config.yaml
 ```
 
 仓库提供了可直接参考的 [Dockerfile.sub](../Dockerfile.sub) 和 [docker-compose.sub.yml](../docker-compose.sub.yml)。镜像只安装 proxystack Python 包和订阅服务依赖，不包含 mihomo 或 xray-core。

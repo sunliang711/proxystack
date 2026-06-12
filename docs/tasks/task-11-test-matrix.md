@@ -20,7 +20,7 @@
 4. [x] 覆盖 `add` 默认端口分配和 `clone --allocate-ports` 的端口池分配写回行为。
 5. [x] 覆盖 Xray、mihomo、subscription 生成器 golden 输出。
 6. [x] 覆盖 `check/start` 的职责边界：`check` 不写文件、不操作服务，`start` 先写生成文件再启动或重启目标服务。
-7. [x] 覆盖订阅发布包 import 默认 rebuild、`--no-rebuild` 跳过 rebuild、current 原子切换。
+7. [x] 覆盖订阅发布包 import 默认增量写入、`--replace-all` 全量替换、inputs 原子替换和 watcher reload。
 8. [x] 覆盖 agent/sub 同机部署目录边界；锁隔离作为文档化手工验收项保留。
 9. [x] 覆盖订阅 HTTP token 鉴权、无用户、空节点和三类订阅格式。
 10. [x] 覆盖 Docker Compose 示例的关键安全配置：非 root、只读 rootfs、`cap_drop: ALL`、持久化 `/data`、healthcheck。
@@ -30,7 +30,7 @@
 - `pytest` 能在无 root、无 systemd、无真实代理核心二进制的环境中通过。
 - golden tests 变更必须显式更新快照，不能由普通格式化命令误改。
 - 所有 P0 命令至少有 help 测试和一条成功/失败路径测试。
-- 端到端测试覆盖 `init -> add -> validate -> check -> start -> publish -> sub import -> serve` 的主流程。
+- 端到端测试覆盖 `init -> add -> validate -> check -> start -> sub export -> sub import -> serve` 的主流程。
 - 测试夹具使用示例明文凭据，不使用真实生产凭据。
 
 ## 依赖
@@ -44,7 +44,7 @@ systemd 和 Docker 在 CI 中可能不可用；需要把自动化测试和手工
 ## P0 实现状态
 
 - 已建立 `tests/unit`、`tests/golden`、`tests/fixtures`、`tests/e2e` 目录结构；现有 `tests/test_*.py` 未搬动。
-- 已补充 Task11 增量测试，覆盖示例 stack 独立加载、必填凭据缺失、`add` 默认端口写回、订阅 input/index/格式 golden、`proxystack-sub import --no-rebuild` 和 rebuild 原子替换、fake `serve` 成功路径、Docker Compose 安全配置、agent/sub 目录边界和锁路径文档约束。
-- 已补充端到端主流程测试：`init -> add -> validate -> check -> start -> publish -> sub import -> serve`，通过 fake systemd runner 和 fake uvicorn 隔离真实系统服务和网络监听。
+- 已补充 Task11 增量测试，覆盖示例 stack 独立加载、必填凭据缺失、`add` 默认端口写回、订阅 input/index/格式 golden、`proxystack-sub import` 增量写入、`--replace-all` 全量替换、watcher reload、fake `serve` 成功路径、Docker Compose 安全配置、agent/sub 目录边界和锁路径文档约束。
+- 已补充端到端主流程测试：`init -> add -> validate -> check -> start -> sub export -> sub import -> serve`，通过 fake systemd runner 和 fake uvicorn 隔离真实系统服务和网络监听。
 - 既有测试继续覆盖 Xray/mihomo golden、非法配置端口/ref/循环依赖、check/start 边界、订阅 HTTP token/无用户/空节点/三类格式、订阅发布包 schema/hash/path 安全。
 - 自动化测试不调用真实 `systemctl`、`journalctl`、真实网络下载、真实 Docker/systemd/root 权限。

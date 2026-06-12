@@ -353,7 +353,7 @@ proxystack-agent import proxystack-backup.zip --force
 - `config/config.yaml`：全局配置。
 - `stacks/*.yaml`：stack 配置。
 
-备份包不包含 `runtime/`、`runtime/generated/`、`publish/`、`downloads/`、`.venv/`、`bin/`、`geo/` 或 systemd unit。`runtime` 和生成配置都可以由 `check/start/render` 根据 config 和 stacks 重新生成，导入旧 runtime 反而可能携带过期 hash、旧路径或旧机器状态。
+备份包不包含 `runtime/`、`runtime/generated/`、`publish/`、`downloads/`、`sub/inputs/`、`sub/templates/`、`.venv/`、`bin/`、`geo/` 或 systemd unit。`runtime` 和生成配置都可以由 `check/start/render` 根据 config 和 stacks 重新生成，导入旧 runtime 反而可能携带过期 hash、旧路径或旧机器状态；订阅 inputs 和模板属于 `proxystack-sub` 运行数据，不随 agent 原生备份包迁移。
 
 导入规则：
 
@@ -369,11 +369,12 @@ proxystack-agent import proxystack-backup.zip --force
 proxystack-agent sub export
 proxystack-agent sub export usa1
 proxystack-agent sub export usa1 -o /opt/proxystack/publish/usa1-sub-bundle.zip
+proxystack-agent sub export usa1 --summary
 proxystack-agent sub validate-inputs --input-dir ./inputs
 proxystack-agent render sub --input-dir ./inputs
 proxystack-sub import sub-bundle.zip
 proxystack-sub import sub-bundle.zip --replace-all
-proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
+proxystack-sub serve --config /opt/proxystack/sub/config.yaml
 ```
 
 HTTP 路由：
@@ -389,19 +390,24 @@ GET /surge_sub/:user
 
 - `sub export`：常用入口，默认生成 `/opt/proxystack/publish/sub-bundle.zip`，包内按 stack 写入 `inputs/<stack>.yaml`。
 - `sub export <stack>`：只导出指定 stack，默认生成 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
+- `sub export --summary` 或 `--dry-run`：只预览发布包将包含的 input、node 和 user 数量，不写 zip。
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。
 - `render sub`：只输出订阅索引，不写文件；加 `--input-dir` 时输出多 input 合并后的结果。
 
-订阅服务启动时扫描 `<data_dir>/inputs/` 并构建内存索引，请求处理只读取内存索引，不读取 `current/index.json`、全局 `config.yaml` 或 stack 文件。服务运行期间会监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；`.yaml`、`.yml`、`.json` input 增加、删除、保存完成或原子替换后会重新加载整个 inputs 目录，临时文件和属性变化不会触发 reload。`proxystack-sub import` 只校验发布包并增量写入或覆盖同名 input，`--replace-all` 会先清空旧 input。订阅访问 token 来自 ps-sub 配置文件，例如 `/opt/proxystack/sub/config.yaml`：
+`proxystack-sub import` 成功后会输出本次导入摘要，包括 source、input 数、node 数、user 数、写入或覆盖的 input，以及 `--replace-all` 删除的旧 input。订阅服务启动时扫描 `<data_dir>/inputs/` 并构建内存索引，请求处理只读取内存索引，不读取 `current/index.json`、全局 `config.yaml` 或 stack 文件。服务运行期间会监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；`.yaml`、`.yml`、`.json` input 增加、删除、保存完成或原子替换后会重新加载整个 inputs 目录，临时文件和属性变化不会触发 reload。订阅访问 token 来自 ps-sub 配置文件，例如 `/opt/proxystack/sub/config.yaml`：
 
 ```yaml
+data_dir: /opt/proxystack/sub
 listen: 0.0.0.0:3003
 access:
   type: token
   token: "<subscription-token>"
+templates_dir: /opt/proxystack/sub/templates
+watch_interval: 2.0
+watch_debounce: 0.3
 ```
 
-`data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
+完整示例见 [examples/sub-config.yaml](../examples/sub-config.yaml)。`data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
 订阅模板可以本地覆盖，默认查找 `<data_dir>/templates/sub/` 下的 `clash.yaml.j2`、`premium-clash.yaml.j2` 和 `surge.conf.j2`。也可以在 ps-sub 配置中显式指定模板根目录：
 
 ```yaml
@@ -409,6 +415,14 @@ templates_dir: /opt/proxystack/sub/templates
 ```
 
 此时模板放在 `/opt/proxystack/sub/templates/sub/`；如果直接把模板放在 `templates_dir` 根目录，也会被识别。
+
+`proxystack-sub serve` 启动和 reload 会输出不含 token/password 的英文日志摘要，便于排查：
+
+```text
+Subscription server configuration: data_dir=/opt/proxystack/sub input_dir=/opt/proxystack/sub/inputs listen=0.0.0.0:3003 access=token templates_dir=/opt/proxystack/sub/templates watch_interval=2.0 watch_debounce=0.3
+Subscription server template sources: clash.yaml.j2=/opt/proxystack/sub/templates/sub/clash.yaml.j2 premium-clash.yaml.j2=builtin:sub/premium-clash.yaml.j2 surge.conf.j2=builtin:sub/surge.conf.j2
+Subscription inputs reloaded: input_dir=/opt/proxystack/sub/inputs inputs=3 sources=3 nodes=4 users=1
+```
 
 本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程是 `sub export + sub import`，运行中的服务会由 watcher 自动 reload。
 

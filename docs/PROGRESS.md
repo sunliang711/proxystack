@@ -16,13 +16,14 @@
 - [x] 扩展 Xray API、Stats、Policy 生成
 - [x] 实现 mihomo 配置生成器和 `render clash`
 - [x] 实现订阅 input/index 生成、多 inputs 合并和发布包
-- [x] 实现 `proxystack-sub import/rebuild/serve` 与 FastAPI 订阅路由
+- [x] 实现 `proxystack-sub import/serve`、inputs 动态 reload 与 FastAPI 订阅路由
 - [x] 实现 CLI 生命周期命令、runtime 生成文件和 manifest 写入
 - [x] 实现 mihomo/xray/geo 下载安装更新和 self update P0 候选版
 - [x] 实现 systemd unit 安装和真实服务管理 P0
 - [x] 实现发布构建、订阅包 schema 校验和订阅服务 Docker 示例 P0
 - [x] 建立测试矩阵和端到端验证 P0
 - [x] 实现首次安装和订阅服务部署脚本 P0
+- [x] 增强订阅发布预览、导入摘要、serve 启动/reload 日志和 ps-sub 配置示例
 
 ## 里程碑
 
@@ -47,6 +48,9 @@
 - [Task 10 交付记录：发布构建与订阅包 P0](delivery/2026-06-05-20-17-11-feature-python-import-export-release.md)
 - [Task 11 交付记录：测试矩阵与端到端验证 P0](delivery/2026-06-05-20-33-29-test-python-test-matrix.md)
 - [Task 12 交付记录：部署脚本 P0](delivery/2026-06-05-20-58-01-feature-shell-deployment-scripts.md)
+- [sub export 按 stack 导出订阅发布包](delivery/2026-06-11-23-09-39-feature-python-sub-export-stack-bundles.md)
+- [ps-sub 订阅模板渲染](delivery/2026-06-12-11-09-59-feature-python-subscription-template-rendering.md)
+- [订阅服务近期优先项增强](delivery/2026-06-12-13-13-37-feature-python-subscription-ops-polish.md)
 
 ## 任务列表
 

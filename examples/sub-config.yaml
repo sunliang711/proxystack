@@ -1,0 +1,8 @@
+data_dir: /opt/proxystack/sub
+listen: 127.0.0.1:3003
+access:
+  type: token
+  token: change-me-subscription-token
+templates_dir: /opt/proxystack/sub/templates
+watch_interval: 2.0
+watch_debounce: 0.3

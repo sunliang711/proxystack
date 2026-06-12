@@ -1,5 +1,7 @@
 # Task11 测试矩阵与端到端验证 P0 交付记录
 
+> 历史记录：本次记录中的 `publish`、`import --no-rebuild`、`rebuild/current` 流程已被后续实现替换；当前测试矩阵以 `docs/testing-matrix.md` 为准。
+
 ## 变更摘要
 
 - 建立 `tests/unit`、`tests/fixtures`、`tests/e2e` 目录结构，保留原有平铺测试文件不搬动。

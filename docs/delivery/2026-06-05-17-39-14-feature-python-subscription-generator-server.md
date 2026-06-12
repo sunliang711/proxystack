@@ -1,5 +1,7 @@
 # Task06 订阅生成与 HTTP 服务交付记录
 
+> 历史记录：本次交付中的 `publish`、`sub export-input`、`rebuild` 和 `current/index.json` 模型已被后续实现替换；当前用法以 `docs/cli.md`、`docs/generation.md` 和 `proxystack-agent sub export`、`proxystack-sub import/serve` 为准。
+
 ## 交付范围
 
 - 新增 `src/proxystack/generator/sub`，实现订阅 input schema、index schema、stack input 生成、inputs 扫描合并、重复 node.id 冲突检测、Clash/Premium Clash/Surge 订阅渲染，以及 `sub-bundle.zip` manifest/hash 校验。

@@ -50,11 +50,13 @@ from proxystack.generator.backup import read_native_backup
 from proxystack.generator.backup import write_native_backup
 from proxystack.generator.mihomo import dumps_mihomo_config
 from proxystack.generator.sub import SubscriptionGeneratorError
+from proxystack.generator.sub import SubscriptionBundleSummary
 from proxystack.generator.sub import index_to_json
 from proxystack.generator.sub import merge_input_files
 from proxystack.generator.sub import render_stack_index
 from proxystack.generator.sub import render_stack_input
 from proxystack.generator.sub import stack_input_file
+from proxystack.generator.sub import summarize_input_files
 from proxystack.generator.sub import write_bundle
 from proxystack.generator.xray import dumps_xray_config
 from proxystack.graph import DependencyPlan
@@ -1228,6 +1230,7 @@ def render_sub(
 def export_subscription(
     stack: Optional[str] = typer.Argument(None, help="可选 stack 名称；缺省导出全部 stack。"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="订阅发布包输出路径。"),
+    summary: bool = typer.Option(False, "--summary", "--dry-run", help="只预览发布包内容，不写入 zip。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
 ) -> None:
     """生成 ps-sub 可导入的订阅发布包。"""
@@ -1235,7 +1238,11 @@ def export_subscription(
         global_config = load_config(config)
         stack_set = load_stacks(global_config, check_system_ports=False)
         bundle_source, input_files = build_subscription_bundle_inputs(stack_set, stack)
+        bundle_summary = summarize_input_files(bundle_source, input_files)
         output_path = output or default_subscription_bundle_path(global_config, stack)
+        if summary:
+            echo_subscription_bundle_summary(bundle_summary, output_path=output_path, preview=True)
+            return
         write_bundle(output_path, bundle_source, input_files)
         ensure_managed_directory(output_path.parent)
         ensure_managed_file_metadata(output_path)
@@ -1243,6 +1250,7 @@ def export_subscription(
         typer.echo(f"订阅发布包导出失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"订阅发布包已导出：{output_path}")
+    echo_subscription_bundle_summary(bundle_summary, output_path=output_path, preview=False)
 
 
 @sub_app.command("validate-inputs")
@@ -1288,6 +1296,24 @@ def default_subscription_bundle_path(global_config: GlobalConfig, stack: Optiona
     if stack is None:
         return publish_dir / "sub-bundle.zip"
     return publish_dir / f"{stack}-sub-bundle.zip"
+
+
+def echo_subscription_bundle_summary(
+    summary: SubscriptionBundleSummary,
+    output_path: Path,
+    preview: bool,
+) -> None:
+    """输出订阅发布包内容摘要，不包含任何连接凭据。"""
+    title = "订阅发布包预览" if preview else "订阅发布包摘要"
+    typer.echo(
+        f"{title}: output={output_path} source={summary.source} "
+        f"inputs={summary.input_count} nodes={summary.node_count} users={summary.user_count}"
+    )
+    for input_summary in summary.inputs:
+        typer.echo(
+            f"  - {input_summary.name}: source={input_summary.source} "
+            f"nodes={input_summary.nodes} users={input_summary.users}"
+        )
 
 
 def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: bool) -> list[Path]:

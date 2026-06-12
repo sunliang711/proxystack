@@ -61,8 +61,9 @@ class SubscriptionState:
             self._index = index
             self._last_error = None
         LOGGER.info(
-            "Subscription inputs reloaded: input_dir=%s sources=%d nodes=%d users=%d",
+            "Subscription inputs reloaded: input_dir=%s inputs=%d sources=%d nodes=%d users=%d",
             self.input_dir,
+            len(index.sources),
             len(index.sources),
             len(index.nodes),
             len(index.users),

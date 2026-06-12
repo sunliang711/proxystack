@@ -10,9 +10,9 @@
 - 删除 agent 顶层 `publish` 和 `sub export-input` CLI 入口。
 - `sub export` 缺省按 stack 拆分写入 `inputs/<stack>.yaml`，默认输出 `/opt/proxystack/publish/sub-bundle.zip`。
 - `sub export <stack>` 只导出指定 stack，默认输出 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
-- `proxystack-sub import` 默认增量导入发布包，覆盖同名 input，保留其它 input，并自动 rebuild。
+- `proxystack-sub import` 默认增量导入发布包，覆盖同名 input，保留其它 input；运行中的 `serve` 由 watcher 自动 reload。
 - 新增 `proxystack-sub import --replace-all`，用于清空旧 inputs 后全量替换。
-- 增量导入时校验发布包 access 与既有 access 一致，避免多个发布包覆盖订阅 token。
+- 订阅 access token 由 `ps-sub config.yaml` 管理，导入发布包不覆盖订阅服务 token。
 - 更新 CLI、生成规则、部署、架构和测试矩阵文档。
 
 ## 验证

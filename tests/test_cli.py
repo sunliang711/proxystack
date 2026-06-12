@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -14,6 +15,7 @@ from uuid import UUID
 from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
+from pytest import LogCaptureFixture
 from pytest import MonkeyPatch
 from ruamel.yaml import YAML
 from typer.testing import CliRunner
@@ -1298,6 +1300,10 @@ def test_sub_import_writes_bundle_inputs_only(tmp_path: Path) -> None:
     result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir)])
 
     assert result.exit_code == 0
+    assert "订阅发布包已导入" in result.output
+    assert "source=usa1" in result.output
+    assert "inputs=1" in result.output
+    assert "written usa1.yaml" in result.output
     rendered_index = merge_input_files(data_dir / "inputs")
     assert "alice" in rendered_index.users
     assert (data_dir / "inputs" / "usa1.yaml").exists()
@@ -1305,8 +1311,13 @@ def test_sub_import_writes_bundle_inputs_only(tmp_path: Path) -> None:
     assert not (data_dir / "current" / "index.json").exists()
 
 
-def test_sub_serve_uses_config_access_and_memory_index(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+def test_sub_serve_uses_config_access_and_memory_index(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    caplog: LogCaptureFixture,
+) -> None:
     """验证 serve CLI 从配置读取 token，并把 inputs 加载到内存 app。"""
+    caplog.set_level(logging.INFO)
     captured: dict[str, object] = {}
     data_dir = tmp_path / "sub"
     (data_dir / "inputs").mkdir(parents=True)
@@ -1338,6 +1349,11 @@ watch_debounce: 0
     )
 
     assert result.exit_code == 0
+    assert "Subscription server configuration" in caplog.text
+    assert "access=token" in caplog.text
+    assert "demo-token" not in caplog.text
+    assert "Subscription server template sources" in caplog.text
+    assert "Subscription server loaded inputs" in caplog.text
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 3004
     client = TestClient(captured["app"])
@@ -1446,6 +1462,24 @@ def test_subscription_export_import_e2e_merges_multiple_stack_bundles(tmp_path: 
     assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["usa1.yaml", "usa2.yaml"]
 
 
+def test_agent_sub_export_summary_does_not_write_bundle(tmp_path: Path) -> None:
+    """验证 sub export --summary 只预览发布包内容，不写 zip。"""
+    output = tmp_path / "summary-only.zip"
+
+    result = runner.invoke(
+        agent_app,
+        ["sub", "export", "usa1", "--summary", "-o", str(output), "-c", "examples/config.yaml"],
+    )
+
+    assert result.exit_code == 0
+    assert "订阅发布包预览" in result.output
+    assert "source=usa1" in result.output
+    assert "inputs=1" in result.output
+    assert "nodes=2" in result.output
+    assert "usa1.yaml" in result.output
+    assert not output.exists()
+
+
 def test_sub_import_keeps_existing_inputs_by_default(tmp_path: Path) -> None:
     """验证连续导入发布包默认保留其它 input。"""
     old_input_dir = tmp_path / "old-inputs"
@@ -1463,9 +1497,13 @@ def test_sub_import_keeps_existing_inputs_by_default(tmp_path: Path) -> None:
 
     old_import = runner.invoke(sub_app, ["import", str(old_bundle), "--data-dir", str(data_dir)])
     new_import = runner.invoke(sub_app, ["import", str(new_bundle), "--data-dir", str(data_dir)])
+    overwrite_import = runner.invoke(sub_app, ["import", str(new_bundle), "--data-dir", str(data_dir)])
 
     assert old_import.exit_code == 0
     assert new_import.exit_code == 0
+    assert overwrite_import.exit_code == 0
+    assert "written new.yaml" in new_import.output
+    assert "overwritten new.yaml" in overwrite_import.output
     rendered_index = merge_input_files(data_dir / "inputs")
     assert [node.id for node in rendered_index.nodes] == ["new:id", "old:id"]
     assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["new.yaml", "old.yaml"]
@@ -1490,6 +1528,9 @@ def test_sub_import_replace_all_clears_existing_inputs(tmp_path: Path) -> None:
 
     assert old_import.exit_code == 0
     assert new_import.exit_code == 0
+    assert "replace_all=true" in new_import.output
+    assert "已删除旧 input" in new_import.output
+    assert "old.yaml" in new_import.output
     rendered_index = merge_input_files(data_dir / "inputs")
     assert [node.id for node in rendered_index.nodes] == ["new:id"]
     assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["new.yaml"]

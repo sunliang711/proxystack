@@ -19,7 +19,7 @@ proxystack-backup.zip
     <name>.yaml
 ```
 
-备份包不包含 `runtime/`、`runtime/generated/`、`.venv/`、`bin/`、`geo/`、`downloads/`、`publish/`、`sub/current/` 或 systemd unit 文件。`runtime` 属于派生运行状态，可以由 `check/start/render` 根据 config 和 stacks 重新生成。
+备份包不包含 `runtime/`、`runtime/generated/`、`.venv/`、`bin/`、`geo/`、`downloads/`、`publish/`、`sub/inputs/`、`sub/templates/` 或 systemd unit 文件。`runtime` 属于派生运行状态，可以由 `check/start/render` 根据 config 和 stacks 重新生成；订阅 inputs 和模板属于 `proxystack-sub` 运行数据，不随 agent 原生备份包迁移。
 
 ## manifest
 

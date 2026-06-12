@@ -123,6 +123,7 @@ def test_subscription_state_reload_writes_reload_logs(tmp_path: Path, caplog: Lo
     assert state.reload() is True
     assert "Subscription inputs reload started" in caplog.text
     assert "Subscription inputs reloaded" in caplog.text
+    assert "inputs=1" in caplog.text
     assert "nodes=1" in caplog.text
 
 

@@ -1,5 +1,7 @@
 # 远端全流程测试与修复交付说明
 
+> 历史记录：本次远端流程中的 `ps-agent publish`、`ps-agent sub export-input` 和 `ps-sub rebuild` 已被后续 `ps-agent sub export`、`ps-sub import/serve` 动态 inputs reload 流程替换。
+
 ## 变更摘要
 
 - 在 `10.2.7.195` 使用 root 免密 SSH 完成非 Docker 全流程测试。
