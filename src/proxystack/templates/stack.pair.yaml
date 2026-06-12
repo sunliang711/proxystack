@@ -60,7 +60,7 @@ xrelay:
         # 认证类型；noauth 表示不需要用户名密码。
         type: noauth
       # 【按需改】订阅或统计中的用户标识。
-      user: demo
+      user: user1
       # 【按需改】入站备注，会出现在生成结果或订阅信息中。
       remark: example local socks
       # 【按需改】是否导出到订阅；本地 relay 默认不对外发布。
@@ -81,11 +81,11 @@ xrelay:
       # vmess 客户端用户列表；单用户也写一条 users 记录。
       users:
         # 【按需改】订阅或统计中的用户标识。
-        - user: demo
+        - user: user1
           # 【必改】vmess 用户 UUID；部署前必须替换。
           uuid: 11111111-1111-4111-8111-111111111111
           # 【按需改】Xray 统计 email；不填时使用 user。
-          email: demo@example.com
+          email:
           # 【按需改】订阅节点名称。
           remark: example vmess
 
@@ -103,9 +103,9 @@ xrelay:
     #   udp: true
     #   sub: true
     #   users:
-    #     - user: demo
+    #     - user: user1
     #       password: replace-with-user-password
-    #       email: demo@example.com
+    #       email: user1@example.com
     #       remark: example ss2022
 
   # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
