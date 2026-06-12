@@ -14,6 +14,7 @@ from typing import Callable
 
 InputChangeCallback = Callable[[], None]
 LOGGER = logging.getLogger(__name__)
+WATCHED_INPUT_EXTENSIONS = {".yaml", ".yml", ".json"}
 
 IN_ATTRIB = 0x00000004
 IN_CLOSE_WRITE = 0x00000008
@@ -21,6 +22,7 @@ IN_CREATE = 0x00000100
 IN_DELETE = 0x00000200
 IN_DELETE_SELF = 0x00000400
 IN_IGNORED = 0x00008000
+IN_ISDIR = 0x40000000
 IN_MODIFY = 0x00000002
 IN_MOVED_FROM = 0x00000040
 IN_MOVED_TO = 0x00000080
@@ -29,12 +31,10 @@ IN_Q_OVERFLOW = 0x00004000
 INOTIFY_EVENT_HEADER = "iIII"
 INOTIFY_EVENT_HEADER_SIZE = struct.calcsize(INOTIFY_EVENT_HEADER)
 WATCH_MASK = (
-    IN_ATTRIB
-    | IN_CLOSE_WRITE
+    IN_CLOSE_WRITE
     | IN_CREATE
     | IN_DELETE
     | IN_DELETE_SELF
-    | IN_MODIFY
     | IN_MOVED_FROM
     | IN_MOVED_TO
     | IN_MOVE_SELF
@@ -95,7 +95,7 @@ class PollingInputWatcher(InputWatcher):
             return {
                 path.name: (path.stat().st_mtime_ns, path.stat().st_size)
                 for path in self.input_dir.iterdir()
-                if path.is_file()
+                if path.is_file() and has_watched_input_extension(path.name)
             }
         except OSError:
             return {}
@@ -153,7 +153,7 @@ class InotifyInputWatcher(InputWatcher):
             return False
         except OSError:
             return False
-        return any(_iter_inotify_events(event_bytes))
+        return any(is_relevant_input_event(mask, name) for _wd, mask, _cookie, name in _iter_inotify_events(event_bytes))
 
     def _drain_events(self) -> None:
         """清空 debounce 期间积累的事件，避免重复 reload。"""
@@ -215,6 +215,22 @@ def run_change_callback(on_change: InputChangeCallback) -> None:
         on_change()
     except Exception as exc:
         LOGGER.warning("Input watcher callback failed: %s", exc)
+
+
+def is_relevant_input_event(mask: int, name: str) -> bool:
+    """判断 inotify 事件是否代表订阅 input 的有效变更。"""
+    if mask & (IN_Q_OVERFLOW | IN_DELETE_SELF | IN_MOVE_SELF | IN_IGNORED):
+        return True
+    if mask & IN_ISDIR:
+        return False
+    if not mask & (IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO):
+        return False
+    return has_watched_input_extension(name)
+
+
+def has_watched_input_extension(name: str) -> bool:
+    """判断文件名是否是订阅服务需要监控的 input 扩展名。"""
+    return Path(name).suffix in WATCHED_INPUT_EXTENSIONS
 
 
 def _iter_inotify_events(event_bytes: bytes) -> list[tuple[int, int, int, str]]:

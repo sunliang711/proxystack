@@ -16,7 +16,18 @@ from proxystack.generator.sub import SubscriptionNode
 from proxystack.generator.sub import input_to_yaml
 from proxystack.subserver import SubscriptionState
 from proxystack.subserver import create_app
+from proxystack.subserver.watcher import IN_ATTRIB
+from proxystack.subserver.watcher import IN_CLOSE_WRITE
+from proxystack.subserver.watcher import IN_CREATE
+from proxystack.subserver.watcher import IN_DELETE
+from proxystack.subserver.watcher import IN_ISDIR
+from proxystack.subserver.watcher import IN_MODIFY
+from proxystack.subserver.watcher import IN_MOVED_FROM
+from proxystack.subserver.watcher import IN_MOVED_TO
+from proxystack.subserver.watcher import IN_Q_OVERFLOW
 from proxystack.subserver.watcher import PollingInputWatcher
+from proxystack.subserver.watcher import WATCH_MASK
+from proxystack.subserver.watcher import is_relevant_input_event
 
 
 def test_health_reads_loaded_memory_index(tmp_path: Path) -> None:
@@ -185,6 +196,39 @@ def test_polling_watcher_detects_atomic_input_replace(tmp_path: Path) -> None:
         assert changed.wait(1)
     finally:
         watcher.stop()
+
+
+def test_polling_watcher_ignores_non_input_files(tmp_path: Path) -> None:
+    """验证轮询 watcher 忽略非 input 后缀文件变化。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_input(input_dir / "manual.yaml", alice_node())
+    changed = Event()
+    watcher = PollingInputWatcher(input_dir, changed.set, interval=0.01)
+
+    watcher.start()
+    (input_dir / ".manual.yaml.tmp").write_text("temporary", encoding="utf-8")
+    try:
+        assert not changed.wait(0.1)
+    finally:
+        watcher.stop()
+
+
+def test_inotify_event_filter_only_accepts_supported_input_changes() -> None:
+    """验证 inotify 只把订阅 input 文件的有效变更视为 reload 触发条件。"""
+    assert WATCH_MASK & IN_MODIFY == 0
+    assert WATCH_MASK & IN_ATTRIB == 0
+    assert is_relevant_input_event(IN_CLOSE_WRITE, "manual.yaml") is True
+    assert is_relevant_input_event(IN_CLOSE_WRITE, "manual.yml") is True
+    assert is_relevant_input_event(IN_CREATE, "manual.json") is True
+    assert is_relevant_input_event(IN_DELETE, "manual.yaml") is True
+    assert is_relevant_input_event(IN_MOVED_FROM, "manual.yaml") is True
+    assert is_relevant_input_event(IN_MOVED_TO, "manual.yaml") is True
+    assert is_relevant_input_event(IN_CLOSE_WRITE, ".manual.yaml.tmp") is False
+    assert is_relevant_input_event(IN_MODIFY, "manual.yaml") is False
+    assert is_relevant_input_event(IN_ATTRIB, "manual.yaml") is False
+    assert is_relevant_input_event(IN_CREATE | IN_ISDIR, "manual.yaml") is False
+    assert is_relevant_input_event(IN_Q_OVERFLOW, "") is True
 
 
 def test_polling_watcher_survives_callback_error(tmp_path: Path) -> None:

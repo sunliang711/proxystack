@@ -392,7 +392,7 @@ GET /surge_sub/:user
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。
 - `render sub`：只输出订阅索引，不写文件；加 `--input-dir` 时输出多 input 合并后的结果。
 
-订阅服务启动时扫描 `<data_dir>/inputs/` 并构建内存索引，请求处理只读取内存索引，不读取 `current/index.json`、全局 `config.yaml` 或 stack 文件。服务运行期间会监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；input 增加、删除、修改或原子替换后会重新加载整个 inputs 目录。`proxystack-sub import` 只校验发布包并增量写入或覆盖同名 input，`--replace-all` 会先清空旧 input。订阅访问 token 来自 ps-sub 配置文件，例如 `/opt/proxystack/sub/config.yaml`：
+订阅服务启动时扫描 `<data_dir>/inputs/` 并构建内存索引，请求处理只读取内存索引，不读取 `current/index.json`、全局 `config.yaml` 或 stack 文件。服务运行期间会监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；`.yaml`、`.yml`、`.json` input 增加、删除、保存完成或原子替换后会重新加载整个 inputs 目录，临时文件和属性变化不会触发 reload。`proxystack-sub import` 只校验发布包并增量写入或覆盖同名 input，`--replace-all` 会先清空旧 input。订阅访问 token 来自 ps-sub 配置文件，例如 `/opt/proxystack/sub/config.yaml`：
 
 ```yaml
 listen: 0.0.0.0:3003

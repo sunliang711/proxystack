@@ -368,7 +368,7 @@ nodes:
 - 按 `nodes[].user` 分组生成订阅。
 - `nodes[].id` 必须全局唯一；重复 id 默认报错。
 - 启动阶段单个输入文件校验失败时服务启动失败；运行阶段 reload 失败时保留上一份可用内存索引。
-- 服务运行期间监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；文件增加、删除、修改或原子替换后会重新扫描整个 inputs 目录，并输出 watcher 触发和 reload 成败日志。
+- 服务运行期间监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；`.yaml`、`.yml`、`.json` input 文件增加、删除、保存完成或原子替换后会重新扫描整个 inputs 目录，并输出 watcher 触发和 reload 成败日志；临时文件和属性变化不会触发 reload。
 - access token 从 `<data_dir>/config.yaml` 的 `access` 字段读取，不写入发布包，也不写入 index 文件。
 - 可选 `templates_dir` 指向本地模板根目录；未配置时可直接在 `<data_dir>/templates/sub/` 放置同名模板覆盖包内默认模板。
 - input 文件必须是 `input_schema: proxystack.subscription-input`、`input_version: 1`；缺少 `input_schema` 的 v1 文件按兼容输入读取，其他 schema 或版本会失败。
