@@ -7,10 +7,12 @@ from pathlib import Path
 from threading import Event
 
 from fastapi.testclient import TestClient
+import pytest
 from pytest import LogCaptureFixture
 from pytest import MonkeyPatch
 
 from proxystack.generator.sub import SubscriptionAccess
+from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionInput
 from proxystack.generator.sub import SubscriptionNode
 from proxystack.generator.sub import input_to_yaml
@@ -125,6 +127,17 @@ def test_subscription_state_reload_writes_reload_logs(tmp_path: Path, caplog: Lo
     assert "Subscription inputs reloaded" in caplog.text
     assert "inputs=1" in caplog.text
     assert "nodes=1" in caplog.text
+
+
+def test_subscription_state_load_rejects_duplicate_proxy_name(tmp_path: Path) -> None:
+    """验证 serve 启动加载 inputs 时会拒绝同一用户下重复订阅代理名。"""
+    input_dir = tmp_path / "inputs"
+    write_input(input_dir / "a.yaml", alice_node("same proxy", node_id="test:a"))
+    write_input(input_dir / "b.yaml", alice_node("same proxy", node_id="test:b"))
+    state = SubscriptionState(tmp_path, access=SubscriptionAccess(type="token", token="demo-token"))
+
+    with pytest.raises(SubscriptionGeneratorError, match="duplicate proxy name for user: user=alice name=same proxy"):
+        state.load()
 
 
 def test_subscription_state_reload_keeps_previous_index_on_bad_input(
@@ -286,10 +299,10 @@ def write_input(path: Path, node: SubscriptionNode) -> None:
     tmp_path.replace(path)
 
 
-def alice_node(remark: str = "alice socks") -> SubscriptionNode:
+def alice_node(remark: str = "alice socks", node_id: str = "test:alice") -> SubscriptionNode:
     """生成测试用 alice socks5 节点。"""
     return SubscriptionNode(
-        id="test:alice",
+        id=node_id,
         user="alice",
         protocol="socks5",
         server="proxy.example.com",

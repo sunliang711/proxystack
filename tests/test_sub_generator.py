@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from typing import Optional
 from zipfile import ZipFile
 
 import pytest
@@ -315,6 +316,29 @@ def test_merge_input_files_rejects_duplicate_node_id(tmp_path: Path) -> None:
         merge_input_files(input_dir)
 
 
+def test_merge_input_files_rejects_duplicate_proxy_name_for_same_user(tmp_path: Path) -> None:
+    """验证同一用户下重复订阅代理名会提前失败，避免客户端收到重复 proxy name。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_input(input_dir / "a.yaml", "a", "a:id", "alice", remark="same proxy")
+    write_input(input_dir / "b.yaml", "b", "b:id", "alice", remark="same proxy")
+
+    with pytest.raises(SubscriptionGeneratorError, match="duplicate proxy name for user: user=alice name=same proxy"):
+        merge_input_files(input_dir)
+
+
+def test_merge_input_files_allows_same_proxy_name_for_different_users(tmp_path: Path) -> None:
+    """验证不同用户之间可以使用相同订阅代理名，因为订阅按用户独立返回。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_input(input_dir / "a.yaml", "a", "a:id", "alice", remark="same proxy")
+    write_input(input_dir / "b.yaml", "b", "b:id", "bob", remark="same proxy")
+
+    index = merge_input_files(input_dir)
+
+    assert sorted(index.users) == ["alice", "bob"]
+
+
 def test_merge_input_files_sorts_by_filename(tmp_path: Path) -> None:
     """验证 inputs 按文件名稳定合并。"""
     input_dir = tmp_path / "inputs"
@@ -486,6 +510,29 @@ def test_extract_bundle_rejects_duplicate_nodes_before_replacing_inputs(tmp_path
     assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["old.yaml"]
 
 
+def test_extract_bundle_rejects_duplicate_proxy_name_before_writing_inputs(tmp_path: Path) -> None:
+    """验证坏 bundle 中重复订阅代理名会在写入 inputs 前失败。"""
+    data_dir = tmp_path / "sub"
+    bad_bundle = tmp_path / "bad-duplicate-name.zip"
+    first_input = tmp_path / "first.yaml"
+    second_input = tmp_path / "second.yaml"
+    write_input(first_input, "first", "first:id", "alice", remark="same proxy")
+    write_input(second_input, "second", "second:id", "alice", remark="same proxy")
+    write_bundle(
+        bad_bundle,
+        "bad",
+        [
+            ("first.yaml", first_input.read_bytes()),
+            ("second.yaml", second_input.read_bytes()),
+        ],
+    )
+
+    with pytest.raises(SubscriptionGeneratorError, match="duplicate proxy name for user: user=alice name=same proxy"):
+        extract_bundle_inputs(bad_bundle, data_dir)
+
+    assert not (data_dir / "inputs").exists() or list((data_dir / "inputs").iterdir()) == []
+
+
 def test_extract_bundle_rejects_unsupported_input_extension(tmp_path: Path) -> None:
     """验证导入发布包时拒绝 manifest 中不支持的 input 扩展名。"""
     bundle = tmp_path / "bad-extension.zip"
@@ -584,7 +631,15 @@ def test_extract_bundle_rejects_corrupt_zip(tmp_path: Path) -> None:
         extract_bundle_inputs(bundle, tmp_path / "sub")
 
 
-def write_input(path: Path, source: str, node_id: str, user: str, *, as_json: bool = False) -> None:
+def write_input(
+    path: Path,
+    source: str,
+    node_id: str,
+    user: str,
+    *,
+    as_json: bool = False,
+    remark: Optional[str] = None,
+) -> None:
     """写入测试用订阅 input。"""
     content = {
         "input_version": 1,
@@ -598,7 +653,7 @@ def write_input(path: Path, source: str, node_id: str, user: str, *, as_json: bo
                 "server": "proxy.example.com",
                 "port": 24001,
                 "tag": f"socks5:24001:{node_id}",
-                "remark": node_id,
+                "remark": remark or node_id,
                 "auth": {
                     "type": "password",
                     "username": "user",

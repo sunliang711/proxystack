@@ -1311,6 +1311,32 @@ def test_sub_import_writes_bundle_inputs_only(tmp_path: Path) -> None:
     assert not (data_dir / "current" / "index.json").exists()
 
 
+def test_sub_import_rejects_duplicate_proxy_name(tmp_path: Path) -> None:
+    """验证 proxystack-sub import 会拒绝同一用户下重复订阅代理名。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    first_input = input_dir / "first.yaml"
+    second_input = input_dir / "second.yaml"
+    bundle = tmp_path / "duplicate-proxy-name.zip"
+    data_dir = tmp_path / "sub"
+    write_cli_input(first_input, source="first", node_id="first:id", remark="same proxy")
+    write_cli_input(second_input, source="second", node_id="second:id", remark="same proxy")
+    write_bundle(
+        bundle,
+        "duplicate",
+        [
+            ("first.yaml", first_input.read_bytes()),
+            ("second.yaml", second_input.read_bytes()),
+        ],
+    )
+
+    result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir)])
+
+    assert result.exit_code == 1
+    assert "duplicate proxy name for user: user=alice name=same proxy" in result.output
+    assert not (data_dir / "inputs").exists() or list((data_dir / "inputs").iterdir()) == []
+
+
 def test_sub_serve_uses_config_access_and_memory_index(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1369,6 +1395,34 @@ def test_sub_serve_requires_config_file(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "sub config file could not be read" in result.output
+
+
+def test_sub_serve_rejects_duplicate_proxy_name_before_startup(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 serve 会在启动 HTTP 服务前拒绝同一用户下重复订阅代理名。"""
+    data_dir = tmp_path / "sub"
+    input_dir = data_dir / "inputs"
+    input_dir.mkdir(parents=True)
+    write_cli_input(input_dir / "first.yaml", source="first", node_id="first:id", remark="same proxy")
+    write_cli_input(input_dir / "second.yaml", source="second", node_id="second:id", remark="same proxy")
+    config_path = data_dir / "config.yaml"
+    config_path.write_text(
+        """listen: 127.0.0.1:3003
+access:
+  type: none
+""",
+        encoding="utf-8",
+    )
+
+    def fail_run(app: object, host: str, port: int) -> None:
+        """serve 输入校验失败时不应启动真实 HTTP 服务。"""
+        raise AssertionError("uvicorn.run should not be called")
+
+    monkeypatch.setattr(sub_module.uvicorn, "run", fail_run)
+
+    result = runner.invoke(sub_app, ["serve", "--config", str(config_path)])
+
+    assert result.exit_code == 1
+    assert "duplicate proxy name for user: user=alice name=same proxy" in result.output
 
 
 def test_sub_serve_defaults_data_dir_to_config_parent(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -1605,7 +1659,12 @@ def test_release_build_cleanup_removes_stale_build_state(tmp_path: Path) -> None
     assert not egg_info_dir.exists()
 
 
-def write_cli_input(path: Path, source: str = "manual", node_id: str = "manual:id") -> None:
+def write_cli_input(
+    path: Path,
+    source: str = "manual",
+    node_id: str = "manual:id",
+    remark: Optional[str] = None,
+) -> None:
     """写入 CLI 测试使用的最小订阅 input。"""
     content = {
         "input_schema": "proxystack.subscription-input",
@@ -1620,7 +1679,7 @@ def write_cli_input(path: Path, source: str = "manual", node_id: str = "manual:i
                 "server": "proxy.example.com",
                 "port": 24001,
                 "tag": f"socks5:24001:{node_id}",
-                "remark": node_id,
+                "remark": remark or node_id,
                 "auth": {
                     "type": "password",
                     "username": "user",

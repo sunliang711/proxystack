@@ -530,10 +530,11 @@ def merge_inputs(
     inputs: list[tuple[Path, SubscriptionInput]],
     access: Optional[SubscriptionAccess] = None,
 ) -> SubscriptionIndex:
-    """按给定顺序合并多个 input，并在重复 node.id 时失败。"""
+    """按给定顺序合并多个 input，并在重复 node.id 或订阅代理名时失败。"""
     nodes: list[SubscriptionNode] = []
     sources: list[str] = []
     node_sources: dict[str, str] = {}
+    proxy_name_sources: dict[tuple[str, str], tuple[str, str]] = {}
     for input_path, subscription_input in inputs:
         sources.append(subscription_input.source)
         for node in subscription_input.nodes:
@@ -542,6 +543,16 @@ def merge_inputs(
                     f"duplicate node id: {node.id}, first seen in {node_sources[node.id]}, repeated in {input_path.name}"
                 )
             node_sources[node.id] = input_path.name
+            proxy_name_key = (node.user, node.remark)
+            if proxy_name_key in proxy_name_sources:
+                first_input_name, first_node_id = proxy_name_sources[proxy_name_key]
+                raise SubscriptionGeneratorError(
+                    "duplicate proxy name for user: "
+                    f"user={node.user} name={node.remark}, "
+                    f"first seen in {first_input_name} node={first_node_id}, "
+                    f"repeated in {input_path.name} node={node.id}"
+                )
+            proxy_name_sources[proxy_name_key] = (input_path.name, node.id)
             nodes.append(node)
     return build_index(nodes, sources, access=access)
 
