@@ -69,6 +69,29 @@ xrelay:
       # 【按需改】是否导出到订阅；true 表示生成订阅节点。
       sub: true
 
+    # 【按需改】入站名称；这里示例一个对外 vmess 入口。
+    - name: vmess
+      # 入站协议；vmess 用于兼容 Xray/V2Ray 客户端。
+      protocol: vmess
+      # 【按需改】入站监听地址；0.0.0.0 表示监听所有网卡。
+      listen: 0.0.0.0
+      # 【按需改】入站监听端口；对外开放时需放行防火墙。
+      port: 24100
+      # 传输网络类型；raw 表示普通 TCP。
+      network: raw
+      # 【按需改】是否导出到订阅；true 表示生成订阅节点。
+      sub: true
+      # vmess 客户端用户列表；单用户也写一条 users 记录。
+      users:
+        # 【按需改】订阅或统计中的用户标识。
+        - user: demo
+          # 【必改】vmess 用户 UUID；部署前必须替换。
+          uuid: 11111111-1111-4111-8111-111111111111
+          # 【按需改】Xray 统计 email；不填时使用 user。
+          email: demo@example.com
+          # 【按需改】订阅节点名称。
+          remark: example vmess
+
   # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
   outbound:
     # 出站目标类型；clash 表示转发到本 stack 的 Clash 监听器。
