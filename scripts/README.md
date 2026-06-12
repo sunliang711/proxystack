@@ -82,38 +82,23 @@ sudo scripts/install-sub-local.sh \
 
 ## scripts/uninstall-local.sh
 
-安全卸载本地 systemd unit，默认保留配置、运行数据、用户和 CLI 链接：
+安全卸载本地服务。默认停止并禁用服务、删除 systemd unit 和 CLI 链接，保留配置、运行数据、用户和用户组：
 
 ```bash
 sudo scripts/uninstall-local.sh
 ```
 
-只卸载订阅服务 unit：
+彻底清理托管目录、用户和用户组需要显式确认：
 
 ```bash
-sudo scripts/uninstall-local.sh --target sub
-```
-
-卸载全部 unit，并删除指向托管 venv 的 CLI 链接：
-
-```bash
-sudo scripts/uninstall-local.sh --remove-bin
-```
-
-彻底清理托管目录和用户需要显式确认：
-
-```bash
-sudo scripts/uninstall-local.sh --target all --purge-data --remove-user --remove-bin
+sudo scripts/uninstall-local.sh --purge
 ```
 
 主要参数：
 
-- `--target TARGET` 可选 `all`、`agent`、`sub`，默认 `all`。
 - `--base-dir DIR` 默认 `/opt/proxystack`。
 - `--bin-dir DIR` 默认 `/usr/local/bin`。
-- `--remove-bin` 删除指向 `${base_dir}/.venv/bin` 的 CLI symlink。
-- `--purge-data` 删除 `${base_dir}`，只允许配合 `--target all`。
-- `--remove-user` 删除系统用户和组，只允许配合 `--target all`。
+- `--purge` 删除 `${base_dir}`、系统用户和用户组。
 
 ## scripts/deploy-sub-docker.sh
 
@@ -156,6 +141,6 @@ sudo scripts/deploy-sub-docker.sh \
 ```bash
 scripts/install-agent.sh --install-systemd --dry-run
 scripts/install-sub-local.sh --import-bundle sub-bundle.zip --dry-run
-scripts/uninstall-local.sh --remove-bin --dry-run
+scripts/uninstall-local.sh --purge --dry-run
 scripts/deploy-sub-docker.sh --replace --dry-run
 ```

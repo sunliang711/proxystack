@@ -44,6 +44,7 @@ from proxystack.graph import DependencyPlan
 from proxystack.graph import ReferenceGraph
 from proxystack.graph import ServiceNode
 from proxystack.graph import build_reference_graph
+from proxystack.subserver.config import default_sub_server_config
 
 MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
@@ -198,7 +199,7 @@ external_host: {external_host}
 
 subscription:
   source: local
-  listen: 127.0.0.1:3003
+  listen: 0.0.0.0:3003
   remark_policy: prefix-source
   access:
     type: token
@@ -312,16 +313,11 @@ def sub_config_yaml(config: GlobalConfig) -> str:
     yaml = YAML()
     yaml.default_flow_style = False
     stream = StringIO()
-    yaml.dump(
-        {
-            "data_dir": str(config.resolve_path(config.paths.sub)),
-            "listen": config.subscription.listen,
-            "access": config.subscription.access.model_dump(mode="json", exclude_none=True),
-            "watch_interval": 2.0,
-            "watch_debounce": 0.3,
-        },
-        stream,
-    )
+    sub_config = default_sub_server_config(config.resolve_path(config.paths.sub))
+    config_data = sub_config.model_dump(mode="json", exclude_none=True)
+    config_data["listen"] = config.subscription.listen
+    config_data["access"] = config.subscription.access.model_dump(mode="json", exclude_none=True)
+    yaml.dump(config_data, stream)
     return stream.getvalue()
 
 

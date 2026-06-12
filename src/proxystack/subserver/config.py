@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import resources
 from io import StringIO
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,9 @@ from proxystack.generator.sub import SubscriptionGeneratorError
 
 DEFAULT_SUB_DATA_DIR = Path("/opt/proxystack/sub")
 DEFAULT_SUB_CONFIG_PATH = DEFAULT_SUB_DATA_DIR / "config.yaml"
+DEFAULT_SUB_LISTEN = "0.0.0.0:3003"
+DEFAULT_SUB_TEMPLATE_NAME = "sub-config.yaml"
+DEFAULT_SUB_TEMPLATES_DIR = DEFAULT_SUB_DATA_DIR / "templates"
 
 
 class SubServerConfig(BaseModel):
@@ -29,7 +33,7 @@ class SubServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     data_dir: Path = DEFAULT_SUB_DATA_DIR
-    listen: str = "127.0.0.1:3003"
+    listen: str = DEFAULT_SUB_LISTEN
     access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
     templates_dir: Optional[Path] = None
     watch_interval: float = Field(default=2.0, gt=0)
@@ -65,7 +69,7 @@ def load_sub_server_config(
     if not config_path.exists():
         if path is not None or require_existing:
             raise SubscriptionGeneratorError(f"sub config file could not be read: {config_path}")
-        return SubServerConfig(data_dir=data_dir or DEFAULT_SUB_DATA_DIR)
+        return default_sub_server_config(data_dir or DEFAULT_SUB_DATA_DIR)
     try:
         return load_sub_server_config_file(config_path, data_dir or config_path.parent)
     except (ValueError, ValidationError) as exc:
@@ -78,6 +82,28 @@ def load_sub_server_config_file(path: Path, default_data_dir: Path) -> SubServer
     if "data_dir" not in config_data:
         config_data["data_dir"] = default_data_dir
     return SubServerConfig.model_validate(config_data)
+
+
+def default_sub_server_config(default_data_dir: Path = DEFAULT_SUB_DATA_DIR) -> SubServerConfig:
+    """读取内置 ps-sub 模板并按目标 data_dir 生成默认配置。"""
+    config_data = read_builtin_sub_config_template()
+    if config_data is None:
+        return SubServerConfig(data_dir=default_data_dir)
+    config_data["data_dir"] = default_data_dir
+    templates_dir = config_data.get("templates_dir")
+    if templates_dir is not None and Path(str(templates_dir)) == DEFAULT_SUB_TEMPLATES_DIR:
+        config_data["templates_dir"] = default_data_dir / "templates"
+    return SubServerConfig.model_validate(config_data)
+
+
+def read_builtin_sub_config_template() -> Optional[dict[str, Any]]:
+    """读取包内 sub-config.yaml；缺失时返回 None 以便使用模型默认值。"""
+    try:
+        template_path = resources.files("proxystack").joinpath("templates", DEFAULT_SUB_TEMPLATE_NAME)
+        template_text = template_path.read_text(encoding="utf-8")
+    except (FileNotFoundError, ModuleNotFoundError):
+        return None
+    return load_yaml_text_mapping(template_text, DEFAULT_SUB_TEMPLATE_NAME)
 
 
 def sub_server_config_to_yaml(config: SubServerConfig) -> str:
@@ -115,16 +141,21 @@ def apply_cli_overrides(
 
 def load_yaml_mapping(path: Path) -> dict[str, Any]:
     """读取 ps-sub YAML 配置并要求顶层是 mapping。"""
-    yaml = YAML(typ="safe")
     try:
-        with path.open("r", encoding="utf-8") as config_file:
-            loaded = yaml.load(config_file)
+        return load_yaml_text_mapping(path.read_text(encoding="utf-8"), str(path))
     except OSError as exc:
         raise ValueError(f"Sub config file could not be read: {path}") from exc
+
+
+def load_yaml_text_mapping(text: str, source: str) -> dict[str, Any]:
+    """读取 YAML 文本并要求顶层是 mapping。"""
+    yaml = YAML(typ="safe")
+    try:
+        loaded = yaml.load(text)
     except YAMLError as exc:
-        raise ValueError(f"Sub config file contains invalid YAML: {path}") from exc
+        raise ValueError(f"Sub config file contains invalid YAML: {source}") from exc
     if loaded is None:
         return {}
     if not isinstance(loaded, dict):
-        raise ValueError(f"Sub config file must be a mapping: {path}")
+        raise ValueError(f"Sub config file must be a mapping: {source}")
     return loaded

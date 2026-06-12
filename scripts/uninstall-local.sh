@@ -5,32 +5,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-TARGET="all"
 BASE_DIR="/opt/proxystack"
 BIN_DIR="/usr/local/bin"
 INSTALL_USER="proxystack"
 INSTALL_GROUP="proxystack"
-PURGE_DATA="0"
-REMOVE_USER="0"
-REMOVE_BIN="0"
+PURGE="0"
 
 # 展示 uninstall-local 用法。
 usage() {
 	cat <<'EOF'
 Usage: scripts/uninstall-local.sh [options]
 
-Uninstall local proxystack systemd units safely. By default the script stops
-and disables services, removes unit files, and keeps data, users, and CLI links.
+Uninstall local proxystack services safely. By default the script stops and
+disables services, removes unit files and CLI links, and keeps data plus owner.
 
 Options:
-  --target TARGET          all, agent, or sub. Default: all
   --base-dir DIR           Managed base directory. Default: /opt/proxystack
   --bin-dir DIR            Console-script symlink directory. Default: /usr/local/bin
   --user USER              System user. Default: proxystack
   --group GROUP            System group. Default: proxystack
-  --remove-bin             Remove CLI symlinks that point into the managed venv.
-  --purge-data             Remove base directory. Only allowed with --target all.
-  --remove-user            Remove system user and group. Only allowed with --target all.
+  --purge                  Also remove base directory, system user, and group.
   --dry-run                Print commands without executing writes.
   -h, --help               Show this help.
 EOF
@@ -50,14 +44,6 @@ read_arg() {
 parse_args() {
 	while [[ "$#" -gt 0 ]]; do
 		case "$1" in
-			--target)
-				TARGET="$(read_arg "$1" "${2:-}")"
-				shift 2
-				;;
-			--target=*)
-				TARGET="${1#*=}"
-				shift
-				;;
 			--base-dir)
 				BASE_DIR="$(read_arg "$1" "${2:-}")"
 				shift 2
@@ -90,16 +76,8 @@ parse_args() {
 				INSTALL_GROUP="${1#*=}"
 				shift
 				;;
-			--remove-bin)
-				REMOVE_BIN="1"
-				shift
-				;;
-			--purge-data)
-				PURGE_DATA="1"
-				shift
-				;;
-			--remove-user)
-				REMOVE_USER="1"
+			--purge)
+				PURGE="1"
 				shift
 				;;
 			--dry-run)
@@ -117,74 +95,29 @@ parse_args() {
 	done
 }
 
-# 校验目标和危险清理参数。
+# 校验路径和托管身份。
 validate_args() {
-	case "${TARGET}" in
-		all|agent|sub)
-			;;
-		*)
-			die "Target must be one of: all, agent, sub"
-			;;
-	esac
 	guard_managed_path "${BASE_DIR}" "base directory"
 	guard_system_dir "${BIN_DIR}" "bin directory"
-	if [[ "${PURGE_DATA}" == "1" && "${TARGET}" != "all" ]]; then
-		die "--purge-data is only allowed with --target all"
-	fi
-	if [[ "${REMOVE_USER}" == "1" && "${TARGET}" != "all" ]]; then
-		die "--remove-user is only allowed with --target all"
-	fi
 	validate_install_identity "${INSTALL_USER}" "${INSTALL_GROUP}" "${BASE_DIR}" "/usr/sbin/nologin"
 }
 
-# 输出当前 target 对应的 systemd 实例匹配模式。
-service_patterns_for_target() {
-	case "${TARGET}" in
-		all)
-			printf '%s\n' "proxystack-xray@*.service" "proxystack-clash@*.service" "proxystack-sub.service"
-			;;
-		agent)
-			printf '%s\n' "proxystack-xray@*.service" "proxystack-clash@*.service"
-			;;
-		sub)
-			printf '%s\n' "proxystack-sub.service"
-			;;
-	esac
+# 输出 proxystack systemd 实例匹配模式。
+service_patterns() {
+	printf '%s\n' "proxystack-xray@*.service" "proxystack-clash@*.service" "proxystack-sub.service"
 }
 
-# 输出当前 target 对应的模板 unit 文件。
-unit_paths_for_target() {
-	case "${TARGET}" in
-		all)
-			printf '%s\n' \
-				"/etc/systemd/system/proxystack-xray@.service" \
-				"/etc/systemd/system/proxystack-clash@.service" \
-				"/etc/systemd/system/proxystack-sub.service"
-			;;
-		agent)
-			printf '%s\n' \
-				"/etc/systemd/system/proxystack-xray@.service" \
-				"/etc/systemd/system/proxystack-clash@.service"
-			;;
-		sub)
-			printf '%s\n' "/etc/systemd/system/proxystack-sub.service"
-			;;
-	esac
+# 输出 proxystack 模板 unit 文件。
+unit_paths() {
+	printf '%s\n' \
+		"/etc/systemd/system/proxystack-xray@.service" \
+		"/etc/systemd/system/proxystack-clash@.service" \
+		"/etc/systemd/system/proxystack-sub.service"
 }
 
-# 输出当前 target 对应的 CLI 命令名。
-bin_names_for_target() {
-	case "${TARGET}" in
-		all)
-			printf '%s\n' "proxystack-agent" "proxystack-sub" "ps-agent" "ps-sub"
-			;;
-		agent)
-			printf '%s\n' "proxystack-agent" "ps-agent"
-			;;
-		sub)
-			printf '%s\n' "proxystack-sub" "ps-sub"
-			;;
-	esac
+# 输出 proxystack CLI 命令名。
+bin_names() {
+	printf '%s\n' "proxystack-agent" "proxystack-sub" "ps-agent" "ps-sub"
 }
 
 # 按 systemctl 模式列出已加载或已知 unit 名称。
@@ -205,7 +138,7 @@ stop_and_disable_services() {
 
 	while IFS= read -r item; do
 		patterns+=("${item}")
-	done < <(service_patterns_for_target)
+	done < <(service_patterns)
 	if is_dry_run; then
 		run systemctl stop "${patterns[@]}"
 		run systemctl disable "${patterns[@]}"
@@ -236,7 +169,7 @@ remove_unit_files() {
 		else
 			log "Unit file already absent: ${unit_path}"
 		fi
-	done < <(unit_paths_for_target)
+	done < <(unit_paths)
 	run systemctl daemon-reload
 }
 
@@ -246,10 +179,6 @@ remove_bin_links() {
 	local bin_path
 	local link_target
 
-	if [[ "${REMOVE_BIN}" != "1" ]]; then
-		log "CLI link removal skipped"
-		return 0
-	fi
 	while IFS= read -r bin_name; do
 		if [[ -z "${bin_name}" ]]; then
 			continue
@@ -276,21 +205,21 @@ remove_bin_links() {
 				warn "Skipping unmanaged CLI symlink: ${bin_path} -> ${link_target}"
 				;;
 		esac
-	done < <(bin_names_for_target)
+	done < <(bin_names)
 }
 
-# 按显式参数删除托管数据目录。
+# --purge 时删除托管数据目录。
 maybe_purge_data() {
-	if [[ "${PURGE_DATA}" != "1" ]]; then
+	if [[ "${PURGE}" != "1" ]]; then
 		log "Data purge skipped"
 		return 0
 	fi
 	run rm -rf "${BASE_DIR}"
 }
 
-# 按显式参数删除系统用户和组。
+# --purge 时删除系统用户和组。
 maybe_remove_user() {
-	if [[ "${REMOVE_USER}" != "1" ]]; then
+	if [[ "${PURGE}" != "1" ]]; then
 		log "User removal skipped"
 		return 0
 	fi
@@ -320,9 +249,12 @@ main() {
 
 	step "stop and disable services" stop_and_disable_services
 	step "remove systemd units" remove_unit_files
-	step "handle optional console link removal" remove_bin_links
+	step "remove console links" remove_bin_links
 	step "handle optional data purge" maybe_purge_data
 	step "handle optional system user removal" maybe_remove_user
 }
 
-main "$@"
+# 仅直接执行脚本时运行主入口，便于测试 source 后覆盖局部函数。
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi

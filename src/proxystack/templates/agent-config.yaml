@@ -16,7 +16,7 @@ external_host: proxy.example.com
 
 subscription:
   source: local
-  listen: 127.0.0.1:3003
+  listen: 0.0.0.0:3003
   base_url: https://sub.example.com
   remark_policy: prefix-source
   access:

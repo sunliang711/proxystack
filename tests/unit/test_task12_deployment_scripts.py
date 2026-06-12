@@ -49,7 +49,8 @@ def test_task12_entrypoints_have_help_output() -> None:
     result = run_script(["bash", "scripts/uninstall-local.sh", "--help"])
 
     assert result.returncode == 0
-    assert "--target" in result.stdout
+    assert "--purge" in result.stdout
+    assert "--target" not in result.stdout
 
 
 def test_install_scripts_default_to_repository_source() -> None:
@@ -142,8 +143,6 @@ def test_uninstall_local_dry_run_keeps_data_by_default() -> None:
         [
             "bash",
             "scripts/uninstall-local.sh",
-            "--target",
-            "all",
             "--base-dir",
             "/tmp/proxystack-task12-uninstall/opt/proxystack",
             "--bin-dir",
@@ -158,27 +157,155 @@ def test_uninstall_local_dry_run_keeps_data_by_default() -> None:
     assert "proxystack-xray@\\*.service" in output
     assert "proxystack-sub.service" in output
     assert "systemctl daemon-reload" in output
+    assert "rm -f /tmp/proxystack-task12-uninstall/usr/local/bin/ps-agent" in output
     assert "Data purge skipped" in output
+    assert "User removal skipped" in output
     assert "rm -rf /tmp/proxystack-task12-uninstall/opt/proxystack" not in output
 
 
-def test_uninstall_local_rejects_partial_purge_data() -> None:
-    """验证卸载脚本不允许对共享 base_dir 做局部数据清理。"""
+def test_uninstall_local_real_run_removes_managed_cli_links_only(tmp_path: Path) -> None:
+    """验证真实卸载只删除托管 venv 下的 CLI symlink，并保留数据和身份。"""
+    fake_bin = tmp_path / "fake-bin"
+    base_dir = tmp_path / "opt" / "proxystack"
+    bin_dir = tmp_path / "usr" / "local" / "bin"
+    venv_bin = base_dir / ".venv" / "bin"
+    unmanaged_target = tmp_path / "other" / "proxystack-sub"
+    command_log = tmp_path / "commands.log"
+    probe = tmp_path / "uninstall-probe.sh"
+    real_rm = Path("/bin/rm")
+    if not real_rm.exists():
+        real_rm = Path("rm")
+
+    fake_bin.mkdir()
+    venv_bin.mkdir(parents=True)
+    bin_dir.mkdir(parents=True)
+    unmanaged_target.parent.mkdir(parents=True)
+    for name in ["proxystack-agent", "ps-agent"]:
+        target = venv_bin / name
+        target.write_text("", encoding="utf-8")
+        (bin_dir / name).symlink_to(target)
+    unmanaged_target.write_text("", encoding="utf-8")
+    (bin_dir / "proxystack-sub").symlink_to(unmanaged_target)
+    (bin_dir / "ps-sub").write_text("user managed command\n", encoding="utf-8")
+
+    write_fake_command(
+        fake_bin / "id",
+        "if [[ \"$1\" == \"-u\" && \"$#\" -eq 1 ]]; then echo 0; exit 0; fi\n"
+        "exit 1\n",
+    )
+    write_fake_command(
+        fake_bin / "systemctl",
+        "printf 'systemctl %s\\n' \"$*\" >>\"${FAKE_COMMAND_LOG}\"\n"
+        "case \"$1\" in\n"
+        "  list-units)\n"
+        "    printf '%s\\n' 'proxystack-xray@usa1.service loaded active running'\n"
+        "    printf '%s\\n' 'proxystack-xray@.service loaded inactive dead'\n"
+        "    printf '%s\\n' 'proxystack-sub.service loaded active running'\n"
+        "    ;;\n"
+        "  list-unit-files)\n"
+        "    printf '%s\\n' 'proxystack-clash@usa1.service enabled'\n"
+        "    printf '%s\\n' 'proxystack-clash@.service enabled'\n"
+        "    ;;\n"
+        "esac\n"
+        "exit 0\n",
+    )
+    write_fake_command(
+        fake_bin / "rm",
+        "printf 'rm %s\\n' \"$*\" >>\"${FAKE_COMMAND_LOG}\"\n"
+        "should_remove=0\n"
+        "for arg in \"$@\"; do\n"
+        "  case \"$arg\" in\n"
+        "    \"${FAKE_BIN_DIR}\"/*|/tmp/proxystack-*) should_remove=1 ;;\n"
+        "  esac\n"
+        "done\n"
+        "if [[ \"${should_remove}\" == \"1\" ]]; then\n"
+        "  \"${REAL_RM}\" \"$@\"\n"
+        "fi\n"
+        "exit 0\n",
+    )
+    for command in ["getent", "userdel", "groupdel"]:
+        write_fake_command(
+            fake_bin / command,
+            f"printf '{command} %s\\n' \"$*\" >>\"${{FAKE_COMMAND_LOG}}\"\n"
+            "exit 0\n",
+        )
+
+    probe.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "source \"${REPO_ROOT}/scripts/uninstall-local.sh\"\n"
+        "# 非 dry-run 参数校验会拒绝临时目录；这里只绕过校验，保留后续真实卸载分支。\n"
+        "validate_args() { :; }\n"
+        "main \"$@\"\n",
+        encoding="utf-8",
+    )
+    probe.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["FAKE_BIN_DIR"] = str(bin_dir)
+    env["FAKE_COMMAND_LOG"] = str(command_log)
+    env["REAL_RM"] = str(real_rm)
+    env["REPO_ROOT"] = str(Path.cwd())
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(probe),
+            "--base-dir",
+            str(base_dir),
+            "--bin-dir",
+            str(bin_dir),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not (bin_dir / "proxystack-agent").exists()
+    assert not (bin_dir / "proxystack-agent").is_symlink()
+    assert not (bin_dir / "ps-agent").exists()
+    assert not (bin_dir / "ps-agent").is_symlink()
+    assert (bin_dir / "proxystack-sub").is_symlink()
+    assert (bin_dir / "proxystack-sub").exists()
+    assert (bin_dir / "ps-sub").read_text(encoding="utf-8") == "user managed command\n"
+    assert base_dir.exists()
+
+    logged_commands = command_log.read_text(encoding="utf-8")
+    assert f"rm -f {bin_dir / 'proxystack-agent'}" in logged_commands
+    assert f"rm -f {bin_dir / 'ps-agent'}" in logged_commands
+    assert f"rm -f {bin_dir / 'proxystack-sub'}" not in logged_commands
+    assert f"rm -f {bin_dir / 'ps-sub'}" not in logged_commands
+    assert f"rm -rf {base_dir}" not in logged_commands
+    assert "userdel " not in logged_commands
+    assert "groupdel " not in logged_commands
+
+
+def test_uninstall_local_purge_removes_data_and_identity() -> None:
+    """验证 --purge 会预览数据目录和托管身份清理。"""
     result = run_script(
         [
             "bash",
             "scripts/uninstall-local.sh",
-            "--target",
-            "sub",
             "--base-dir",
-            "/tmp/proxystack-task12-uninstall-sub/opt/proxystack",
-            "--purge-data",
+            "/tmp/proxystack-task12-uninstall-purge/opt/proxystack",
+            "--bin-dir",
+            "/tmp/proxystack-task12-uninstall-purge/usr/local/bin",
+            "--user",
+            "proxystack_purge",
+            "--group",
+            "proxystack_purge",
+            "--purge",
             "--dry-run",
         ]
     )
+    output = result.stdout + result.stderr
 
-    assert result.returncode != 0
-    assert "--purge-data is only allowed with --target all" in result.stderr
+    assert result.returncode == 0, output
+    assert "rm -rf /tmp/proxystack-task12-uninstall-purge/opt/proxystack" in output
+    assert "userdel proxystack_purge" in output
+    assert "groupdel proxystack_purge" in output
 
 
 def test_python_venv_dependency_auto_installs_when_supported(tmp_path: Path) -> None:

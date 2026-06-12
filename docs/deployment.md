@@ -145,22 +145,16 @@ proxystack-sub serve --config /opt/proxystack/sub/config.yaml
 
 ## 4. 本地卸载
 
-本地非 Docker 部署统一使用 `scripts/uninstall-local.sh` 卸载 systemd unit。默认保留配置、stack、运行数据、用户和 CLI 链接：
+本地非 Docker 部署统一使用 `scripts/uninstall-local.sh` 卸载服务。默认停止并禁用服务、删除 systemd unit 和 CLI 链接，保留配置、stack、运行数据、用户和用户组：
 
 ```bash
 sudo scripts/uninstall-local.sh
 ```
 
-只卸载订阅服务：
+彻底清理托管目录、用户和用户组必须显式指定：
 
 ```bash
-sudo scripts/uninstall-local.sh --target sub
-```
-
-彻底清理托管目录和用户必须显式指定：
-
-```bash
-sudo scripts/uninstall-local.sh --target all --purge-data --remove-user --remove-bin
+sudo scripts/uninstall-local.sh --purge
 ```
 
 ## 5. 同机非 Docker 目录边界

@@ -24,6 +24,7 @@ import proxystack.cli.agent as agent_module
 import proxystack.cli.lifecycle as lifecycle_module
 import proxystack.cli.sub as sub_module
 import proxystack.domain.validation as validation_module
+import proxystack.subserver.config as sub_config_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
 from proxystack.diagnostics.ipinfo import FamilyResult
@@ -340,7 +341,7 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
         assert (project_dir / relative_path).is_dir()
     sub_config = YAML(typ="safe").load((project_dir / "sub" / "config.yaml").read_text(encoding="utf-8"))
     assert sub_config["data_dir"] == str(project_dir / "sub")
-    assert sub_config["listen"] == "127.0.0.1:3003"
+    assert sub_config["listen"] == "0.0.0.0:3003"
     assert sub_config["access"]["token"] == "demo-subscription-token"
 
 
@@ -1300,8 +1301,23 @@ def test_sub_config_creates_default_config(tmp_path: Path) -> None:
     assert "编辑校验通过" in result.output
     config_data = YAML(typ="safe").load(config_path.read_text(encoding="utf-8"))
     assert config_data["data_dir"] == str(data_dir)
-    assert config_data["listen"] == "127.0.0.1:3003"
-    assert config_data["access"]["type"] == "none"
+    assert config_data["listen"] == "0.0.0.0:3003"
+    assert config_data["access"]["type"] == "token"
+    assert config_data["access"]["token"] == "change-me"
+
+
+def test_sub_default_config_falls_back_when_builtin_template_missing(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """验证内置模板缺失时 ps-sub 默认配置回退到代码默认值。"""
+    data_dir = tmp_path / "sub"
+    monkeypatch.setattr(sub_config_module, "read_builtin_sub_config_template", lambda: None)
+
+    config = sub_config_module.default_sub_server_config(data_dir)
+
+    assert config.listen == "0.0.0.0:3003"
+    assert config.data_dir == data_dir
 
 
 def test_sub_config_rejects_invalid_edit_before_replacing(tmp_path: Path) -> None:

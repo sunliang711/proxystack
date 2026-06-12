@@ -14,7 +14,7 @@
 - 公共函数放在 `scripts/lib/common.sh`，统一处理日志、`--dry-run`、命令检查、路径保护和目录创建。
 - `scripts/install-agent.sh`：本地安装 agent，创建系统用户、目录、Python venv、从源码目录安装 Python 包、链接 console scripts，可选安装 systemd unit；可以创建 `/opt/proxystack/bin` 和 `/opt/proxystack/geo` 空目录，但不下载代理核心或 geo 数据。
 - `scripts/install-sub-local.sh`：本地或远端非 Docker 部署订阅服务，创建 sub 数据目录，可选导入发布包，可选安装和启动 `proxystack-sub.service`。
-- `scripts/uninstall-local.sh`：本地通用卸载入口，支持 `all`、`agent`、`sub` 三种目标，默认只清理 systemd unit，数据和用户需显式参数删除。
+- `scripts/uninstall-local.sh`：本地卸载入口，默认停止并禁用服务、删除 systemd unit 和 CLI 链接，保留数据和托管身份；`--purge` 会彻底删除托管目录、用户和用户组。
 - `scripts/deploy-sub-docker.sh`：Docker 部署订阅服务，创建 `/data` 持久化目录，启动安全默认的容器。
 - 日志 message 使用英文；面向用户的文档说明使用中文。
 
@@ -23,7 +23,7 @@
 1. [x] 编写 `scripts/lib/common.sh`，包含 `log`、`warn`、`die`、`run`、`require_cmd`、`require_root`、`guard_managed_path`、`ensure_dir`、`ensure_venv` 等函数。
 2. [x] 编写 `scripts/install-agent.sh`，支持 `--source`、`--base-dir`、`--bin-dir`、`--python`、`--user`、`--group`、`--no-init`、`--install-systemd`、`--dry-run`。
 3. [x] 编写 `scripts/install-sub-local.sh`，支持 `--source`、`--base-dir`、`--bin-dir`、`--import-bundle`、`--install-systemd`、`--start`、`--dry-run`。
-4. [x] 编写 `scripts/uninstall-local.sh`，支持 `--target`、`--base-dir`、`--bin-dir`、`--remove-bin`、`--purge-data`、`--remove-user`、`--dry-run`。
+4. [x] 编写 `scripts/uninstall-local.sh`，支持 `--base-dir`、`--bin-dir`、`--user`、`--group`、`--purge`、`--dry-run`。
 5. [x] 编写 `scripts/deploy-sub-docker.sh`，支持 `--image`、`--name`、`--data-dir`、`--host`、`--port`、`--user`、`--data-owner`、`--pull`、`--replace`、`--dry-run`。
 6. [x] 编写 `scripts/README.md`，说明四类脚本的使用方式、安全边界和常见示例。
 7. [x] 在部署文档中引用脚本任务和最终脚本入口，不把脚本职责扩展到后续更新。

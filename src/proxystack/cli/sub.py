@@ -24,6 +24,7 @@ from proxystack.logging import summarize_exception
 from proxystack.subserver import SubscriptionState
 from proxystack.subserver import create_app
 from proxystack.subserver.config import apply_cli_overrides
+from proxystack.subserver.config import default_sub_server_config
 from proxystack.subserver.config import load_sub_server_config
 from proxystack.subserver.config import load_sub_server_config_file
 from proxystack.subserver.config import resolve_sub_config_path
@@ -194,7 +195,7 @@ def ensure_sub_config_file(config_path: Path, default_data_dir: Path) -> None:
     """确保 ps-sub config.yaml 存在；缺失时写入可编辑默认配置。"""
     if config_path.exists():
         return
-    config = SubServerConfig(data_dir=default_data_dir)
+    config = default_sub_server_config(default_data_dir)
     write_text_if_changed(config_path, sub_server_config_to_yaml(config))
 
 

@@ -64,7 +64,7 @@ class SubscriptionConfig(ProxystackModel):
     """订阅服务和发布包默认配置。"""
 
     source: Literal["local"] = "local"
-    listen: str = "127.0.0.1:3003"
+    listen: str = "0.0.0.0:3003"
     base_url: Optional[str] = None
     access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
     remark_policy: Literal["preserve", "prefix-source", "template"] = "prefix-source"

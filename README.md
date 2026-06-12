@@ -157,22 +157,16 @@ docker exec proxystack-sub ps-sub import /tmp/sub-bundle.zip --data-dir /data
 
 ### 卸载
 
-本地部署使用 `scripts/uninstall-local.sh` 卸载 systemd unit。默认会保留 `/opt/proxystack` 下的配置、stack、运行数据、系统用户和 CLI 链接：
+本地部署使用 `scripts/uninstall-local.sh` 卸载服务。默认会停止并禁用服务、删除 systemd unit 和 CLI 链接，保留 `/opt/proxystack` 下的配置、stack、运行数据以及对应系统用户/组：
 
 ```bash
 sudo scripts/uninstall-local.sh
 ```
 
-只卸载订阅服务：
+如需彻底清理托管目录、系统用户和用户组，使用：
 
 ```bash
-sudo scripts/uninstall-local.sh --target sub
-```
-
-如需彻底清理托管目录、系统用户和 CLI 链接，必须显式指定清理参数：
-
-```bash
-sudo scripts/uninstall-local.sh --target all --purge-data --remove-user --remove-bin
+sudo scripts/uninstall-local.sh --purge
 ```
 
 ## 使用
