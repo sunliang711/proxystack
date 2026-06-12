@@ -65,7 +65,6 @@ class SubscriptionConfig(ProxystackModel):
 
     source: Literal["local"] = "local"
     listen: str = "0.0.0.0:3003"
-    base_url: Optional[str] = None
     access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
     remark_policy: Literal["preserve", "prefix-source", "template"] = "prefix-source"
     remark_template: Optional[str] = None

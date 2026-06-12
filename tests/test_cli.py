@@ -325,7 +325,6 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert xrelay_defaults["policy"]["system"]["statsInboundUplink"] is True
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
-    assert config_data["subscription"]["base_url"] == "https://sub.example.com"
     assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["install"]["mihomo"]["source"] == "auto"
     assert config_data["install"]["geo"]["source"] == "auto"
@@ -360,7 +359,6 @@ def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: P
     config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
-    assert "base_url" not in config_data["subscription"]
     assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["port_ranges"]["xrelay_inbound"] == "24000-24999"
 

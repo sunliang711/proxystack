@@ -74,6 +74,8 @@ xrelay:
       listen: 0.0.0.0
       # 【按需改】入站监听端口；对外开放时需放行防火墙。
       port: 24100
+      # 【按需改】订阅节点 server；不填时使用全局 external_host。
+      # server: edge.example.com
       # 传输网络类型；raw 表示普通 TCP。
       network: raw
       # 【按需改】是否导出到订阅；true 表示生成订阅节点。
@@ -98,6 +100,8 @@ xrelay:
     #   protocol: shadowsocks
     #   listen: 0.0.0.0
     #   port: 24101
+    #   # 【按需改】订阅节点 server；不填时使用全局 external_host。
+    #   # server: edge.example.com
     #   method: 2022-blake3-aes-256-gcm
     #   password: replace-with-server-password
     #   udp: true
