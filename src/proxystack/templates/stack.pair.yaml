@@ -114,22 +114,30 @@ xrelay:
     #       remark: example ss2022
 
   # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
+  # 下方方案只保留一种：默认方案 A 走本 stack 的 Clash；改用其他方案时同步删除或注释不适用字段。
   outbound:
     # 出站目标类型；支持全集：clash、socks5、http、direct。
-    # - clash 使用 ref 指向 stack.clash.socks。
-    # - socks5/http 使用 server/port，可选 username/password。
-    # - direct 表示 Xray freedom 直连。
-    # 外部 socks5 示例：
-    # type: socks5
-    # server: 127.0.0.1
-    # port: 1080
+    # 方案 A：走本 stack 的 Clash socks 监听；type=clash 只使用 ref，不使用 server/port/username/password。
     type: clash
     # 【一般不改】出站引用；指向 stack.clash.socks 形式的唯一本地 socks 监听。
     ref: example.clash.socks
+    # 方案 B：走外部 SOCKS5 上游；type=socks5 使用 server/port，可选 username/password，不使用 ref。
+    # type: socks5
+    # server: 127.0.0.1
+    # port: 1080
+    # username: up-user
+    # password: up-pass
+    # 方案 C：走外部 HTTP 上游；type=http 使用 server/port，可选 username/password，不使用 ref。
+    # type: http
+    # server: 127.0.0.1
+    # port: 8080
+    # 方案 D：直连；type=direct 不使用 ref/server/port/username/password。
+    # type: direct
 
 # Clash/mihomo 侧配置，用于生成本地出站代理和规则。
 clash:
   # 【一般不改】是否为该 stack 启用 Clash 服务。
+  # 如果 xrelay.outbound.type 不使用 clash，可以设为 false，不生成或管理 Clash 服务；但当前 stack 模型仍要求保留合法 clash 配置段。
   enabled: true
   # 【按需改】Clash 运行模式；支持全集：Rule、Global、Direct；Rule 表示按规则分流。
   mode: Rule

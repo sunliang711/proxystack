@@ -215,7 +215,7 @@ def render_shadowsocks_inbound(inbound: Inbound) -> dict[str, Any]:
         "network": "tcp,udp" if inbound.udp else "tcp",
     }
     if inbound.users:
-        settings["users"] = [render_shadowsocks_user(inbound, shadowsocks_user) for shadowsocks_user in inbound.users]
+        settings["clients"] = [render_shadowsocks_user(inbound, shadowsocks_user) for shadowsocks_user in inbound.users]
     config["settings"] = settings
     return config
 

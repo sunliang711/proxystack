@@ -102,7 +102,7 @@ def test_render_xray_vmess_inbound_supports_multiple_users() -> None:
 
 
 def test_render_xray_shadowsocks_inbound_supports_multiple_users() -> None:
-    """验证传统 shadowsocks users 会生成同一个 inbound 下的多个 users。"""
+    """验证传统 shadowsocks users 会生成同一个 inbound 下的多个 clients。"""
     stack_set = make_stack_set(
         make_stack(
             "ssmulti",
@@ -139,7 +139,7 @@ def test_render_xray_shadowsocks_inbound_supports_multiple_users() -> None:
         "method": "aes-256-gcm",
         "password": "server-pass",
         "network": "tcp",
-        "users": [
+        "clients": [
             {
                 "password": "alice-pass",
                 "email": "alice@example.com",
@@ -155,7 +155,7 @@ def test_render_xray_shadowsocks_inbound_supports_multiple_users() -> None:
 
 
 def test_render_xray_shadowsocks_2022_inbound_supports_multiple_users() -> None:
-    """验证 SS2022 users 会生成共享 method 的多用户 inbound。"""
+    """验证 SS2022 users 会生成共享 method 的多用户 clients。"""
     stack_set = make_stack_set(
         make_stack(
             "ss2022",
@@ -190,7 +190,7 @@ def test_render_xray_shadowsocks_2022_inbound_supports_multiple_users() -> None:
         "method": "2022-blake3-aes-256-gcm",
         "password": SS2022_SERVER_KEY,
         "network": "tcp",
-        "users": [
+        "clients": [
             {
                 "password": SS2022_ALICE_KEY,
                 "email": "alice",
