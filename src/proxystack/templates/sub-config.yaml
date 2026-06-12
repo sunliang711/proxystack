@@ -1,6 +1,7 @@
 data_dir: /opt/proxystack/sub
 listen: 0.0.0.0:3003
 access:
+  # 订阅访问控制类型；支持全集：none、token。
   type: token
   token: change-me
 templates_dir: /opt/proxystack/sub/templates
