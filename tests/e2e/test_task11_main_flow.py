@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Any
 from typing import Sequence
-import json
 
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
@@ -14,7 +13,6 @@ import proxystack.cli.lifecycle as lifecycle_module
 import proxystack.cli.sub as sub_module
 from proxystack.cli.agent import app as agent_app
 from proxystack.cli.sub import app as sub_app
-from proxystack.subserver import create_app
 from proxystack.systemd import CommandResult
 
 runner = CliRunner()
@@ -33,7 +31,7 @@ class FakeSystemdRunner:
         return CommandResult(args=tuple(args), returncode=0, stdout="")
 
 
-def test_init_add_validate_start_publish_import_serve_main_flow(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+def test_init_add_validate_start_sub_export_import_serve_main_flow(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 P0 主流程在 fake systemd/uvicorn 和临时目录中可完整跑通。"""
     config = tmp_path / "project" / "config.yaml"
     fake_systemd = FakeSystemdRunner()
@@ -73,20 +71,18 @@ def test_init_add_validate_start_publish_import_serve_main_flow(tmp_path: Path, 
     assert not (config.parent / "sub" / "current" / "index.json").exists()
     assert fake_systemd.calls == [("systemctl", "restart", "proxystack-xray@edge.service")]
 
-    publish_result = runner.invoke(agent_app, ["publish", "-c", str(config), "--skip-system-ports"])
-    bundle = config.parent / "publish" / "sub-bundle.zip"
+    export_result = runner.invoke(agent_app, ["sub", "export", "edge", "-c", str(config)])
+    bundle = config.parent / "publish" / "edge-sub-bundle.zip"
     import_result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(config.parent / "sub")])
     serve_result = runner.invoke(sub_app, ["serve", "--host", "127.0.0.1", "--port", "3003", "--data-dir", str(config.parent / "sub")])
 
-    assert publish_result.exit_code == 0
+    assert export_result.exit_code == 0
     assert import_result.exit_code == 0
     assert serve_result.exit_code == 0
-    current_index = json.loads((config.parent / "sub" / "current" / "index.json").read_text(encoding="utf-8"))
-    assert current_index["users"]["demo"][0]["id"] == "edge:vmess:demo"
     assert served["host"] == "127.0.0.1"
     assert served["port"] == 3003
 
-    client = TestClient(create_app(config.parent / "sub"))
+    client = TestClient(served["app"])
     health = client.get("/health")
     subscription = client.get("/sub/demo", params={"token": "demo-subscription-token"})
 

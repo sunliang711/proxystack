@@ -22,7 +22,6 @@ proxystack-agent
   ipinfo
   enable
   disable
-  publish
   doctor
   validate
   render
@@ -35,7 +34,6 @@ proxystack-agent
 proxystack-sub
   version
   import
-  rebuild
   serve
 ```
 
@@ -62,9 +60,8 @@ ps-sub = proxystack-sub
   publish/
   downloads/
   sub/
+    config.yaml
     inputs/
-    bundles/
-    current/
 ```
 
 - `config.yaml`：全局配置和默认值；agent 运行期不写，只有 `init` 和 `edit` 这类配置管理命令可以写。
@@ -76,7 +73,7 @@ ps-sub = proxystack-sub
 
 systemd unit 文件仍需要安装到系统目录，这是 systemd 的要求；unit 内容应指向 `/opt/proxystack` 内的配置、虚拟环境和生成文件。
 
-目录写入边界：agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`；sub 只写 `sub/inputs/`、`sub/bundles/`、`sub/current/`。agent 不直接写 `sub/current/`。
+目录写入边界：agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`；sub 只写 `sub/inputs/`，并读取 `sub/config.yaml`。agent 不直接写 `sub/inputs/`。
 
 ## 3. 日常命令
 
@@ -98,13 +95,14 @@ proxystack-agent restart usa1
 proxystack-agent status
 proxystack-agent logs usa1 --follow
 proxystack-agent ipinfo usa1
-proxystack-agent publish
+proxystack-agent sub export
+proxystack-agent sub export usa1
 proxystack-agent doctor
 ```
 
 命令语义：
 
-- `init`：创建 `/opt/proxystack` 目录结构和默认 `config.yaml`；优先以 `examples/config.yaml` 为模板并改写 `base_dir`、`external_host`，模板缺失时使用内置默认值；已存在文件默认不覆盖。
+- `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`；优先以 `examples/config.yaml` 为模板并改写 `base_dir`、`external_host`，模板缺失时使用内置默认值；已存在文件默认不覆盖。
 - `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
 - `config`：安全编辑 `/opt/proxystack/config.yaml`；等价于 `edit` 不带 stack 名称，但语义更明确。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
@@ -124,7 +122,7 @@ proxystack-agent doctor
 - `ipinfo <stack>`：通过该 stack 的 mihomo socks listener 查询出口 IPv4/IPv6 和地域信息；默认按 IPv4/IPv6 使用不同来源，过滤已知不适合该 family 的来源；需要系统已安装 `curl`。
 - `enable [target]`：通过 systemd 设置目标范围内服务开机自启。
 - `disable [target]`：通过 systemd 取消目标范围内服务开机自启。
-- `publish`：生成订阅发布包，默认输出到 `/opt/proxystack/publish/sub-bundle.zip`。
+- `sub export [stack]`：生成订阅发布包；缺省导出全部 stack，指定 stack 时只导出该 stack。
 - `doctor`：检查目录权限、二进制版本、systemd unit、端口占用和配置引用。
 
 ## 4. 作用域规则
@@ -139,9 +137,9 @@ proxystack-agent start clash/usa1   # 只操作 usa1 的 mihomo
 proxystack-agent start sub          # 只操作本地订阅服务
 ```
 
-`sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取 `config.yaml` 和 `stacks/`。
+`sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取全局 `config.yaml` 和 `stacks/`。
 
-Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake unit_dir 隔离真实 `systemctl`、`journalctl` 和 `/etc/systemd/system`。`service log --follow/-f` 直接流式输出 journal。Task06 P0 已实现的订阅服务命令是 `proxystack-sub import/rebuild/serve`。
+Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake unit_dir 隔离真实 `systemctl`、`journalctl` 和 `/etc/systemd/system`。`service log --follow/-f` 直接流式输出 journal。订阅服务命令是 `proxystack-sub import/serve`。
 
 服务生命周期命令默认跳过系统端口占用检查，避免在服务已经运行并占用自身监听端口时阻断 `status/restart/start` 等操作；配置结构、ref 和重复端口仍会校验。`start sub` 不读取或改写 stack 文件，也不会创建 `runtime/generated`。
 
@@ -337,7 +335,7 @@ unit 内容约束：
 - `proxystack-xray@.service` 只执行 `/opt/proxystack/bin/xray run -config /opt/proxystack/runtime/generated/xray/%i.json`。
 - `proxystack-clash@.service` 只执行 `/opt/proxystack/bin/mihomo -f /opt/proxystack/runtime/generated/mihomo/%i.yaml`。
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
-- `proxystack-sub.service` 只执行 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，`ReadWritePaths` 仅包含 `config.paths.sub`。
+- `proxystack-sub.service` 只执行 `proxystack-sub serve --config <sub_dir>/config.yaml`，`ReadWritePaths` 仅包含 `config.paths.sub`。
 
 ## 10. 原生配置备份与恢复
 
@@ -355,7 +353,7 @@ proxystack-agent import proxystack-backup.zip --force
 - `config/config.yaml`：全局配置。
 - `stacks/*.yaml`：stack 配置。
 
-备份包不包含 `runtime/`、`runtime/generated/`、`sub/current/`、`publish/`、`downloads/`、`.venv/`、`bin/`、`geo/` 或 systemd unit。`runtime` 和生成配置都可以由 `check/start/render` 根据 config 和 stacks 重新生成，导入旧 runtime 反而可能携带过期 hash、旧路径或旧机器状态。
+备份包不包含 `runtime/`、`runtime/generated/`、`publish/`、`downloads/`、`.venv/`、`bin/`、`geo/` 或 systemd unit。`runtime` 和生成配置都可以由 `check/start/render` 根据 config 和 stacks 重新生成，导入旧 runtime 反而可能携带过期 hash、旧路径或旧机器状态。
 
 导入规则：
 
@@ -368,16 +366,13 @@ proxystack-agent import proxystack-backup.zip --force
 ## 11. 订阅发布与远端服务
 
 ```bash
-proxystack-agent publish
-proxystack-agent publish --source local -o /opt/proxystack/publish/sub-bundle.zip
-proxystack-agent publish --input-dir ./inputs --source merged -o sub-bundle.zip
-proxystack-agent publish --input-dir ./inputs --include-stack --source merged -o sub-bundle.zip
-proxystack-agent sub export-input --source usa1 -o usa1.yaml
+proxystack-agent sub export
+proxystack-agent sub export usa1
+proxystack-agent sub export usa1 -o /opt/proxystack/publish/usa1-sub-bundle.zip
 proxystack-agent sub validate-inputs --input-dir ./inputs
 proxystack-agent render sub --input-dir ./inputs
 proxystack-sub import sub-bundle.zip
-proxystack-sub import sub-bundle.zip --no-rebuild
-proxystack-sub rebuild
+proxystack-sub import sub-bundle.zip --replace-all
 proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 ```
 
@@ -392,13 +387,23 @@ GET /surge_sub/:user
 
 订阅相关命令区别：
 
-- `publish`：常用入口，默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
-- `sub export-input`：从当前 stack 生成一个 subscription input 文件，适合放进远端或本地的 `inputs/` 目录。
-- `publish --input-dir`：把 `--input-dir` 指定目录中的多个 input 打成 `sub-bundle.zip`，适合 inputs 高级模式；默认不包含当前 stack 生成的 input，需要合并当前 stack 时显式传入 `--include-stack`。
+- `sub export`：常用入口，默认生成 `/opt/proxystack/publish/sub-bundle.zip`，包内按 stack 写入 `inputs/<stack>.yaml`。
+- `sub export <stack>`：只导出指定 stack，默认生成 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。
 - `render sub`：只输出订阅索引，不写文件；加 `--input-dir` 时输出多 input 合并后的结果。
 
-订阅服务启动和请求处理只读取合并后的 `current/index.json`，不直接解析 `config.yaml` 或 stack 文件。`proxystack-sub import` 默认校验发布包、解包 inputs 并自动 rebuild；只有传 `--no-rebuild` 时才需要手动执行 `rebuild`。本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程仍是 `publish + sub import`。
+订阅服务启动时扫描 `<data_dir>/inputs/` 并构建内存索引，请求处理只读取内存索引，不读取 `current/index.json`、全局 `config.yaml` 或 stack 文件。服务运行期间会监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；input 增加、删除、修改或原子替换后会重新加载整个 inputs 目录。`proxystack-sub import` 只校验发布包并增量写入或覆盖同名 input，`--replace-all` 会先清空旧 input。订阅访问 token 来自 ps-sub 配置文件，例如 `/opt/proxystack/sub/config.yaml`：
+
+```yaml
+listen: 0.0.0.0:3003
+access:
+  type: token
+  token: "<subscription-token>"
+```
+
+`data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
+
+本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程是 `sub export + sub import`，运行中的服务会由 watcher 自动 reload。
 
 ## 12. mihomo 辅助命令
 

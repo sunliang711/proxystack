@@ -12,7 +12,6 @@ from ruamel.yaml import YAML
 from typer.testing import CliRunner
 
 from proxystack.cli.agent import app as agent_app
-from proxystack.cli.sub import rebuild_data_dir
 from proxystack.config import load_config
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
@@ -20,12 +19,11 @@ from proxystack.generator.sub import BundleManifest
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionInput
 from proxystack.generator.sub import extract_bundle_inputs
-from proxystack.generator.sub import index_to_json
 from proxystack.generator.sub import input_to_yaml
-from proxystack.generator.sub import load_index_file
 from proxystack.generator.sub import merge_input_files
 from proxystack.generator.sub import render_stack_input
 from proxystack.generator.sub import write_bundle
+from proxystack.subserver import SubscriptionState
 
 runner = CliRunner()
 
@@ -236,10 +234,10 @@ def test_agent_and_sub_merge_logic_are_consistent(tmp_path: Path) -> None:
     write_input(input_dir / "b.json", "b", "b:id", "alice", as_json=True)
 
     agent_index = merge_input_files(input_dir)
-    index_path = rebuild_data_dir(data_dir)
-    sub_index = load_index_file(index_path)
+    state = SubscriptionState(data_dir, access=agent_index.access)
+    state.load()
+    sub_index = state.snapshot()
 
-    assert index_to_json(agent_index) != ""
     assert [node.id for node in sub_index.nodes] == [node.id for node in agent_index.nodes]
     assert sub_index.users.keys() == agent_index.users.keys()
 
@@ -260,91 +258,41 @@ def test_input_and_bundle_version_metadata_require_integer_v1() -> None:
         BundleManifest.model_validate({"bundle_version": 1.0, "source": "bad", "generated_at": "now", "inputs_sha256": {}})
 
 
-def test_publish_input_dir_excludes_stack_by_default(tmp_path: Path) -> None:
-    """验证 publish --input-dir 默认只打包 input-dir，不包含当前 stack。"""
-    input_dir = tmp_path / "inputs"
-    input_dir.mkdir()
-    write_input(input_dir / "manual.yaml", "manual", "manual:id", "alice")
+def test_sub_export_splits_all_stacks_into_inputs(tmp_path: Path) -> None:
+    """验证 sub export 默认按 stack 拆分发布包内 input。"""
     output = tmp_path / "bundle.zip"
 
     result = runner.invoke(
         agent_app,
-        [
-            "publish",
-            "--input-dir",
-            str(input_dir),
-            "--source",
-            "merged",
-            "-o",
-            str(output),
-            "-c",
-            "examples/config.yaml",
-        ],
+        ["sub", "export", "-o", str(output), "-c", "examples/config.yaml"],
     )
 
     assert result.exit_code == 0
     with ZipFile(output) as zip_file:
-        assert sorted(zip_file.namelist()) == ["inputs/manual.yaml", "manifest.json"]
+        assert sorted(zip_file.namelist()) == [
+            "inputs/auto.yaml",
+            "inputs/usa1.yaml",
+            "inputs/usa2.yaml",
+            "manifest.json",
+        ]
         manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
     assert manifest["bundle_schema"] == "proxystack.sub-bundle"
-    assert manifest["access"]["type"] == "token"
-    assert manifest["access"]["token"] == "demo-subscription-token"
+    assert manifest["access"] == {"type": "none"}
 
 
-def test_publish_input_dir_rejects_missing_explicit_config(tmp_path: Path) -> None:
-    """验证显式传入不存在的 config 时不会静默降级为无鉴权发布包。"""
-    input_dir = tmp_path / "inputs"
-    input_dir.mkdir()
-    write_input(input_dir / "manual.yaml", "manual", "manual:id", "alice")
+def test_sub_export_stack_writes_single_input(tmp_path: Path) -> None:
+    """验证指定 stack 导出时只写该 stack 对应 input。"""
+    config = Path("examples/config.yaml")
     output = tmp_path / "bundle.zip"
 
     result = runner.invoke(
         agent_app,
-        [
-            "publish",
-            "--input-dir",
-            str(input_dir),
-            "--source",
-            "merged",
-            "-o",
-            str(output),
-            "-c",
-            str(tmp_path / "missing-config.yaml"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "config file does not exist" in result.output
-
-
-def test_publish_include_stack_adds_stack_input(tmp_path: Path) -> None:
-    """验证 publish --input-dir --include-stack 才会把当前 stack input 合入 bundle。"""
-    input_dir = tmp_path / "inputs"
-    input_dir.mkdir()
-    write_input(input_dir / "manual.yaml", "manual", "manual:id", "alice")
-    output = tmp_path / "bundle.zip"
-
-    result = runner.invoke(
-        agent_app,
-        [
-            "publish",
-            "--input-dir",
-            str(input_dir),
-            "--include-stack",
-            "--source",
-            "stack",
-            "-o",
-            str(output),
-            "-c",
-            "examples/config.yaml",
-            "--skip-system-ports",
-        ],
+        ["sub", "export", "usa1", "-o", str(output), "-c", str(config)],
     )
 
     assert result.exit_code == 0
     with ZipFile(output) as zip_file:
-        assert "inputs/manual.yaml" in zip_file.namelist()
-        assert "inputs/stack.yaml" in zip_file.namelist()
+        assert sorted(zip_file.namelist()) == ["inputs/usa1.yaml", "manifest.json"]
 
 
 def test_write_bundle_rejects_unsafe_input_name(tmp_path: Path) -> None:

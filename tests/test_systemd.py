@@ -61,8 +61,7 @@ def test_unit_content_contains_hardening_and_generated_exec_start(tmp_path: Path
     assert "stacks" not in clash_unit
 
     assert f"ReadWritePaths={tmp_path / 'project' / 'sub'}" in sub_unit
-    assert f"ExecStart={tmp_path / 'project' / '.venv' / 'bin' / 'proxystack-sub'} serve --data-dir {tmp_path / 'project' / 'sub'} --host 127.0.0.1 --port 3003" in sub_unit
-    assert "config.yaml" not in sub_unit
+    assert f"ExecStart={tmp_path / 'project' / '.venv' / 'bin' / 'proxystack-sub'} serve --config {tmp_path / 'project' / 'sub' / 'config.yaml'}" in sub_unit
     assert "stacks" not in sub_unit
 
 

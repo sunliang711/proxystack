@@ -13,6 +13,7 @@ from zipfile import ZipFile
 from zipfile import ZipInfo
 import hashlib
 import json
+import os
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -575,7 +576,7 @@ def write_bundle(
     input_files: list[tuple[str, bytes]],
     access: Optional[SubscriptionAccess] = None,
 ) -> BundleManifest:
-    """写入订阅发布包 zip，并返回 manifest。"""
+    """写入订阅发布包 zip，并返回 manifest；access 不再随发布包生效。"""
     ensure_unique_bundle_input_names(input_files)
     for name, _content in input_files:
         validate_bundle_input_name(name)
@@ -584,7 +585,7 @@ def write_bundle(
         source=source,
         generated_at=now_iso(),
         inputs_sha256={name: sha256_bytes(content) for name, content in input_files},
-        access=access or SubscriptionAccess(),
+        access=SubscriptionAccess(),
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output_path, "w", compression=ZIP_DEFLATED) as zip_file:
@@ -624,7 +625,7 @@ def input_dir_files(input_dir: Path) -> list[tuple[str, bytes]]:
 
 
 def load_index_file(path: Path) -> SubscriptionIndex:
-    """读取并校验 current/index.json。"""
+    """读取并校验订阅索引 JSON 文件。"""
     try:
         return SubscriptionIndex.model_validate(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, ValidationError) as exc:
@@ -664,8 +665,8 @@ def validate_zip_member(member: ZipInfo) -> None:
     raise SubscriptionGeneratorError(f"unexpected bundle path: {name}")
 
 
-def extract_bundle_inputs(bundle_path: Path, data_dir: Path) -> BundleManifest:
-    """校验发布包并把 inputs 解包到 data_dir/inputs。"""
+def extract_bundle_inputs(bundle_path: Path, data_dir: Path, replace_all: bool = False) -> BundleManifest:
+    """校验发布包并把 inputs 增量解包到 data_dir/inputs。"""
     try:
         zip_file = ZipFile(bundle_path, "r")
     except BadZipFile as exc:
@@ -690,12 +691,20 @@ def extract_bundle_inputs(bundle_path: Path, data_dir: Path) -> BundleManifest:
             if actual_hash != manifest.inputs_sha256[name]:
                 raise SubscriptionGeneratorError(f"input hash mismatch: {name}")
         loaded_inputs = [(Path(name), load_input_content(name, content)) for name, content in input_members.items()]
-        merge_inputs(loaded_inputs, access=manifest.access)
         input_dir = data_dir / "inputs"
         input_dir.mkdir(parents=True, exist_ok=True)
-        clear_managed_input_files(input_dir)
+        if replace_all:
+            merge_inputs(loaded_inputs)
+            clear_managed_input_files(input_dir)
+        else:
+            existing_inputs = [
+                (path, load_input_file(path))
+                for path in scan_input_files(input_dir)
+                if path.name not in input_members
+            ]
+            merge_inputs([*existing_inputs, *loaded_inputs])
         for name, content in input_members.items():
-            (input_dir / name).write_bytes(content)
+            write_input_atomically(input_dir / name, content)
     return manifest
 
 
@@ -703,3 +712,10 @@ def clear_managed_input_files(input_dir: Path) -> None:
     """清理旧订阅 input，确保导入发布包后 current 只来自本次 bundle。"""
     for path in scan_input_files(input_dir):
         path.unlink()
+
+
+def write_input_atomically(path: Path, content: bytes) -> None:
+    """通过临时文件和 os.replace 写入 input，便于运行中的 watcher 感知替换。"""
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_bytes(content)
+    os.replace(tmp_path, path)

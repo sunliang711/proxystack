@@ -42,23 +42,19 @@ from proxystack.diagnostics.ipinfo import format_ipinfo_report
 from proxystack.diagnostics.ipinfo import query_ipinfo
 from proxystack.domain import ConfigValidationError
 from proxystack.domain.models import GlobalConfig
+from proxystack.domain.models import Stack
+from proxystack.domain.models import StackSet
 from proxystack.generator.backup import NativeBackupError
 from proxystack.generator.backup import NativeBackupPlan
 from proxystack.generator.backup import read_native_backup
 from proxystack.generator.backup import write_native_backup
 from proxystack.generator.mihomo import dumps_mihomo_config
-from proxystack.generator.sub import SubscriptionAccess
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import index_to_json
-from proxystack.generator.sub import input_dir_files
-from proxystack.generator.sub import input_to_yaml
-from proxystack.generator.sub import load_inputs
 from proxystack.generator.sub import merge_input_files
-from proxystack.generator.sub import merge_inputs
 from proxystack.generator.sub import render_stack_index
 from proxystack.generator.sub import render_stack_input
 from proxystack.generator.sub import stack_input_file
-from proxystack.generator.sub import validate_bundle_input_name
 from proxystack.generator.sub import write_bundle
 from proxystack.generator.xray import dumps_xray_config
 from proxystack.graph import DependencyPlan
@@ -1228,27 +1224,25 @@ def render_sub(
     typer.echo(index_to_json(rendered_index), nl=False)
 
 
-@sub_app.command("export-input")
-def export_input(
-    source: Optional[str] = typer.Option(None, "--source", help="订阅 input source；缺省使用 config.subscription.source。"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="输出 input YAML 路径。"),
+@sub_app.command("export")
+def export_subscription(
+    stack: Optional[str] = typer.Argument(None, help="可选 stack 名称；缺省导出全部 stack。"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="订阅发布包输出路径。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    check_system_ports: bool = typer.Option(False, "--check-system-ports/--skip-system-ports", help="是否检查系统端口占用；默认跳过，避免运行中服务阻断导出。"),
 ) -> None:
-    """从当前 stack 生成订阅 input YAML。"""
+    """生成 ps-sub 可导入的订阅发布包。"""
     try:
         global_config = load_config(config)
-        stack_set = load_stacks(global_config, check_system_ports=check_system_ports)
-        input_source = source or global_config.subscription.source
-        subscription_input = render_stack_input(stack_set, input_source)
-        validate_bundle_input_name(f"{input_source}.yaml")
-        output_path = output or Path(f"{input_source}.yaml")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(input_to_yaml(subscription_input), encoding="utf-8")
-    except (ValidationError, ConfigValidationError, ValueError, SubscriptionGeneratorError) as exc:
-        typer.echo(f"订阅 input 导出失败：\n{exc}", err=True)
+        stack_set = load_stacks(global_config, check_system_ports=False)
+        bundle_source, input_files = build_subscription_bundle_inputs(stack_set, stack)
+        output_path = output or default_subscription_bundle_path(global_config, stack)
+        write_bundle(output_path, bundle_source, input_files)
+        ensure_managed_directory(output_path.parent)
+        ensure_managed_file_metadata(output_path)
+    except (ValidationError, ConfigValidationError, ValueError, SubscriptionGeneratorError, OSError) as exc:
+        typer.echo(f"订阅发布包导出失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"订阅 input 已导出：{output_path}")
+    typer.echo(f"订阅发布包已导出：{output_path}")
 
 
 @sub_app.command("validate-inputs")
@@ -1264,60 +1258,36 @@ def validate_inputs(
     typer.echo(f"订阅 inputs 校验通过：{len(rendered_index.nodes)} 个节点")
 
 
-@app.command("publish", rich_help_panel=SUBSCRIPTION_HELP_PANEL)
-def publish(
-    source: Optional[str] = typer.Option(None, "--source", help="发布包 source；缺省使用 config.subscription.source。"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="发布包输出路径。"),
-    input_dir: Optional[Path] = typer.Option(None, "--input-dir", help="订阅 inputs 目录。"),
-    include_stack: bool = typer.Option(False, "--include-stack", help="与 --input-dir 合并当前 stack 生成的临时 input。"),
-    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
-    skip_system_ports: bool = typer.Option(False, "--skip-system-ports", help="跳过系统端口占用检查。"),
-) -> None:
-    """生成订阅发布包，不包含完整 stack 或 clash 本地运行配置。"""
-    try:
-        bundle_source = source or "merged"
-        access = None
-        global_config = None
-        stack_set = None
-        input_files = []
-        if input_dir is not None and not include_stack and not config.exists() and config != DEFAULT_CONFIG_PATH:
-            raise ValueError(f"config file does not exist: {config}")
-        if input_dir is None or include_stack or config.exists():
-            global_config = load_config(config)
-            bundle_source = source or global_config.subscription.source
-            access = SubscriptionAccess.model_validate(global_config.subscription.access.model_dump())
-        if input_dir is None or include_stack:
-            if global_config is None:
-                global_config = load_config(config)
-                bundle_source = source or global_config.subscription.source
-                access = SubscriptionAccess.model_validate(global_config.subscription.access.model_dump())
-            stack_set = load_stacks(global_config, check_system_ports=False)
-        if input_dir is None:
-            subscription_input = render_stack_input(stack_set, bundle_source)
-            merge_inputs([(Path(f"{bundle_source}.yaml"), subscription_input)], access=access)
-            input_files = [stack_input_file(bundle_source, subscription_input)]
-        else:
-            loaded_inputs = load_inputs(input_dir)
-            input_files = input_dir_files(input_dir)
-            if include_stack:
-                subscription_input = render_stack_input(stack_set, bundle_source)
-                loaded_inputs.append((Path(f"{bundle_source}.yaml"), subscription_input))
-                input_files.append(stack_input_file(bundle_source, subscription_input))
-            merge_inputs(loaded_inputs, access=access)
-        if output is None:
-            if input_dir is None or include_stack:
-                output_path = global_config.resolve_path(global_config.paths.publish) / "sub-bundle.zip"
-            else:
-                output_path = Path("sub-bundle.zip")
-        else:
-            output_path = output
-        write_bundle(output_path, bundle_source, input_files, access=access)
-        ensure_managed_directory(output_path.parent)
-        ensure_managed_file_metadata(output_path)
-    except (ValidationError, ConfigValidationError, ValueError, SubscriptionGeneratorError, OSError) as exc:
-        typer.echo(f"订阅发布包生成失败：\n{exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"订阅发布包已生成：{output_path}")
+def build_subscription_bundle_inputs(stack_set: StackSet, stack: Optional[str]) -> tuple[str, list[tuple[str, bytes]]]:
+    """根据可选 stack 名称生成发布包内的 input 文件列表。"""
+    if stack is not None:
+        selected_stacks = [find_stack_for_subscription_export(stack_set, stack)]
+        bundle_source = stack
+    else:
+        selected_stacks = list(stack_set.stacks)
+        bundle_source = stack_set.config.subscription.source
+    input_files: list[tuple[str, bytes]] = []
+    for selected_stack in selected_stacks:
+        scoped_stack_set = stack_set.model_copy(update={"stacks": [selected_stack]})
+        subscription_input = render_stack_input(scoped_stack_set, selected_stack.name)
+        input_files.append(stack_input_file(selected_stack.name, subscription_input))
+    return bundle_source, input_files
+
+
+def find_stack_for_subscription_export(stack_set: StackSet, stack: str) -> Stack:
+    """查找要导出的 stack；不存在时给出明确错误。"""
+    for candidate_stack in stack_set.stacks:
+        if candidate_stack.name == stack:
+            return candidate_stack
+    raise ValueError(f"stack does not exist: {stack}")
+
+
+def default_subscription_bundle_path(global_config: GlobalConfig, stack: Optional[str]) -> Path:
+    """返回订阅发布包默认输出路径。"""
+    publish_dir = global_config.resolve_path(global_config.paths.publish)
+    if stack is None:
+        return publish_dir / "sub-bundle.zip"
+    return publish_dir / f"{stack}-sub-bundle.zip"
 
 
 def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: bool) -> list[Path]:

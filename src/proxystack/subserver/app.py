@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
 
@@ -15,16 +16,28 @@ from fastapi.responses import PlainTextResponse
 
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionIndex
-from proxystack.generator.sub import load_index_file
 from proxystack.generator.sub import render_clash_subscription
 from proxystack.generator.sub import render_premium_clash_subscription
 from proxystack.generator.sub import render_surge_subscription
+from proxystack.subserver.state import SubscriptionState
+from proxystack.subserver.watcher import InputWatcher
 
 
-def create_app(data_dir: Path) -> FastAPI:
-    """创建只读取 data_dir/current/index.json 的 FastAPI 应用。"""
-    app = FastAPI(title="proxystack subscription server")
-    index_path = data_dir / "current" / "index.json"
+def create_app(state: SubscriptionState, watcher: InputWatcher | None = None) -> FastAPI:
+    """创建从内存状态读取订阅索引的 FastAPI 应用。"""
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        """在服务生命周期内启动和停止 inputs 目录监控。"""
+        if watcher is not None:
+            watcher.start()
+        try:
+            yield
+        finally:
+            if watcher is not None:
+                watcher.stop()
+
+    app = FastAPI(title="proxystack subscription server", lifespan=lifespan)
 
     @app.exception_handler(HTTPException)
     async def handle_http_exception(_request: Request, exc: HTTPException) -> JSONResponse:
@@ -33,27 +46,31 @@ def create_app(data_dir: Path) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict[str, object]:
-        """返回服务健康状态和当前索引可读性。"""
-        try:
-            index = load_index_file(index_path)
-        except SubscriptionGeneratorError:
-            return {"status": "error", "index": False}
-        return {"status": "ok", "index": True, "users": len(index.users)}
+        """返回服务健康状态和内存索引状态。"""
+        state_health = state.health()
+        response: dict[str, object] = {
+            "status": "ok" if state_health.loaded and state_health.last_error is None else "error",
+            "index": state_health.loaded,
+            "users": state_health.users,
+        }
+        if state_health.last_error is not None:
+            response["last_error"] = state_health.last_error
+        return response
 
     @app.get("/sub/{user}")
     def clash_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回普通 Clash 订阅。"""
-        return render_subscription_response(user, token, index_path, render_clash_subscription)
+        return render_subscription_response(user, token, state, render_clash_subscription)
 
     @app.get("/premium_sub/{user}")
     def premium_clash_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回 Premium Clash 订阅。"""
-        return render_subscription_response(user, token, index_path, render_premium_clash_subscription)
+        return render_subscription_response(user, token, state, render_premium_clash_subscription)
 
     @app.get("/surge_sub/{user}")
     def surge_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回 Surge 订阅。"""
-        return render_subscription_response(user, token, index_path, render_surge_subscription)
+        return render_subscription_response(user, token, state, render_surge_subscription)
 
     return app
 
@@ -61,11 +78,11 @@ def create_app(data_dir: Path) -> FastAPI:
 def render_subscription_response(
     user: str,
     token: Optional[str],
-    index_path: Path,
+    state: SubscriptionState,
     renderer: Callable[[SubscriptionIndex, str], str],
 ) -> PlainTextResponse:
-    """读取索引、执行 token 鉴权并返回订阅文本。"""
-    index = read_request_index(index_path)
+    """读取内存索引、执行 token 鉴权并返回订阅文本。"""
+    index = read_request_index(state)
     verify_token(index, token)
     try:
         content = renderer(index, user)
@@ -74,10 +91,10 @@ def render_subscription_response(
     return PlainTextResponse(content)
 
 
-def read_request_index(index_path: Path) -> SubscriptionIndex:
-    """读取请求使用的订阅索引，失败时返回统一 JSON 错误。"""
+def read_request_index(state: SubscriptionState) -> SubscriptionIndex:
+    """读取请求使用的内存索引，失败时返回统一 JSON 错误。"""
     try:
-        return load_index_file(index_path)
+        return state.snapshot()
     except SubscriptionGeneratorError as exc:
         raise json_error(503, "index_unavailable", "subscription index unavailable") from exc
 

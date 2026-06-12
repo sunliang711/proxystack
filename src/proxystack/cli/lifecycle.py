@@ -139,12 +139,14 @@ def init_project(config_path: Path, base_dir: Optional[Path], external_host: str
     if config_path.exists() and not force:
         config = load_config(config_path)
         created_paths.extend(ensure_project_dirs(config))
+        created_paths.append(ensure_sub_config(config, force=False))
         return created_paths
 
     config_text = initial_config_yaml(actual_base_dir, external_host)
     write_text_if_changed(config_path, config_text, force=force)
     config = load_config(config_path)
     created_paths.extend(ensure_project_dirs(config))
+    created_paths.append(ensure_sub_config(config, force=force))
     return created_paths
 
 
@@ -294,12 +296,35 @@ def ensure_project_dirs(config: GlobalConfig) -> list[Path]:
         config.resolve_path(config.paths.downloads),
         config.resolve_path(config.paths.sub),
         config.resolve_path(config.paths.sub) / "inputs",
-        config.resolve_path(config.paths.sub) / "bundles",
-        config.resolve_path(config.paths.sub) / "current",
     ]
     for path in paths:
         ensure_managed_directory(path)
     return paths
+
+
+def ensure_sub_config(config: GlobalConfig, force: bool = False) -> Path:
+    """根据全局订阅配置生成 ps-sub 独立配置文件。"""
+    sub_config_path = config.resolve_path(config.paths.sub) / "config.yaml"
+    write_text_if_changed(sub_config_path, sub_config_yaml(config), force=force)
+    return sub_config_path
+
+
+def sub_config_yaml(config: GlobalConfig) -> str:
+    """把全局订阅监听和 access 初始值写成 ps-sub 配置 YAML。"""
+    yaml = YAML()
+    yaml.default_flow_style = False
+    stream = StringIO()
+    yaml.dump(
+        {
+            "data_dir": str(config.resolve_path(config.paths.sub)),
+            "listen": config.subscription.listen,
+            "access": config.subscription.access.model_dump(mode="json", exclude_none=True),
+            "watch_interval": 2.0,
+            "watch_debounce": 0.3,
+        },
+        stream,
+    )
+    return stream.getvalue()
 
 
 def ensure_existing_stack_metadata(config: GlobalConfig) -> None:

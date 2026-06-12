@@ -78,7 +78,7 @@ sudo scripts/install-sub-local.sh \
 - `--install-systemd` 只安装 `proxystack-sub.service`。
 - `--start` 启动 `proxystack-sub.service`。
 
-脚本会在 `config.yaml` 不存在时运行 `proxystack-agent init` 生成默认配置；已存在配置不会被覆盖。
+脚本会在 `config.yaml` 不存在时运行 `proxystack-agent init` 生成默认配置和初始 `sub/config.yaml`；已存在配置不会被覆盖。
 
 ## scripts/uninstall-local.sh
 
@@ -125,6 +125,8 @@ sudo scripts/deploy-sub-docker.sh \
   --data-dir /opt/proxystack/sub \
   --port 3003
 ```
+
+脚本要求数据目录中已存在 `config.yaml`，避免容器以无鉴权默认配置启动。
 
 拉取镜像并显式替换同名容器：
 

@@ -314,12 +314,11 @@ Subscription input 是 agent 和 sub 共享的格式。`proxystack-sub` 支持�
 
 ```text
 <data_dir>/
+  config.yaml
   inputs/
     usa1.yaml
     usa2.yaml
     auto.yaml
-  current/
-    index.json
 ```
 
 每个 input 文件只包含订阅节点和来源元数据，不包含完整 stack：
@@ -347,44 +346,42 @@ nodes:
 
 合并规则：
 
-- `proxystack-sub rebuild` 扫描 `<data_dir>/inputs/*.yaml`、`*.yml`、`*.json`。
-- `proxystack-agent publish --input-dir <dir>` 使用同一套扫描与合并规则。
+- `proxystack-sub serve` 启动时扫描 `<data_dir>/inputs/*.yaml`、`*.yml`、`*.json` 并构建内存索引。
 - `proxystack-agent render sub --input-dir <dir>` 可以输出合并后的订阅索引。
 - 只合并通过 schema 校验的输入文件。
 - 按文件名排序后合并，保证结果稳定。
 - 按 `nodes[].user` 分组生成订阅。
 - `nodes[].id` 必须全局唯一；重复 id 默认报错。
-- 单个输入文件校验失败时，默认整个 rebuild 失败，避免发布半新半旧订阅。
-- rebuild 成功后原子写入 `<data_dir>/current/index.json`。
-- `current/index.json` 包含 `index_version: 1`、`generated_at`、`sources`、`nodes`、按 user 分组的 `users`，以及供 HTTP 服务读取的 `access`。
+- 启动阶段单个输入文件校验失败时服务启动失败；运行阶段 reload 失败时保留上一份可用内存索引。
+- 服务运行期间监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；文件增加、删除、修改或原子替换后会重新扫描整个 inputs 目录。
+- access token 从 `<data_dir>/config.yaml` 的 `access` 字段读取，不写入发布包，也不写入 index 文件。
 - input 文件必须是 `input_schema: proxystack.subscription-input`、`input_version: 1`；缺少 `input_schema` 的 v1 文件按兼容输入读取，其他 schema 或版本会失败。
 
-本地 agent 默认会从当前 stack 生成一个 input 文件，也可以打包成 bundle：
+本地 agent 使用统一导出命令生成订阅发布包：
 
 ```bash
-proxystack-agent sub export-input --source usa1 -o usa1.yaml
-proxystack-agent publish --source usa1 -o sub-bundle.zip
+proxystack-agent sub export
+proxystack-agent sub export usa1
 ```
 
-agent 也可以直接消费已有 inputs 目录：
+`sub export` 缺省导出全部 stack，包内按 stack 写入 `inputs/<stack>.yaml`；指定 stack 时只导出该 stack，并默认写到 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
+
+agent 仍可以只读消费已有 inputs 目录用于校验或预览：
 
 ```bash
 proxystack-agent sub validate-inputs --input-dir ./inputs
 proxystack-agent render sub --input-dir ./inputs
-proxystack-agent publish --input-dir ./inputs --source merged -o sub-bundle.zip
 ```
-
-当 `--input-dir` 存在时，`publish` 默认只使用该目录里的输入文件；如需同时包含当前 stack 生成的输入，可增加 `--include-stack`。`--include-stack` 会先生成当前 stack 的临时 input，再与 `--input-dir` 中的文件按同一套规则合并。
 
 ## 7. 订阅发布包
 
-本地 `proxystack-agent publish` 将订阅 input 和 manifest 打包为远端可导入的发布包：
+本地 `proxystack-agent sub export` 将订阅 input 和 manifest 打包为远端可导入的发布包：
 
 ```text
 sub-bundle.zip
   manifest.json
   inputs/
-    <source>.yaml
+    <stack>.yaml
 ```
 
 P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `manifest.json` 和 `inputs/*.yaml|*.yml|*.json`，导入时会拒绝绝对路径、反斜杠、`..` 和其他未知成员。
@@ -402,8 +399,7 @@ P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `
   },
   "template_version": "builtin-v1",
   "access": {
-    "type": "token",
-    "token": "<subscription-token>"
+    "type": "none"
   }
 }
 ```
@@ -416,9 +412,10 @@ P0 使用内置渲染器，不需要模板目录。P0 发布包只允许包含 `
 - 不包含 clash upstream、proxy-groups、rules、mode。
 - 不包含 mihomo controller 配置。
 - 不包含本地运行目录和 systemd 信息。
+- 不包含订阅服务 access token；token 只在 ps-sub 配置文件中配置。
 - manifest 必须是 `bundle_schema: proxystack.sub-bundle`、`bundle_version: 1`；缺少 `bundle_schema` 的 v1 发布包按兼容输入读取，原生备份包等其他 schema 会被拒绝。
 
-`proxystack-sub import sub-bundle.zip` 校验 manifest 和 hash 后，把 bundle 内的 inputs 解包到 `<data_dir>/inputs/`，默认执行 rebuild 并原子切换 `current` 指针；只有传入 `--no-rebuild` 时才跳过 rebuild。`proxystack-sub serve` 只读取 `current/index.json` 和模板。
+`proxystack-sub import sub-bundle.zip` 校验 manifest 和 hash 后，把 bundle 内的 inputs 增量解包到 `<data_dir>/inputs/`；同名 input 会被原子替换，其它 input 会保留，适合多个 agent/stack 发布包连续导入。需要清空旧 inputs 后全量替换时使用 `--replace-all`。`proxystack-sub serve` 从内存索引响应请求，运行中的服务会在 inputs 变化后自动 reload。
 
 本地部署默认数据目录是 `/opt/proxystack/sub`。Docker 部署默认数据目录是容器内 `/data`，需要由宿主机 volume 持久化。
 

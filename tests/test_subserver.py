@@ -3,31 +3,38 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event
 
 from fastapi.testclient import TestClient
+from pytest import MonkeyPatch
 
 from proxystack.generator.sub import SubscriptionAccess
-from proxystack.generator.sub import SubscriptionIndex
+from proxystack.generator.sub import SubscriptionInput
 from proxystack.generator.sub import SubscriptionNode
-from proxystack.generator.sub import index_to_json
+from proxystack.generator.sub import input_to_yaml
+from proxystack.subserver import SubscriptionState
 from proxystack.subserver import create_app
+from proxystack.subserver.watcher import PollingInputWatcher
 
 
-def test_health_reads_current_index(tmp_path: Path) -> None:
-    """验证 /health 只依赖 current/index.json。"""
-    write_index(tmp_path)
-    client = TestClient(create_app(tmp_path))
+def test_health_reads_loaded_memory_index(tmp_path: Path) -> None:
+    """验证 /health 返回内存索引状态。"""
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state))
 
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "index": True, "users": 2}
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["index"] is True
+    assert payload["users"] == 1
 
 
 def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
     """验证三种订阅路由按 user 输出文本。"""
-    write_index(tmp_path)
-    client = TestClient(create_app(tmp_path))
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state))
 
     clash_response = client.get("/sub/alice", params={"token": "demo-token"})
     premium_response = client.get("/premium_sub/alice", params={"token": "demo-token"})
@@ -45,8 +52,8 @@ def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
 
 def test_subscription_routes_require_token(tmp_path: Path) -> None:
     """验证缺少 token 时返回 401。"""
-    write_index(tmp_path)
-    client = TestClient(create_app(tmp_path))
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state))
 
     response = client.get("/sub/alice")
 
@@ -56,8 +63,8 @@ def test_subscription_routes_require_token(tmp_path: Path) -> None:
 
 def test_subscription_routes_reject_wrong_token(tmp_path: Path) -> None:
     """验证 token 错误时返回 403。"""
-    write_index(tmp_path)
-    client = TestClient(create_app(tmp_path))
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state))
 
     response = client.get("/sub/alice", params={"token": "bad-token"})
 
@@ -67,8 +74,8 @@ def test_subscription_routes_reject_wrong_token(tmp_path: Path) -> None:
 
 def test_subscription_routes_return_404_for_missing_user(tmp_path: Path) -> None:
     """验证用户不存在时返回统一 404 JSON 错误。"""
-    write_index(tmp_path)
-    client = TestClient(create_app(tmp_path))
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state))
 
     response = client.get("/sub/missing", params={"token": "demo-token"})
 
@@ -76,33 +83,107 @@ def test_subscription_routes_return_404_for_missing_user(tmp_path: Path) -> None
     assert response.json()["error"]["code"] == "not_found"
 
 
-def test_subscription_routes_return_404_for_empty_user(tmp_path: Path) -> None:
-    """验证用户存在但节点为空时返回 404。"""
-    write_index(tmp_path)
-    client = TestClient(create_app(tmp_path))
+def test_subscription_state_reload_keeps_previous_index_on_bad_input(tmp_path: Path) -> None:
+    """验证 reload 失败时保留上一份可用内存索引。"""
+    input_dir = tmp_path / "inputs"
+    write_input(input_dir / "manual.yaml", alice_node())
+    state = SubscriptionState(tmp_path, access=SubscriptionAccess(type="token", token="demo-token"))
+    state.load()
+    (input_dir / "bad.yaml").write_text("nodes: bad\n", encoding="utf-8")
 
-    response = client.get("/sub/empty", params={"token": "demo-token"})
+    assert state.reload() is False
+    assert state.snapshot().users["alice"][0].id == "test:alice"
+    assert state.health().last_error
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "not_found"
+
+def test_subscription_state_reload_records_filesystem_errors(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 reload 遇到文件系统异常时保留旧索引并记录错误。"""
+    import proxystack.subserver.state as state_module
+
+    state = loaded_state(tmp_path)
+
+    def raise_os_error(_input_dir: Path, access: SubscriptionAccess) -> None:
+        """模拟 inputs 目录读取时出现文件系统异常。"""
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(state_module, "merge_input_files", raise_os_error)
+
+    assert state.reload() is False
+    assert state.snapshot().users["alice"][0].id == "test:alice"
+    assert "permission denied" in str(state.health().last_error)
 
 
-def write_index(data_dir: Path) -> None:
-    """写入测试用 current/index.json。"""
-    current_dir = data_dir / "current"
-    current_dir.mkdir(parents=True)
-    index = SubscriptionIndex(
-        index_version=1,
+def test_polling_watcher_detects_atomic_input_replace(tmp_path: Path) -> None:
+    """验证轮询 watcher 能发现 import 使用的原子替换。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_input(input_dir / "manual.yaml", alice_node())
+    changed = Event()
+    watcher = PollingInputWatcher(input_dir, changed.set, interval=0.01)
+
+    watcher.start()
+    write_input(input_dir / "manual.yaml", alice_node(remark="updated socks"))
+    try:
+        assert changed.wait(1)
+    finally:
+        watcher.stop()
+
+
+def test_polling_watcher_survives_callback_error(tmp_path: Path) -> None:
+    """验证 reload 回调异常不会终止 polling watcher 线程。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_input(input_dir / "manual.yaml", alice_node())
+    changed = Event()
+    calls = {"count": 0}
+
+    def flaky_callback() -> None:
+        """第一次触发时抛错，第二次触发时标记成功。"""
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("reload failed")
+        changed.set()
+
+    watcher = PollingInputWatcher(input_dir, flaky_callback, interval=0.01)
+
+    watcher.start()
+    write_input(input_dir / "manual.yaml", alice_node(remark="first update"))
+    for _attempt in range(100):
+        if calls["count"] >= 1:
+            break
+        changed.wait(0.01)
+    assert calls["count"] >= 1
+    write_input(input_dir / "manual.yaml", alice_node(remark="second update"))
+    try:
+        assert changed.wait(1)
+    finally:
+        watcher.stop()
+
+
+def loaded_state(data_dir: Path) -> SubscriptionState:
+    """生成已加载的订阅内存状态。"""
+    input_dir = data_dir / "inputs"
+    write_input(input_dir / "manual.yaml", alice_node())
+    state = SubscriptionState(data_dir, access=SubscriptionAccess(type="token", token="demo-token"))
+    state.load()
+    return state
+
+
+def write_input(path: Path, node: SubscriptionNode) -> None:
+    """写入测试用订阅 input 文件。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subscription_input = SubscriptionInput(
+        input_version=1,
+        source="test",
         generated_at="2026-06-05T12:00:00+08:00",
-        sources=["test"],
-        nodes=[alice_node()],
-        users={"alice": [alice_node()], "empty": []},
-        access=SubscriptionAccess(type="token", token="demo-token"),
+        nodes=[node],
     )
-    (current_dir / "index.json").write_text(index_to_json(index), encoding="utf-8")
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(input_to_yaml(subscription_input), encoding="utf-8")
+    tmp_path.replace(path)
 
 
-def alice_node() -> SubscriptionNode:
+def alice_node(remark: str = "alice socks") -> SubscriptionNode:
     """生成测试用 alice socks5 节点。"""
     return SubscriptionNode(
         id="test:alice",
@@ -111,7 +192,7 @@ def alice_node() -> SubscriptionNode:
         server="proxy.example.com",
         port=24001,
         tag="socks5:24001:alice",
-        remark="alice socks",
+        remark=remark,
         auth={
             "type": "password",
             "username": "alice",

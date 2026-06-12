@@ -10,7 +10,6 @@ from typing import Optional
 from typing import Sequence
 
 from proxystack.domain.models import GlobalConfig
-from proxystack.domain.models import parse_listen
 
 SYSTEMD_UNIT_DIR = Path("/etc/systemd/system")
 XRAY_TEMPLATE_UNIT = "proxystack-xray@.service"
@@ -141,9 +140,9 @@ class SystemdManager:
         return UnitFile(CLASH_TEMPLATE_UNIT, content)
 
     def build_sub_unit(self) -> UnitFile:
-        """生成订阅服务 unit，只传入 data-dir、host 和 port。"""
-        host, port = parse_listen(self.config.subscription.listen)
+        """生成订阅服务 unit，使用 ps-sub 独立配置文件。"""
         sub_dir = self.config.resolve_path(self.config.paths.sub)
+        sub_config = sub_dir / "config.yaml"
         command_path = self.config.base_dir / ".venv" / "bin" / "proxystack-sub"
         content = "\n".join(
             [
@@ -161,7 +160,7 @@ class SystemdManager:
                 "ProtectHome=true",
                 "PrivateTmp=true",
                 f"ReadWritePaths={systemd_quote_arg(sub_dir)}",
-                f"ExecStart={systemd_join_args([command_path, 'serve', '--data-dir', sub_dir, '--host', host, '--port', str(port)])}",
+                f"ExecStart={systemd_join_args([command_path, 'serve', '--config', sub_config])}",
                 "Restart=on-failure",
                 "RestartSec=3s",
                 "",

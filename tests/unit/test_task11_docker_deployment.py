@@ -18,12 +18,8 @@ def test_docker_compose_sub_service_uses_security_hardening() -> None:
     assert service["command"] == [
         "proxystack-sub",
         "serve",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "3003",
-        "--data-dir",
-        "/data",
+        "--config",
+        "/data/config.yaml",
     ]
 
 
@@ -34,7 +30,7 @@ def test_dockerfile_sub_runtime_defaults_are_non_root_and_persistent() -> None:
     assert "USER 10001:10001" in dockerfile
     assert 'VOLUME ["/data"]' in dockerfile
     assert "HEALTHCHECK" in dockerfile
-    assert 'CMD ["proxystack-sub", "serve", "--host", "0.0.0.0", "--port", "3003", "--data-dir", "/data"]' in dockerfile
+    assert 'CMD ["proxystack-sub", "serve", "--config", "/data/config.yaml"]' in dockerfile
 
 
 def test_agent_sub_directory_boundary_and_lock_paths_are_documented() -> None:
@@ -42,7 +38,7 @@ def test_agent_sub_directory_boundary_and_lock_paths_are_documented() -> None:
     cli_doc = Path("docs/cli.md").read_text(encoding="utf-8")
     deployment_doc = Path("docs/deployment.md").read_text(encoding="utf-8")
 
-    assert "agent 不直接写 `sub/current/`" in cli_doc
-    assert "sub 只写 `sub/inputs/`、`sub/bundles/`、`sub/current/`" in cli_doc
+    assert "agent 不直接写 `sub/inputs/`" in cli_doc
+    assert "sub 只写 `sub/inputs/`，并读取 `sub/config.yaml`" in cli_doc
     assert "`/opt/proxystack/runtime/agent.lock`" in deployment_doc
     assert "`/opt/proxystack/sub/sub.lock`" in deployment_doc

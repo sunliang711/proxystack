@@ -13,7 +13,7 @@
 - 配置编译：从 `config.yaml + stacks/*.yaml` 生成 Xray JSON、mihomo YAML、subscription 输入索引和订阅发布包。
 - 多实例管理：本地 agent 支持 `proxystack-xray@<name>.service`、`proxystack-clash@<name>.service`；sub 服务本地部署时支持 `proxystack-sub.service`，Docker 部署时由容器运行时管理。
 - 下载和安装：安装/更新 mihomo、xray-core 和 geo 数据；systemd unit 由 `service install|uninstall` 管理。
-- CLI 生命周期：`init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`publish`、`doctor`，以及高级 `validate`、`render` 和 `service install|uninstall|start|stop|restart|status|log`。
+- CLI 生命周期：`init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor`，以及高级 `validate`、`render`、`sub export` 和 `service install|uninstall|start|stop|restart|status|log`。
 - 配置生命周期：`add`、`edit`、`list`、`remove`、`clone`、`render`；`clone --allocate-ports` 可基于全局端口池重新分配监听端口。
 - 订阅发布：本地基于 `xrelay.inbounds[].sub == true` 生成订阅输入/发布包；agent 和 sub 都可合并多个输入文件后输出或发布 Clash/Premium Clash/Surge 订阅。
 - auto 聚合：支持 mihomo `url-test` 和 `load-balance`，P0 可通过 `--members usa1,usa2` 引用其他 xrelay 暴露的 socks5 inbound。
@@ -135,13 +135,11 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - `proxystack-agent logs [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent enable [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent disable [name|xrelay/name|clash/name|sub]`
-- `proxystack-agent publish [-o sub-bundle.zip]`
-- `proxystack-agent publish --input-dir ./inputs --source merged -o sub-bundle.zip`
+- `proxystack-agent sub export [stack] [-o sub-bundle.zip]`
 - `proxystack-agent doctor`
 - `proxystack-agent validate [-c config.yaml] [target]`
 - `proxystack-agent render [model|xrelay|clash|sub] [name]`
 - `proxystack-agent render sub --input-dir ./inputs`
-- `proxystack-agent sub export-input --source usa1 -o usa1.yaml`
 - `proxystack-agent sub validate-inputs --input-dir ./inputs`
 - `proxystack-agent service install|uninstall [name]`
 - `proxystack-agent service start|stop|restart|status|enable|disable|log [name]`
@@ -152,7 +150,6 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 远端订阅 CLI：
 
 - `proxystack-sub import sub-bundle.zip`
-- `proxystack-sub rebuild`
 - `proxystack-sub serve`
 
 订阅 HTTP：
@@ -169,10 +166,10 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - 可观测性：所有命令使用结构化日志，服务状态通过 systemd 和 manifest 查询。
 - 幂等性：`start` 多次执行结果一致；生成文件带 hash，未变化不写入。配置变化时重启受影响服务，并启动目标范围内未变化的服务。
 - 可恢复：P0 保留最近一次生成的 manifest 和上一版生成文件快照，但不提供显式 rollback 命令；显式 rollback 放到 P1，原生备份 `export/import` 推迟到 M5。
-- 远端最小数据：`proxystack-sub` 只保存订阅输入/发布包和合并索引，不保存完整 stack、clash upstream、rules 或 mihomo controller 配置。
-- 同机隔离：agent 和本地 sub 可以共用 `/opt/proxystack` 根目录，但写入目录和锁文件必须分离；agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`，sub 只写 `sub/inputs/`、`sub/bundles/`、`sub/current/`。agent 运行期不写 `config.yaml`，只有 `init` 和 `edit` 这类配置管理命令可以写 `config.yaml`。
+- 远端最小数据：`proxystack-sub` 只保存订阅输入和自身配置，不保存完整 stack、clash upstream、rules 或 mihomo controller 配置。
+- 同机隔离：agent 和本地 sub 可以共用 `/opt/proxystack` 根目录，但写入目录和锁文件必须分离；agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`，sub 只写 `sub/inputs/` 并读取 `sub/config.yaml`。agent 运行期不写 `config.yaml`，只有 `init` 和 `edit` 这类配置管理命令可以写 `config.yaml`。
 - 权限边界：默认使用 `proxystack:proxystack` 用户和用户组，`/opt/proxystack` 为 `0750`；代理核心安装到 `/opt/proxystack/bin`，geo 数据安装到 `/opt/proxystack/geo`，二者默认 owner 为 `proxystack:proxystack`。
-- 锁语义：agent 生成和服务管理使用 agent 锁，sub import/rebuild 使用 sub 锁；锁文件互不复用，避免同机部署时互相阻塞或覆盖。
+- 锁语义：agent 生成和服务管理使用 agent 锁，sub import 使用 sub 锁；锁文件互不复用，避免同机部署时互相阻塞或覆盖。
 
 ## 9. 部署方案
 
@@ -198,18 +195,17 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 订阅服务本地部署：
 
 - Python 虚拟环境：`/opt/proxystack/.venv`
-- 发布包目录：`/opt/proxystack/sub/bundles/`
+- ps-sub 配置：`/opt/proxystack/sub/config.yaml`
 - 输入目录：`/opt/proxystack/sub/inputs/`
-- 当前订阅索引：`/opt/proxystack/sub/current/index.json`
 - systemd 服务：`/etc/systemd/system/proxystack-sub.service`
 
 订阅服务 Docker 部署：
 
 - 镜像：`proxystack-sub:<version>`
 - 数据卷：`/opt/proxystack/sub:/data`
-- 容器命令：`proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /data`
+- 容器命令：`proxystack-sub serve --config /data/config.yaml`
 - 发布包导入：`docker cp sub-bundle.zip` 后执行 `docker exec proxystack-sub proxystack-sub import /tmp/sub-bundle.zip --data-dir /data`
-- 多输入合并：挂载或导入多个文件到 `/data/inputs/` 后执行 `proxystack-sub rebuild --data-dir /data`
+- 多输入合并：挂载或导入多个文件到 `/data/inputs/`，运行中的服务通过 watcher 自动 reload。
 - 安全运行：Docker 镜像默认文档使用非 root 用户、只读根文件系统、`cap_drop: ALL` 和持久化 `/data` volume。
 
 ## 10. 任务分解
@@ -238,9 +234,9 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 | 订阅与实际 Xray inbound 不一致 | 客户端连接失败 | 订阅索引从同一份编译后模型生成，不读取手写副本 |
 | 远端订阅服务拿到过多内部信息 | 暴露 upstream、rules 或 controller 配置 | 订阅输入/发布包只包含订阅节点、客户端连接凭据和模板元数据，不包含完整 stack 或 clash 内部信息 |
 | 订阅 URL 被未授权访问 | 客户端节点泄露 | 默认建议启用 token 访问控制，`none` 只用于本地或显式风险确认 |
-| Docker 部署丢失订阅数据 | 容器重建后订阅为空 | 必须挂载持久化 `/data` volume，导入发布包后原子切换 current |
-| 多输入合并出现重复节点 | 客户端订阅出现重复或覆盖不可预期 | 以稳定 node id 去重，并在 rebuild 输出冲突报告 |
-| agent 和本地 sub 同机部署误写同一目录 | 订阅 current 被覆盖或运行状态互相污染 | agent/sub 写入目录和锁文件分离，发布包必须经 import/rebuild 才进入 sub/current |
+| Docker 部署丢失订阅数据 | 容器重建后订阅为空 | 必须挂载持久化 `/data` volume，保存 ps-sub 配置和 inputs |
+| 多输入合并出现重复节点 | 客户端订阅出现重复或覆盖不可预期 | 以稳定 node id 去重，并在 reload 时保留上一份可用内存索引 |
+| agent 和本地 sub 同机部署误写同一目录 | 订阅 inputs 被覆盖或运行状态互相污染 | agent/sub 写入目录和锁文件分离，发布包必须经 import 才进入 sub/inputs |
 
 ## 12. 领域术语表
 

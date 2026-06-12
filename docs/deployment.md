@@ -81,17 +81,17 @@ proxystack-agent config usa1
 proxystack-agent check
 proxystack-agent start
 proxystack-agent status
-proxystack-agent publish
+proxystack-agent sub export
 ```
 
 说明：
 
-- `init` 创建 `/opt/proxystack` 目录结构和默认 `config.yaml`，默认配置优先来自 `examples/config.yaml`。
+- `init` 创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`，默认配置优先来自 `examples/config.yaml`。
 - `setup` 会先执行幂等初始化，再安装代理核心和 geo 数据，最后安装 systemd unit。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
 - `check` 校验配置并展示生成变更预览，不写运行目录、不操作 systemd。
 - `start` 先检查 `mihomo`/`xray` 是否已安装且可执行，再生成配置并写入 manifest，最后通过 systemd 启动目标服务；配置变化时会重启受影响服务，并启动目标范围内未变化的服务。
-- `publish` 默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
+- `sub export` 默认生成 `/opt/proxystack/publish/sub-bundle.zip`。
 - 后续 proxystack 代码更新使用 `proxystack-agent update self --wheel <file>` 或配置的包源；代理核心更新使用 `proxystack-agent update mihomo|xray|geo|all`。
 - `install/update mihomo|xray|geo|all` 仍只处理代理核心和 geo 数据，不自动停启 systemd 服务；真实停启和 unit 管理由 `service` 分组和顶层生命周期命令提供。
 
@@ -105,16 +105,14 @@ systemd unit 文件需要安装到 `/etc/systemd/system/`，这是 systemd 的�
 
 ```text
 /opt/proxystack/sub/
+  config.yaml
   inputs/
-  bundles/
-  current/
-    index.json
 ```
 
 导入发布包并启动：
 
 ```bash
-proxystack-agent publish
+proxystack-agent sub export
 proxystack-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/proxystack/sub
 proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 ```
@@ -137,9 +135,9 @@ proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /opt/proxystack/sub
 本地部署要求：
 
 - `proxystack-sub.service` 只运行订阅 HTTP 服务；unit 安装使用 `proxystack-agent service install sub`，常用启停使用 `proxystack-agent start sub`、`proxystack-agent stop sub` 和 `proxystack-agent restart sub`。
-- 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认自动 rebuild。多个输入文件也可以直接放入 `/opt/proxystack/sub/inputs/` 后执行 `proxystack-sub rebuild`。
+- 发布包更新通过 `proxystack-sub import sub-bundle.zip` 完成；import 默认增量覆盖同名 input。需要清空旧 inputs 时使用 `--replace-all`。
 - import 必须校验 zip 路径穿越、manifest hash 和 bundle version。
-- 服务进程只读取 `/opt/proxystack/sub/current`，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
+- 服务进程启动时读取 `/opt/proxystack/sub/config.yaml` 和 `/opt/proxystack/sub/inputs/`，请求处理只使用内存索引，不读取 `/opt/proxystack/config.yaml` 或 `stacks/*.yaml`。
 
 ## 4. 本地卸载
 
@@ -173,18 +171,17 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
   publish/                 # agent 写入发布包
   downloads/               # agent 写入下载缓存
   sub/                     # sub 写入
+    config.yaml
     inputs/
-    bundles/
-    current/
 ```
 
 写入边界：
 
 - `proxystack-agent` 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/*.yaml`。
 - `config.yaml` 运行期只读；只有 `init` 和 `edit` 这类配置管理命令可以写。
-- `proxystack-sub` 只写 `sub/inputs/`、`sub/bundles/`、`sub/current/`。
-- `proxystack-agent publish` 只生成 `/opt/proxystack/publish/sub-bundle.zip`，不直接改 `sub/current/`。
-- `proxystack-sub import` 从发布包复制 inputs 到 `sub/inputs/`，再 rebuild 到 `sub/current/`。
+- `proxystack-sub` 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址和 access token。
+- `proxystack-agent sub export` 只生成 `/opt/proxystack/publish/sub-bundle.zip` 或指定 stack 的 `/opt/proxystack/publish/<stack>-sub-bundle.zip`，不直接改 `sub/inputs/`。
+- `proxystack-sub import` 从发布包复制 inputs 到 `sub/inputs/`，运行中的服务由 watcher 自动 reload。
 
 运行边界：
 
@@ -205,7 +202,7 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
 - `/opt/proxystack/geo/*`：`0640`，owner 为 `proxystack:proxystack`。
 - `/opt/proxystack/config.yaml` 和 `stacks/*.yaml`：`0640`。
 - `/opt/proxystack/runtime/`、`publish/`、`downloads/`：`0750`。
-- `/opt/proxystack/sub/`、`sub/inputs/`、`sub/bundles/`、`sub/current/`：`0750`。
+- `/opt/proxystack/sub/`、`sub/inputs/`：`0750`。
 - `/usr/local/bin/proxystack-agent`、`/usr/local/bin/proxystack-sub`、`/usr/local/bin/ps-agent` 和 `/usr/local/bin/ps-sub`：root-owned symlink，指向 `/opt/proxystack/.venv/bin/` 中的 console script。
 - `service install|uninstall` 和首次创建 `/etc/systemd/system/*.service` 必须以 root 运行；`update self`、`install/update mihomo|xray|geo` 默认以 `proxystack` 用户运行。需要重启 systemd 服务时，用户必须显式使用 sudo 或系统授权，CLI 不静默提权。
 
@@ -223,7 +220,7 @@ Task09 P0 实现的 unit 约束：
 
 - `proxystack-xray@.service` 和 `proxystack-clash@.service` 只引用 `runtime/generated` 下的生成后配置文件，不把 `config.yaml` 或 `stacks/*.yaml` 作为运行配置传入服务。
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
-- `proxystack-sub.service` 只传入 `proxystack-sub serve --data-dir <sub_dir> --host <host> --port <port>`，不读取或改写 stack 文件。
+- `proxystack-sub.service` 只传入 `proxystack-sub serve --config <sub_dir>/config.yaml`，不读取或改写 stack 文件。
 - `service install|uninstall` 是唯一 unit 文件安装卸载入口；`install/update` 分组不提供 unit 安装命令。
 - `systemctl` 和 `journalctl` 通过参数数组调用；返回非零时 CLI 展示 stdout/stderr 摘要并失败，不吞掉权限错误。
 
@@ -235,14 +232,19 @@ Task09 P0 实现的 unit 约束：
 
 - 只包含 `proxystack-sub` 运行所需依赖。
 - 暴露订阅 HTTP 端口。
-- 通过 volume 保存 inputs、已导入的发布包和 current 索引。
+- 通过 volume 保存 ps-sub 配置和 inputs。
 - 不包含 mihomo、xray-core，也不管理 systemd。
 
 推荐运行：
 
 ```bash
 mkdir -p /opt/proxystack/sub
+vi /opt/proxystack/sub/config.yaml
+```
 
+`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。
+
+```bash
 docker run -d \
   --name proxystack-sub \
   --restart unless-stopped \
@@ -253,7 +255,7 @@ docker run -d \
   --cap-drop ALL \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   proxystack-sub:latest \
-  proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /data
+  proxystack-sub serve --config /data/config.yaml
 ```
 
 Docker 部署可使用 `scripts/deploy-sub-docker.sh`，脚本封装数据目录创建、owner 设置和安全默认的容器启动参数。同名容器已存在时脚本默认失败，需要显式传入 `--replace`。
@@ -270,7 +272,7 @@ sudo scripts/deploy-sub-docker.sh \
 ```bash
 docker cp sub-bundle.zip proxystack-sub:/tmp/sub-bundle.zip
 docker exec proxystack-sub proxystack-sub import /tmp/sub-bundle.zip --data-dir /data
-docker exec proxystack-sub python -c "import json; print(json.load(open('/data/current/index.json'))['index_version'])"
+docker exec proxystack-sub python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:3003/health', timeout=2).read().decode())"
 ```
 
 Docker Compose 示例：
@@ -315,7 +317,7 @@ services:
 Docker 部署安全要求：
 
 - 容器内服务默认不需要 root 权限。
-- `/data` volume 必须持久化，否则重启后会丢失 inputs、已导入发布包和 current 索引。
+- `/data` volume 必须持久化，否则重启后会丢失 ps-sub 配置和 inputs。
 - 容器应 drop capabilities、只读根文件系统，并配置 healthcheck。
 - 不把完整 stack 或 mihomo 配置挂载进容器。
 - 如果公网暴露订阅服务，建议在反向代理层加 HTTPS、访问控制、限流和日志。
@@ -325,28 +327,20 @@ Docker 部署安全要求：
 P0 只要求手动上传/导入：
 
 ```bash
-proxystack-agent publish -o /opt/proxystack/publish/sub-bundle.zip
+proxystack-agent sub export -o /opt/proxystack/publish/sub-bundle.zip
 scp /opt/proxystack/publish/sub-bundle.zip user@sub-server:/tmp/sub-bundle.zip
 ssh user@sub-server 'proxystack-sub import /tmp/sub-bundle.zip'
 ```
 
-多输入文件场景：
+多 stack 增量发布场景：
 
 ```bash
-proxystack-agent sub export-input --source usa1 -o usa1.yaml
-proxystack-agent sub export-input --source usa2 -o usa2.yaml
-scp usa1.yaml usa2.yaml user@sub-server:/opt/proxystack/sub/inputs/
-ssh user@sub-server 'proxystack-sub rebuild --data-dir /opt/proxystack/sub'
-```
-
-同一批 inputs 也可以直接给本地 agent 使用，例如在上传前先校验、输出合并结果并打包：
-
-```bash
-mkdir -p ./inputs
-cp usa1.yaml usa2.yaml ./inputs/
-proxystack-agent sub validate-inputs --input-dir ./inputs
-proxystack-agent render sub --input-dir ./inputs
-proxystack-agent publish --input-dir ./inputs --source merged -o sub-bundle.zip
+proxystack-agent sub export usa1
+proxystack-agent sub export usa2
+scp /opt/proxystack/publish/usa1-sub-bundle.zip user@sub-server:/tmp/usa1-sub-bundle.zip
+scp /opt/proxystack/publish/usa2-sub-bundle.zip user@sub-server:/tmp/usa2-sub-bundle.zip
+ssh user@sub-server 'proxystack-sub import /tmp/usa1-sub-bundle.zip --data-dir /opt/proxystack/sub'
+ssh user@sub-server 'proxystack-sub import /tmp/usa2-sub-bundle.zip --data-dir /opt/proxystack/sub'
 ```
 
 Docker 场景：
@@ -357,11 +351,12 @@ ssh user@sub-server 'docker cp /tmp/sub-bundle.zip proxystack-sub:/tmp/sub-bundl
 ssh user@sub-server 'docker exec proxystack-sub proxystack-sub import /tmp/sub-bundle.zip --data-dir /data'
 ```
 
-Docker 多输入文件场景：
+Docker 多 stack 增量发布场景：
 
 ```bash
-scp usa1.yaml usa2.yaml user@sub-server:/opt/proxystack/sub/inputs/
-ssh user@sub-server 'docker exec proxystack-sub proxystack-sub rebuild --data-dir /data'
+scp /opt/proxystack/publish/usa1-sub-bundle.zip user@sub-server:/tmp/usa1-sub-bundle.zip
+ssh user@sub-server 'docker cp /tmp/usa1-sub-bundle.zip proxystack-sub:/tmp/usa1-sub-bundle.zip'
+ssh user@sub-server 'docker exec proxystack-sub proxystack-sub import /tmp/usa1-sub-bundle.zip --data-dir /data'
 ```
 
 P1 可以增加远端自动拉取发布包，但需要单独设计鉴权、签名和回滚策略。

@@ -22,9 +22,8 @@
   publish/
   downloads/
   sub/
+    config.yaml
     inputs/
-    bundles/
-    current/
 ```
 
 `config.yaml` 是全局配置；`stacks/*.yaml` 是每个 stack 的独立配置文件。每个 stack 文件包含一组 `xrelay -> clash` 配置，文件名默认就是 stack 名称。
@@ -143,8 +142,8 @@ install:
 
 - agent 可写 `runtime/`、`publish/`、`downloads/` 和 stack 配置文件。
 - `config.yaml` 运行期只读；只有 `init` 和 `edit` 这类配置管理命令可以写。
-- sub 只写 `sub/inputs/`、`sub/bundles/`、`sub/current/`。
-- agent 不直接写 `sub/current/`；订阅内容必须通过 `publish` 生成 bundle，再由 `proxystack-sub import` 导入。
+- sub 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址和 access token。
+- agent 不直接写 `sub/inputs/`；订阅内容必须通过 `sub export` 生成 bundle，再由 `proxystack-sub import` 导入。
 - sub 不读取 `config.yaml`、`stacks/` 或 `runtime/`。
 - agent 和 sub 可以共用 `.venv/`，但运行期锁文件必须分开：agent 使用 `runtime/agent.lock`，sub 使用 `sub/sub.lock`。
 
@@ -219,7 +218,7 @@ clash:
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `name` | 是 | stack 名称，必须与文件名一致 |
-| `enabled` | 否 | 是否参与 `check/start/publish`，默认 `true` |
+| `enabled` | 否 | 是否参与 `check/start/sub export`，默认 `true` |
 | `role` | 否 | stack 角色，P0 支持 `edge` 和 `auto` |
 | `labels` | 否 | 标签列表，用于 `list` 展示和未来 auto selector |
 | `xrelay` | 是 | Xray/xrelay 配置 |

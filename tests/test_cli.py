@@ -13,6 +13,7 @@ from typing import Sequence
 from uuid import UUID
 from zipfile import ZipFile
 
+from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from ruamel.yaml import YAML
 from typer.testing import CliRunner
@@ -27,6 +28,8 @@ from proxystack.diagnostics.ipinfo import FamilyResult
 from proxystack.diagnostics.ipinfo import IpInfoReport
 from proxystack.diagnostics.ipinfo import SourceResult
 from proxystack.diagnostics.ipinfo import format_ipinfo_report
+from proxystack.generator.sub import merge_input_files
+from proxystack.generator.sub import write_bundle
 from proxystack.systemd import CommandResult
 from scripts.build_package import clean_build_state
 
@@ -103,7 +106,6 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["ipinfo"],
         ["enable"],
         ["disable"],
-        ["publish"],
         ["doctor"],
         ["validate"],
         ["install"],
@@ -118,6 +120,7 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["service", "restart"],
         ["service", "status"],
         ["service", "log"],
+        ["sub", "export"],
         ["version"],
         ["render"],
         ["render", "model"],
@@ -330,10 +333,12 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
         "downloads",
         "sub",
         "sub/inputs",
-        "sub/bundles",
-        "sub/current",
     ]:
         assert (project_dir / relative_path).is_dir()
+    sub_config = YAML(typ="safe").load((project_dir / "sub" / "config.yaml").read_text(encoding="utf-8"))
+    assert sub_config["data_dir"] == str(project_dir / "sub")
+    assert sub_config["listen"] == "127.0.0.1:3003"
+    assert sub_config["access"]["token"] == "demo-subscription-token"
 
 
 def test_agent_init_falls_back_when_examples_config_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -964,28 +969,72 @@ def test_agent_check_config_check_only_and_doctor(tmp_path: Path) -> None:
     assert "subscription.listen" in doctor_result.output
 
 
-def test_agent_sub_export_input(tmp_path: Path) -> None:
-    """验证 proxystack-agent sub export-input 可以写出 input YAML。"""
-    output = tmp_path / "local.yaml"
+def test_agent_sub_export_all_stacks_bundle(tmp_path: Path) -> None:
+    """验证 proxystack-agent sub export 可以按 stack 写出发布包。"""
+    output = tmp_path / "sub-bundle.zip"
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export-input", "--source", "local", "-o", str(output), "-c", "examples/config.yaml", "--skip-system-ports"],
+        ["sub", "export", "-o", str(output), "-c", "examples/config.yaml"],
     )
 
     assert result.exit_code == 0
-    exported_input = YAML(typ="safe").load(output.read_text(encoding="utf-8"))
-    assert exported_input["source"] == "local"
-    assert exported_input["nodes"][0]["id"] == "auto:relay"
+    with ZipFile(output) as zip_file:
+        assert sorted(zip_file.namelist()) == [
+            "inputs/auto.yaml",
+            "inputs/usa1.yaml",
+            "inputs/usa2.yaml",
+            "manifest.json",
+        ]
+        manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
+        auto_input = YAML(typ="safe").load(zip_file.read("inputs/auto.yaml").decode("utf-8"))
+    assert manifest["bundle_schema"] == "proxystack.sub-bundle"
+    assert manifest["bundle_version"] == 1
+    assert sorted(manifest["inputs_sha256"]) == ["auto.yaml", "usa1.yaml", "usa2.yaml"]
+    assert manifest["access"] == {"type": "none"}
+    assert auto_input["source"] == "auto"
+    assert auto_input["nodes"][0]["id"] == "auto:relay"
 
 
-def test_agent_sub_export_input_skips_running_service_ports_by_default(tmp_path: Path) -> None:
-    """验证 export-input 不会因自身服务端口已被监听而失败。"""
+def test_agent_sub_export_stack_bundle(tmp_path: Path) -> None:
+    """验证 sub export 指定 stack 时只导出该 stack。"""
+    output = tmp_path / "usa1-sub-bundle.zip"
+
+    result = runner.invoke(
+        agent_app,
+        ["sub", "export", "usa1", "-o", str(output), "-c", "examples/config.yaml"],
+    )
+
+    assert result.exit_code == 0
+    with ZipFile(output) as zip_file:
+        assert sorted(zip_file.namelist()) == ["inputs/usa1.yaml", "manifest.json"]
+        manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
+        bundled_input = YAML(typ="safe").load(zip_file.read("inputs/usa1.yaml").decode("utf-8"))
+    assert manifest["source"] == "usa1"
+    assert bundled_input["source"] == "usa1"
+    assert [node["id"] for node in bundled_input["nodes"]] == ["usa1:relay", "usa1:vmess:alice"]
+
+
+def test_agent_sub_export_rejects_missing_stack(tmp_path: Path) -> None:
+    """验证 sub export 指定不存在 stack 时失败。"""
+    output = tmp_path / "missing-sub-bundle.zip"
+
+    result = runner.invoke(
+        agent_app,
+        ["sub", "export", "missing", "-o", str(output), "-c", "examples/config.yaml"],
+    )
+
+    assert result.exit_code == 1
+    assert "stack does not exist: missing" in result.output
+
+
+def test_agent_sub_export_skips_running_service_ports_by_default(tmp_path: Path) -> None:
+    """验证 sub export 不会因自身服务端口已被监听而失败。"""
     config = copy_example_project(tmp_path)
     stack_path = config.parent / "stacks" / "usa1.yaml"
     yaml = YAML()
     stack_data = yaml.load(stack_path.read_text(encoding="utf-8"))
-    output = tmp_path / "local.yaml"
+    output = tmp_path / "usa1-sub-bundle.zip"
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.bind(("0.0.0.0", 0))
@@ -994,7 +1043,7 @@ def test_agent_sub_export_input_skips_running_service_ports_by_default(tmp_path:
         with stack_path.open("w", encoding="utf-8") as stack_file:
             yaml.dump(stack_data, stack_file)
 
-        result = runner.invoke(agent_app, ["sub", "export-input", "--source", "local", "-o", str(output), "-c", str(config)])
+        result = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(output), "-c", str(config)])
     finally:
         sock.close()
 
@@ -1014,62 +1063,47 @@ def test_agent_sub_validate_inputs(tmp_path: Path) -> None:
     assert "订阅 inputs 校验通过" in result.output
 
 
-def test_agent_publish_example(tmp_path: Path) -> None:
-    """验证 proxystack-agent publish 可以生成订阅发布包。"""
-    output = tmp_path / "sub-bundle.zip"
-
-    result = runner.invoke(
-        agent_app,
-        ["publish", "--source", "local", "-o", str(output), "-c", "examples/config.yaml", "--skip-system-ports"],
-    )
-
-    assert result.exit_code == 0
-    with ZipFile(output) as zip_file:
-        assert sorted(zip_file.namelist()) == ["inputs/local.yaml", "manifest.json"]
-        manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
-        bundled_input = YAML(typ="safe").load(zip_file.read("inputs/local.yaml").decode("utf-8"))
-    assert manifest["bundle_schema"] == "proxystack.sub-bundle"
-    assert manifest["bundle_version"] == 1
-    assert "local.yaml" in manifest["inputs_sha256"]
-    assert bundled_input["input_schema"] == "proxystack.subscription-input"
-
-
-def test_agent_publish_skips_running_service_ports_by_default(tmp_path: Path) -> None:
-    """验证 publish 不会因自身服务端口已被监听而失败。"""
+def test_agent_sub_export_default_output_for_stack(tmp_path: Path) -> None:
+    """验证 sub export 指定 stack 时默认输出到 stack 专属发布包。"""
     config = copy_example_project(tmp_path)
-    stack_path = config.parent / "stacks" / "usa1.yaml"
-    yaml = YAML()
-    stack_data = yaml.load(stack_path.read_text(encoding="utf-8"))
-    output = tmp_path / "sub-bundle.zip"
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("0.0.0.0", 0))
-        sock.listen()
-        stack_data["xrelay"]["inbounds"][0]["port"] = sock.getsockname()[1]
-        with stack_path.open("w", encoding="utf-8") as stack_file:
-            yaml.dump(stack_data, stack_file)
+    output = config.parent / "publish" / "usa1-sub-bundle.zip"
 
-        result = runner.invoke(agent_app, ["publish", "--source", "local", "-o", str(output), "-c", str(config)])
-    finally:
-        sock.close()
+    result = runner.invoke(agent_app, ["sub", "export", "usa1", "-c", str(config)])
 
     assert result.exit_code == 0
     assert output.exists()
 
 
-def test_agent_publish_sets_managed_bundle_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 root 发布订阅包时会修正 zip 文件权限和 owner。"""
+def test_agent_sub_export_sets_managed_bundle_metadata_as_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 root 导出订阅包时会修正 zip 文件权限和 owner。"""
     output = tmp_path / "sub-bundle.zip"
     chown_calls = use_fake_root_managed_owner(monkeypatch)
 
     result = runner.invoke(
         agent_app,
-        ["publish", "--source", "local", "-o", str(output), "-c", "examples/config.yaml", "--skip-system-ports"],
+        ["sub", "export", "-o", str(output), "-c", "examples/config.yaml"],
     )
 
     assert result.exit_code == 0
     assert output.stat().st_mode & 0o777 == 0o640
     assert (output, 123, 456) in chown_calls
+
+
+def test_agent_sub_export_bundle_schema(tmp_path: Path) -> None:
+    """验证 sub export 生成的发布包包含 schema 和 input 元数据。"""
+    output = tmp_path / "sub-bundle.zip"
+
+    result = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(output), "-c", "examples/config.yaml"])
+
+    assert result.exit_code == 0
+    with ZipFile(output) as zip_file:
+        assert sorted(zip_file.namelist()) == ["inputs/usa1.yaml", "manifest.json"]
+        manifest = json.loads(zip_file.read("manifest.json").decode("utf-8"))
+        bundled_input = YAML(typ="safe").load(zip_file.read("inputs/usa1.yaml").decode("utf-8"))
+    assert manifest["bundle_schema"] == "proxystack.sub-bundle"
+    assert manifest["bundle_version"] == 1
+    assert "usa1.yaml" in manifest["inputs_sha256"]
+    assert bundled_input["input_schema"] == "proxystack.subscription-input"
 
 
 def test_agent_native_backup_export_import_roundtrip(tmp_path: Path) -> None:
@@ -1125,16 +1159,16 @@ def test_agent_native_backup_import_refuses_existing_files_without_force(tmp_pat
 def test_agent_native_backup_import_rejects_subscription_bundle(tmp_path: Path) -> None:
     """验证 agent 原生导入拒绝误导入 sub-bundle.zip。"""
     sub_bundle = tmp_path / "sub-bundle.zip"
-    publish_result = runner.invoke(
+    export_result = runner.invoke(
         agent_app,
-        ["publish", "--source", "local", "-o", str(sub_bundle), "-c", "examples/config.yaml", "--skip-system-ports"],
+        ["sub", "export", "usa1", "-o", str(sub_bundle), "-c", "examples/config.yaml"],
     )
-    assert publish_result.exit_code == 0
+    assert export_result.exit_code == 0
 
     result = runner.invoke(agent_app, ["import", str(sub_bundle), "-c", str(tmp_path / "target" / "config.yaml")])
 
     assert result.exit_code == 1
-    assert "unexpected native backup path: inputs/local.yaml" in result.output
+    assert "unexpected native backup path: inputs/usa1.yaml" in result.output
 
 
 def test_agent_native_backup_import_rejects_unsafe_member_path(tmp_path: Path) -> None:
@@ -1237,7 +1271,7 @@ def test_sub_help_is_available() -> None:
 
 def test_sub_command_help_is_available() -> None:
     """验证 proxystack-sub P0 子命令都提供 help 输出。"""
-    for command in [["version"], ["import"], ["rebuild"], ["serve"]]:
+    for command in [["version"], ["import"], ["serve"]]:
         result = runner.invoke(sub_app, [*command, "--help"])
 
         assert result.exit_code == 0, command
@@ -1251,49 +1285,44 @@ def test_sub_version_is_available() -> None:
     assert "proxystack-sub" in result.output
 
 
-def test_sub_import_rebuilds_bundle(tmp_path: Path) -> None:
-    """验证 proxystack-sub import 默认解包 inputs 并 rebuild 当前索引。"""
+def test_sub_import_writes_bundle_inputs_only(tmp_path: Path) -> None:
+    """验证 proxystack-sub import 只解包 inputs，不生成 current 或 access 文件。"""
     bundle = tmp_path / "sub-bundle.zip"
     data_dir = tmp_path / "sub"
-    publish_result = runner.invoke(
+    export_result = runner.invoke(
         agent_app,
-        ["publish", "--source", "local", "-o", str(bundle), "-c", "examples/config.yaml", "--skip-system-ports"],
+        ["sub", "export", "usa1", "-o", str(bundle), "-c", "examples/config.yaml"],
     )
-    assert publish_result.exit_code == 0
+    assert export_result.exit_code == 0
 
     result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir)])
 
     assert result.exit_code == 0
-    rendered_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
-    assert "alice" in rendered_index["users"]
-    assert rendered_index["access"]["token"] == "demo-subscription-token"
-
-
-def test_sub_import_no_rebuild_skips_current_until_rebuild(tmp_path: Path) -> None:
-    """验证 import --no-rebuild 只导入 inputs，不提前生成 current。"""
-    bundle = tmp_path / "sub-bundle.zip"
-    data_dir = tmp_path / "sub"
-    publish_result = runner.invoke(
-        agent_app,
-        ["publish", "--source", "local", "-o", str(bundle), "-c", "examples/config.yaml", "--skip-system-ports"],
-    )
-    assert publish_result.exit_code == 0
-
-    import_result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir), "--no-rebuild"])
-
-    assert import_result.exit_code == 0
-    assert (data_dir / "inputs" / "local.yaml").exists()
-    assert (data_dir / "bundles" / "access.json").exists()
+    rendered_index = merge_input_files(data_dir / "inputs")
+    assert "alice" in rendered_index.users
+    assert (data_dir / "inputs" / "usa1.yaml").exists()
+    assert not (data_dir / "bundles" / "access.json").exists()
     assert not (data_dir / "current" / "index.json").exists()
-    rebuild_result = runner.invoke(sub_app, ["rebuild", "--data-dir", str(data_dir)])
-
-    assert rebuild_result.exit_code == 0
-    assert (data_dir / "current" / "index.json").exists()
 
 
-def test_sub_serve_uses_uvicorn_without_starting_network(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 serve CLI 传递 host、port 和 app，不启动真实网络服务。"""
+def test_sub_serve_uses_config_access_and_memory_index(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 serve CLI 从配置读取 token，并把 inputs 加载到内存 app。"""
     captured: dict[str, object] = {}
+    data_dir = tmp_path / "sub"
+    (data_dir / "inputs").mkdir(parents=True)
+    write_cli_input(data_dir / "inputs" / "manual.yaml")
+    config_path = tmp_path / "sub-config.yaml"
+    config_path.write_text(
+        f"""data_dir: {data_dir}
+listen: 0.0.0.0:3004
+access:
+  type: token
+  token: demo-token
+watch_interval: 0.1
+watch_debounce: 0
+""",
+        encoding="utf-8",
+    )
 
     def fake_run(app: object, host: str, port: int) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
@@ -1305,52 +1334,81 @@ def test_sub_serve_uses_uvicorn_without_starting_network(tmp_path: Path, monkeyp
 
     result = runner.invoke(
         sub_app,
-        ["serve", "--data-dir", str(tmp_path / "sub"), "--host", "0.0.0.0", "--port", "3004"],
+        ["serve", "--config", str(config_path)],
     )
 
     assert result.exit_code == 0
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 3004
+    client = TestClient(captured["app"])
+    assert client.get("/sub/alice").status_code == 401
+    assert client.get("/sub/alice", params={"token": "demo-token"}).status_code == 200
 
 
-def test_subscription_publish_import_e2e_matches_input_merge(tmp_path: Path) -> None:
-    """验证 inputs 经 agent 发布再由 sub 导入后，合并节点与 agent 预览一致。"""
-    input_dir = tmp_path / "inputs"
-    input_dir.mkdir()
-    export_result = runner.invoke(
-        agent_app,
-        [
-            "sub",
-            "export-input",
-            "--source",
-            "local",
-            "-o",
-            str(input_dir / "local.yaml"),
-            "-c",
-            "examples/config.yaml",
-            "--skip-system-ports",
-        ],
-    )
-    write_cli_input(input_dir / "manual.yaml", source="manual", node_id="manual:id")
-    agent_render = runner.invoke(agent_app, ["render", "sub", "--input-dir", str(input_dir)])
-    bundle = tmp_path / "sub-bundle.zip"
-    publish_result = runner.invoke(agent_app, ["publish", "--input-dir", str(input_dir), "--source", "merged", "-o", str(bundle)])
+def test_sub_serve_requires_config_file(tmp_path: Path) -> None:
+    """验证 serve 缺少 ps-sub 配置时不会以无 token 默认配置启动。"""
     data_dir = tmp_path / "sub"
-    import_result = runner.invoke(sub_app, ["import", str(bundle), "--data-dir", str(data_dir)])
 
-    assert export_result.exit_code == 0
-    assert agent_render.exit_code == 0
-    assert publish_result.exit_code == 0
-    assert import_result.exit_code == 0
-    agent_index = json.loads(agent_render.output)
-    sub_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
-    assert [node["id"] for node in sub_index["nodes"]] == [node["id"] for node in agent_index["nodes"]]
-    assert sub_index["sources"] == agent_index["sources"]
-    assert sorted(sub_index["users"]) == sorted(agent_index["users"])
+    result = runner.invoke(sub_app, ["serve", "--data-dir", str(data_dir)])
+
+    assert result.exit_code == 1
+    assert "sub config file could not be read" in result.output
 
 
-def test_sub_import_replaces_old_inputs(tmp_path: Path) -> None:
-    """验证连续导入发布包时旧 input 不会残留到 current/index.json。"""
+def test_sub_serve_defaults_data_dir_to_config_parent(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 ps-sub 配置缺省 data_dir 时使用配置文件所在目录。"""
+    captured: dict[str, object] = {}
+    data_dir = tmp_path / "sub"
+    (data_dir / "inputs").mkdir(parents=True)
+    write_cli_input(data_dir / "inputs" / "manual.yaml")
+    config_path = data_dir / "config.yaml"
+    config_path.write_text(
+        """listen: 127.0.0.1:3003
+access:
+  type: none
+""",
+        encoding="utf-8",
+    )
+
+    def fake_run(app: object, host: str, port: int) -> None:
+        """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
+        captured["app"] = app
+        captured["host"] = host
+        captured["port"] = port
+
+    monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
+
+    result = runner.invoke(sub_app, ["serve", "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    client = TestClient(captured["app"])
+    response = client.get("/sub/alice")
+    assert response.status_code == 200
+    assert "manual:id" in response.text
+
+
+def test_subscription_export_import_e2e_merges_multiple_stack_bundles(tmp_path: Path) -> None:
+    """验证多个 stack 发布包连续导入后会合并到同一个订阅索引。"""
+    usa1_bundle = tmp_path / "usa1-sub-bundle.zip"
+    usa2_bundle = tmp_path / "usa2-sub-bundle.zip"
+    data_dir = tmp_path / "sub"
+    usa1_export = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(usa1_bundle), "-c", "examples/config.yaml"])
+    usa2_export = runner.invoke(agent_app, ["sub", "export", "usa2", "-o", str(usa2_bundle), "-c", "examples/config.yaml"])
+    usa1_import = runner.invoke(sub_app, ["import", str(usa1_bundle), "--data-dir", str(data_dir)])
+    usa2_import = runner.invoke(sub_app, ["import", str(usa2_bundle), "--data-dir", str(data_dir)])
+
+    assert usa1_export.exit_code == 0
+    assert usa2_export.exit_code == 0
+    assert usa1_import.exit_code == 0
+    assert usa2_import.exit_code == 0
+    sub_index = merge_input_files(data_dir / "inputs")
+    assert [node.id for node in sub_index.nodes] == ["usa1:relay", "usa1:vmess:alice", "usa2:relay"]
+    assert sub_index.sources == ["usa1", "usa2"]
+    assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["usa1.yaml", "usa2.yaml"]
+
+
+def test_sub_import_keeps_existing_inputs_by_default(tmp_path: Path) -> None:
+    """验证连续导入发布包默认保留其它 input。"""
     old_input_dir = tmp_path / "old-inputs"
     new_input_dir = tmp_path / "new-inputs"
     old_input_dir.mkdir()
@@ -1361,33 +1419,67 @@ def test_sub_import_replaces_old_inputs(tmp_path: Path) -> None:
     new_bundle = tmp_path / "new.zip"
     data_dir = tmp_path / "sub"
 
-    old_publish = runner.invoke(agent_app, ["publish", "--input-dir", str(old_input_dir), "--source", "old", "-o", str(old_bundle)])
-    new_publish = runner.invoke(agent_app, ["publish", "--input-dir", str(new_input_dir), "--source", "new", "-o", str(new_bundle)])
-    assert old_publish.exit_code == 0
-    assert new_publish.exit_code == 0
+    write_bundle(old_bundle, "old", [("old.yaml", (old_input_dir / "old.yaml").read_bytes())])
+    write_bundle(new_bundle, "new", [("new.yaml", (new_input_dir / "new.yaml").read_bytes())])
 
     old_import = runner.invoke(sub_app, ["import", str(old_bundle), "--data-dir", str(data_dir)])
     new_import = runner.invoke(sub_app, ["import", str(new_bundle), "--data-dir", str(data_dir)])
 
     assert old_import.exit_code == 0
     assert new_import.exit_code == 0
-    rendered_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
-    assert [node["id"] for node in rendered_index["nodes"]] == ["new:id"]
+    rendered_index = merge_input_files(data_dir / "inputs")
+    assert [node.id for node in rendered_index.nodes] == ["new:id", "old:id"]
+    assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["new.yaml", "old.yaml"]
+
+
+def test_sub_import_replace_all_clears_existing_inputs(tmp_path: Path) -> None:
+    """验证 import --replace-all 会清空旧 input 后再导入。"""
+    old_input_dir = tmp_path / "old-inputs"
+    new_input_dir = tmp_path / "new-inputs"
+    old_input_dir.mkdir()
+    new_input_dir.mkdir()
+    write_cli_input(old_input_dir / "old.yaml", source="old", node_id="old:id")
+    write_cli_input(new_input_dir / "new.yaml", source="new", node_id="new:id")
+    old_bundle = tmp_path / "old.zip"
+    new_bundle = tmp_path / "new.zip"
+    data_dir = tmp_path / "sub"
+    write_bundle(old_bundle, "old", [("old.yaml", (old_input_dir / "old.yaml").read_bytes())])
+    write_bundle(new_bundle, "new", [("new.yaml", (new_input_dir / "new.yaml").read_bytes())])
+
+    old_import = runner.invoke(sub_app, ["import", str(old_bundle), "--data-dir", str(data_dir)])
+    new_import = runner.invoke(sub_app, ["import", str(new_bundle), "--data-dir", str(data_dir), "--replace-all"])
+
+    assert old_import.exit_code == 0
+    assert new_import.exit_code == 0
+    rendered_index = merge_input_files(data_dir / "inputs")
+    assert [node.id for node in rendered_index.nodes] == ["new:id"]
     assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["new.yaml"]
 
 
-def test_sub_rebuild_reads_inputs(tmp_path: Path) -> None:
-    """验证 proxystack-sub rebuild 扫描 data_dir/inputs 并写 current/index.json。"""
+def test_sub_import_ignores_bundle_access_metadata(tmp_path: Path) -> None:
+    """验证 import 不再根据发布包 access 做兼容性判断。"""
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    write_cli_input(input_dir / "first.yaml", source="first", node_id="first:id")
+    write_cli_input(input_dir / "second.yaml", source="second", node_id="second:id")
+    first_bundle = tmp_path / "first.zip"
+    second_bundle = tmp_path / "second.zip"
     data_dir = tmp_path / "sub"
-    input_dir = data_dir / "inputs"
-    input_dir.mkdir(parents=True)
-    write_cli_input(input_dir / "manual.yaml")
+    write_bundle(first_bundle, "first", [("first.yaml", (input_dir / "first.yaml").read_bytes())])
 
-    result = runner.invoke(sub_app, ["rebuild", "--data-dir", str(data_dir)])
+    write_bundle(
+        second_bundle,
+        "second",
+        [("second.yaml", (input_dir / "second.yaml").read_bytes())],
+    )
 
-    assert result.exit_code == 0
-    rendered_index = json.loads((data_dir / "current" / "index.json").read_text(encoding="utf-8"))
-    assert rendered_index["nodes"][0]["id"] == "manual:id"
+    first_import = runner.invoke(sub_app, ["import", str(first_bundle), "--data-dir", str(data_dir)])
+    second_import = runner.invoke(sub_app, ["import", str(second_bundle), "--data-dir", str(data_dir)])
+
+    assert first_import.exit_code == 0
+    assert second_import.exit_code == 0
+    assert not (data_dir / "bundles" / "access.json").exists()
+    assert sorted(path.name for path in (data_dir / "inputs").iterdir()) == ["first.yaml", "second.yaml"]
 
 
 def test_release_artifacts_define_console_scripts_and_sub_container_defaults() -> None:
@@ -1403,7 +1495,7 @@ def test_release_artifacts_define_console_scripts_and_sub_container_defaults() -
     assert 'ps-agent = "proxystack.cli.agent:run"' in pyproject
     assert 'ps-sub = "proxystack.cli.sub:run"' in pyproject
     assert "scripts/build_package.py" in makefile
-    assert 'CMD ["proxystack-sub", "serve", "--host", "0.0.0.0", "--port", "3003", "--data-dir", "/data"]' in dockerfile
+    assert 'CMD ["proxystack-sub", "serve", "--config", "/data/config.yaml"]' in dockerfile
     assert service["user"] == "10001:10001"
     assert service["read_only"] is True
     assert service["cap_drop"] == ["ALL"]
@@ -1412,12 +1504,8 @@ def test_release_artifacts_define_console_scripts_and_sub_container_defaults() -
     assert service["command"] == [
         "proxystack-sub",
         "serve",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "3003",
-        "--data-dir",
-        "/data",
+        "--config",
+        "/data/config.yaml",
     ]
 
 

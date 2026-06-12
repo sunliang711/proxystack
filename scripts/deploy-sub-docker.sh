@@ -159,8 +159,17 @@ validate_args() {
 ensure_data_dirs() {
 	ensure_dir "${DATA_DIR}" "0750" "${DATA_OWNER}" "managed"
 	ensure_dir "${DATA_DIR}/inputs" "0750" "${DATA_OWNER}" "managed"
-	ensure_dir "${DATA_DIR}/bundles" "0750" "${DATA_OWNER}" "managed"
-	ensure_dir "${DATA_DIR}/current" "0750" "${DATA_OWNER}" "managed"
+}
+
+# 确认 ps-sub 配置存在，避免容器以无鉴权默认配置启动。
+ensure_sub_config_exists() {
+	if is_dry_run; then
+		log "Sub config check skipped for dry-run"
+		return 0
+	fi
+	if [[ ! -f "${DATA_DIR}/config.yaml" ]]; then
+		die "Sub config does not exist: ${DATA_DIR}/config.yaml"
+	fi
 }
 
 # 判断同名容器是否已存在。
@@ -232,7 +241,7 @@ run_container() {
 		--cap-drop ALL \
 		--tmpfs /tmp:rw,noexec,nosuid,size=64m \
 		"${IMAGE}" \
-		proxystack-sub serve --host 0.0.0.0 --port 3003 --data-dir /data
+		proxystack-sub serve --config /data/config.yaml
 }
 
 # 主入口。
@@ -243,6 +252,7 @@ main() {
 
 	step "check container conflict" check_container_conflict_before_writes
 	step "prepare data directories" ensure_data_dirs
+	step "check ps-sub config" ensure_sub_config_exists
 	step "handle optional Docker image pull" maybe_pull_image
 	step "check Docker image" ensure_image_available
 	step "handle optional container replacement" replace_existing_container_after_image_ready

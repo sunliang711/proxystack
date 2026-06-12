@@ -561,6 +561,8 @@ def test_deploy_sub_docker_dry_run_uses_security_defaults() -> None:
     assert "/tmp:rw" in output
     assert "noexec" in output
     assert "nosuid" in output
+    assert "Sub config check skipped for dry-run" in output
+    assert "proxystack-sub serve --config /data/config.yaml" in output
     assert "docker rm -f" not in output
     assert output.index("Container conflict check skipped for dry-run") < output.index("install -d -m 0750")
 
@@ -654,6 +656,15 @@ def test_deploy_sub_docker_conflict_fails_before_creating_data_dirs(tmp_path: Pa
     assert "Container already exists" in result.stderr
     assert docker_log.read_text(encoding="utf-8").strip() == "container inspect proxystack-sub"
     assert not install_log.exists()
+
+
+def test_deploy_sub_docker_requires_sub_config_before_run() -> None:
+    """验证 Docker 部署脚本在启动容器前检查 ps-sub 配置。"""
+    script = Path("scripts/deploy-sub-docker.sh").read_text(encoding="utf-8")
+
+    assert '[[ ! -f "${DATA_DIR}/config.yaml" ]]' in script
+    assert "Sub config does not exist" in script
+    assert script.index("step \"check ps-sub config\"") < script.index("step \"start Docker container\"")
 
 
 def test_managed_path_guard_rejects_dangerous_roots() -> None:

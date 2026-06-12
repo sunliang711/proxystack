@@ -176,8 +176,6 @@ ensure_sub_dirs() {
 	ensure_dir "${BASE_DIR}" "0750" "${owner_group}" "managed"
 	ensure_dir "${data_dir}" "0750" "${owner_group}" "managed"
 	ensure_dir "${data_dir}/inputs" "0750" "${owner_group}" "managed"
-	ensure_dir "${data_dir}/bundles" "0750" "${owner_group}" "managed"
-	ensure_dir "${data_dir}/current" "0750" "${owner_group}" "managed"
 }
 
 # 在 venv 中安装 proxystack Python 包。
@@ -226,7 +224,6 @@ ensure_config() {
 
 	if [[ -f "${config_path}" ]]; then
 		log "Config already exists: ${config_path}"
-		return 0
 	fi
 	run_as_user "${INSTALL_USER}" "${BASE_DIR}/.venv/bin/proxystack-agent" init --config "${config_path}" --base-dir "${BASE_DIR}"
 }
