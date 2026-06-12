@@ -15,7 +15,7 @@
 ## 实现步骤
 
 1. [x] 建立测试目录结构：`tests/unit`、`tests/golden`、`tests/fixtures`、`tests/e2e`。
-2. [x] 覆盖 `examples/config.yaml` 和 `examples/stacks/*.yaml` 的加载与校验。
+2. [x] 覆盖 `tests/fixtures/example-project/config.yaml` 和 `tests/fixtures/example-project/stacks/*.yaml` 的加载与校验。
 3. [x] 覆盖非法配置：端口冲突、ref 缺失、循环依赖、危险 socks/http 暴露、必填凭据缺失、重复订阅 node id。
 4. [x] 覆盖 `add` 默认端口分配和 `clone --allocate-ports` 的端口池分配写回行为。
 5. [x] 覆盖 Xray、mihomo、subscription 生成器 golden 输出。

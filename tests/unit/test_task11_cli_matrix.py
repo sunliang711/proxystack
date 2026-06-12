@@ -29,7 +29,7 @@ def test_agent_and_sub_p0_subcommand_help_matrix() -> None:
 
 def test_validate_missing_stack_is_failure_path() -> None:
     """验证 validate 对不存在 stack 提供失败路径覆盖。"""
-    result = runner.invoke(agent_app, ["validate", "missing", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["validate", "missing", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 1
     assert "stack does not exist: missing" in result.output

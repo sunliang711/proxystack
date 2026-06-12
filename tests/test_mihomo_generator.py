@@ -31,7 +31,7 @@ GOLDEN_DIR = Path("tests/golden/mihomo")
 )
 def test_render_mihomo_examples_match_golden(stack_name: str, golden_name: str) -> None:
     """验证示例 stack 生成稳定 mihomo YAML。"""
-    config = load_config(Path("examples/config.yaml"))
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config, check_system_ports=False)
 
     assert dumps_mihomo_config(stack_set, stack_name) == (GOLDEN_DIR / golden_name).read_text(encoding="utf-8")
@@ -39,7 +39,7 @@ def test_render_mihomo_examples_match_golden(stack_name: str, golden_name: str) 
 
 def test_render_mihomo_output_is_yaml() -> None:
     """验证 dumps 输出可以被 YAML parser 读取。"""
-    config = load_config(Path("examples/config.yaml"))
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config, check_system_ports=False)
 
     parsed_config = YAML(typ="safe").load(dumps_mihomo_config(stack_set, "auto"))
@@ -238,7 +238,7 @@ def test_normalize_internal_endpoint_address(address: str, expected_address: str
 
 def make_stack_set(*stacks: Stack) -> StackSet:
     """生成测试用 StackSet。"""
-    return StackSet(config=load_config(Path("examples/config.yaml")), stacks=list(stacks))
+    return StackSet(config=load_config(Path("tests/fixtures/example-project/config.yaml")), stacks=list(stacks))
 
 
 def make_stack(

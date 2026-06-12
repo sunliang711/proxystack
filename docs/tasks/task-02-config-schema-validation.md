@@ -22,7 +22,7 @@
 6. 实现凭据字段校验：`validate` 校验明文字段的类型、格式和必填性，不读取外部凭据文件。
 7. 实现端口池模型和端口占用校验：手写端口必须全局唯一且不要求落在 `port_ranges` 中；自动分配只能使用 `port_ranges` 中的空闲端口。
 8. 增加 `role`、`labels` 字段校验，用于 stack 分类和 auto 成员筛选扩展。
-9. 增加 `examples/config.yaml` 和 `examples/stacks/*.yaml` 的解析测试。
+9. 增加 `tests/fixtures/example-project/config.yaml` 和 `tests/fixtures/example-project/stacks/*.yaml` 的解析测试。
 
 ## 验收标准
 

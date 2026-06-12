@@ -48,10 +48,10 @@ def test_render_stack_input_filters_sub_true_and_protocol_fields() -> None:
     assert nodes["edge:socks"].auth.username == "sock-user"
     assert nodes["edge:http"].auth is not None
     assert nodes["edge:http"].auth.password == "http-pass"
-    assert nodes["edge:vmess:alice"].remark == "edge vmess:24001:alice"
-    assert nodes["edge:ss"].remark == "edge shadowsocks:24002:alice"
-    assert nodes["edge:socks"].remark == "edge socks5:24003:bob"
-    assert nodes["edge:http"].remark == "edge http:24004:bob"
+    assert nodes["edge:vmess:alice"].remark == "edge-vmess:24001:alice"
+    assert nodes["edge:ss"].remark == "edge-shadowsocks:24002:alice"
+    assert nodes["edge:socks"].remark == "edge-socks5:24003:bob"
+    assert nodes["edge:http"].remark == "edge-http:24004:bob"
     assert "edge:hidden" not in nodes
 
 
@@ -67,7 +67,7 @@ def test_render_stack_input_uses_external_host_and_inbound_override() -> None:
 def test_render_stack_input_expands_vmess_users() -> None:
     """验证 vmess users 会展开为多个订阅节点。"""
     stack_set = StackSet(
-        config=load_config(Path("examples/config.yaml")),
+        config=load_config(Path("tests/fixtures/example-project/config.yaml")),
         stacks=[
             make_stack(
                 [
@@ -104,18 +104,18 @@ def test_render_stack_input_expands_vmess_users() -> None:
     assert list(nodes) == ["edge:vmess:alice", "edge:vmess:bob"]
     assert nodes["edge:vmess:alice"].user == "alice"
     assert nodes["edge:vmess:alice"].uuid == "11111111-1111-4111-8111-111111111111"
-    assert nodes["edge:vmess:alice"].remark == "edge alice vmess"
+    assert nodes["edge:vmess:alice"].remark == "edge-alice vmess"
     assert nodes["edge:vmess:alice"].tag == "alice-vmess"
     assert nodes["edge:vmess:bob"].user == "bob"
     assert nodes["edge:vmess:bob"].uuid == "22222222-2222-4222-8222-222222222222"
-    assert nodes["edge:vmess:bob"].remark == "edge bob vmess"
+    assert nodes["edge:vmess:bob"].remark == "edge-bob vmess"
     assert nodes["edge:vmess:bob"].tag == "shared-vmess:bob"
 
 
 def test_render_stack_input_expands_shadowsocks_users() -> None:
     """验证传统 shadowsocks users 会展开为多个订阅节点。"""
     stack_set = StackSet(
-        config=load_config(Path("examples/config.yaml")),
+        config=load_config(Path("tests/fixtures/example-project/config.yaml")),
         stacks=[
             make_stack(
                 [
@@ -153,17 +153,17 @@ def test_render_stack_input_expands_shadowsocks_users() -> None:
     assert nodes["edge:ss:alice"].user == "alice"
     assert nodes["edge:ss:alice"].method == "aes-128-gcm"
     assert nodes["edge:ss:alice"].password == "alice-pass"
-    assert nodes["edge:ss:alice"].remark == "edge alice ss"
+    assert nodes["edge:ss:alice"].remark == "edge-alice ss"
     assert nodes["edge:ss:bob"].method == "aes-256-gcm"
     assert nodes["edge:ss:bob"].password == "bob-pass"
-    assert nodes["edge:ss:bob"].remark == "edge shadowsocks:24001:bob"
+    assert nodes["edge:ss:bob"].remark == "edge-shadowsocks:24001:bob"
     assert nodes["edge:ss:bob"].tag == "shared-ss:bob"
 
 
 def test_render_stack_input_expands_shadowsocks_2022_users() -> None:
     """验证 SS2022 users 订阅节点会使用 ServerPassword:UserPassword。"""
     stack_set = StackSet(
-        config=load_config(Path("examples/config.yaml")),
+        config=load_config(Path("tests/fixtures/example-project/config.yaml")),
         stacks=[
             make_stack(
                 [
@@ -421,7 +421,7 @@ def test_sub_export_splits_all_stacks_into_inputs(tmp_path: Path) -> None:
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export", "-o", str(output), "-c", "examples/config.yaml"],
+        ["sub", "export", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"],
     )
 
     assert result.exit_code == 0
@@ -439,7 +439,7 @@ def test_sub_export_splits_all_stacks_into_inputs(tmp_path: Path) -> None:
 
 def test_sub_export_stack_writes_single_input(tmp_path: Path) -> None:
     """验证指定 stack 导出时只写该 stack 对应 input。"""
-    config = Path("examples/config.yaml")
+    config = Path("tests/fixtures/example-project/config.yaml")
     output = tmp_path / "bundle.zip"
 
     result = runner.invoke(
@@ -702,7 +702,7 @@ def write_input(
 
 def make_stack_set() -> StackSet:
     """生成覆盖订阅协议和 server 覆盖规则的 StackSet。"""
-    return StackSet(config=load_config(Path("examples/config.yaml")), stacks=[make_stack()])
+    return StackSet(config=load_config(Path("tests/fixtures/example-project/config.yaml")), stacks=[make_stack()])
 
 
 def make_stack(inbounds: list[dict[str, Any]] | None = None) -> Stack:

@@ -194,19 +194,19 @@ def test_agent_ipinfo_outputs_report(monkeypatch: MonkeyPatch) -> None:
 
     monkeypatch.setattr(agent_module, "query_ipinfo", fake_query_ipinfo)
 
-    result = runner.invoke(agent_app, ["ipinfo", "usa1", "--family", "ipv4", "--timeout", "2", "-c", "examples/config.yaml"])
+    result = runner.invoke(agent_app, ["ipinfo", "usa1", "--family", "ipv4", "--timeout", "2", "-c", "tests/fixtures/example-project/config.yaml"])
 
     assert result.exit_code == 0
     assert "Stack: usa1" in result.output
     assert "Proxy: socks5://127.0.0.1:17091" in result.output
     assert "IP: 198.51.100.10" in result.output
-    assert calls == [(Path("examples/config.yaml"), "usa1", "ipv4", 2.0)]
+    assert calls == [(Path("tests/fixtures/example-project/config.yaml"), "usa1", "ipv4", 2.0)]
     assert stream_callbacks == [True]
 
 
 def test_agent_validate_examples() -> None:
     """验证 proxystack-agent validate 可以校验示例配置。"""
-    result = runner.invoke(agent_app, ["validate", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["validate", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     assert "配置校验通过" in result.output
@@ -239,7 +239,7 @@ def test_cli_subcommands_do_not_print_generic_progress_messages(tmp_path: Path) 
     input_dir.mkdir()
     write_cli_input(input_dir / "manual.yaml")
 
-    validate_result = runner.invoke(agent_app, ["validate", "-c", "examples/config.yaml", "--skip-system-ports"])
+    validate_result = runner.invoke(agent_app, ["validate", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
     agent_sub_result = runner.invoke(agent_app, ["sub", "validate-inputs", "--input-dir", str(input_dir)])
     sub_result = runner.invoke(sub_app, ["version"])
 
@@ -253,7 +253,7 @@ def test_cli_subcommands_do_not_print_generic_progress_messages(tmp_path: Path) 
 
 def test_agent_check_examples() -> None:
     """验证 proxystack-agent check 可以展示依赖和顺序。"""
-    result = runner.invoke(agent_app, ["check", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["check", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     assert "文件变更" in result.output
@@ -265,7 +265,7 @@ def test_agent_check_examples() -> None:
 
 def test_agent_render_xrelay_example() -> None:
     """验证 proxystack-agent render xrelay 可以输出 Xray JSON。"""
-    result = runner.invoke(agent_app, ["render", "xrelay", "usa1", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["render", "xrelay", "usa1", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     rendered_config = json.loads(result.output)
@@ -274,7 +274,7 @@ def test_agent_render_xrelay_example() -> None:
 
 def test_agent_render_clash_example() -> None:
     """验证 proxystack-agent render clash 可以输出 mihomo YAML。"""
-    result = runner.invoke(agent_app, ["render", "clash", "auto", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["render", "clash", "auto", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     rendered_config = YAML(typ="safe").load(result.output)
@@ -284,7 +284,7 @@ def test_agent_render_clash_example() -> None:
 
 def test_agent_render_sub_example() -> None:
     """验证 proxystack-agent render sub 可以输出订阅索引。"""
-    result = runner.invoke(agent_app, ["render", "sub", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["render", "sub", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     rendered_index = json.loads(result.output)
@@ -295,7 +295,7 @@ def test_agent_render_sub_example() -> None:
 
 def test_agent_render_model_example() -> None:
     """验证 proxystack-agent render model 可以输出解析后的模型 JSON。"""
-    result = runner.invoke(agent_app, ["render", "model", "usa1", "-c", "examples/config.yaml", "--skip-system-ports"])
+    result = runner.invoke(agent_app, ["render", "model", "usa1", "-c", "tests/fixtures/example-project/config.yaml", "--skip-system-ports"])
 
     assert result.exit_code == 0
     rendered_model = json.loads(result.output)
@@ -325,6 +325,7 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
     assert config_data["subscription"]["base_url"] == "https://sub.example.com"
+    assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["install"]["mihomo"]["source"] == "auto"
     assert config_data["install"]["geo"]["source"] == "auto"
     for relative_path in [
@@ -343,11 +344,11 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert sub_config["access"]["token"] == "demo-subscription-token"
 
 
-def test_agent_init_falls_back_when_examples_config_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 examples/config.yaml 缺失时 init 仍使用内置默认配置。"""
+def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证包内 agent config 模板缺失时 init 仍使用内置默认配置。"""
     project_dir = tmp_path / "project"
     config = project_dir / "config.yaml"
-    monkeypatch.setattr(lifecycle_module, "EXAMPLE_CONFIG_PATH", tmp_path / "missing" / "config.yaml")
+    monkeypatch.setattr(lifecycle_module, "read_builtin_agent_config_template", lambda: None)
 
     result = runner.invoke(
         agent_app,
@@ -359,6 +360,7 @@ def test_agent_init_falls_back_when_examples_config_is_missing(tmp_path: Path, m
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
     assert "base_url" not in config_data["subscription"]
+    assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["port_ranges"]["xrelay_inbound"] == "24000-24999"
 
 
@@ -651,8 +653,8 @@ def test_agent_start_reports_install_hint_when_unit_is_missing(tmp_path: Path, m
 def test_agent_service_target_selection(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证 service 分组支持组件和 sub 目标选择。"""
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
-    status_result = runner.invoke(agent_app, ["service", "status", "clash/usa1", "-c", "examples/config.yaml"])
-    logs_result = runner.invoke(agent_app, ["service", "log", "sub", "--follow", "-c", "examples/config.yaml"])
+    status_result = runner.invoke(agent_app, ["service", "status", "clash/usa1", "-c", "tests/fixtures/example-project/config.yaml"])
+    logs_result = runner.invoke(agent_app, ["service", "log", "sub", "--follow", "-c", "tests/fixtures/example-project/config.yaml"])
 
     assert status_result.exit_code == 0
     assert "status: proxystack-clash@usa1.service" in status_result.output
@@ -669,7 +671,7 @@ def test_agent_service_log_pair_follow_uses_single_journalctl_call(tmp_path: Pat
     """验证 service log 对实例对 follow 时一次订阅两个 unit。"""
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
-    result = runner.invoke(agent_app, ["service", "log", "usa1", "--follow", "-c", "examples/config.yaml"])
+    result = runner.invoke(agent_app, ["service", "log", "usa1", "--follow", "-c", "tests/fixtures/example-project/config.yaml"])
 
     assert result.exit_code == 0
     assert "log: proxystack-xray@usa1.service" in result.output
@@ -693,7 +695,7 @@ def test_agent_logs_stack_follow_uses_single_journalctl_call(tmp_path: Path, mon
     """验证顶层 logs 对 stack follow 时一次订阅 mihomo 和 xray 两个 unit。"""
     fake_runner = use_fake_systemd(monkeypatch, tmp_path)
 
-    result = runner.invoke(agent_app, ["logs", "usa1", "--follow", "-c", "examples/config.yaml"])
+    result = runner.invoke(agent_app, ["logs", "usa1", "--follow", "-c", "tests/fixtures/example-project/config.yaml"])
 
     assert result.exit_code == 0
     assert "log: proxystack-clash@usa1.service" in result.output
@@ -723,7 +725,7 @@ def test_agent_service_commands_skip_system_port_occupancy_by_default(tmp_path: 
             sock.listen()
         except OSError:
             pass
-        result = runner.invoke(agent_app, ["status", "usa1", "-c", "examples/config.yaml"])
+        result = runner.invoke(agent_app, ["status", "usa1", "-c", "tests/fixtures/example-project/config.yaml"])
     finally:
         sock.close()
 
@@ -977,7 +979,7 @@ def test_agent_sub_export_all_stacks_bundle(tmp_path: Path) -> None:
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export", "-o", str(output), "-c", "examples/config.yaml"],
+        ["sub", "export", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"],
     )
 
     assert result.exit_code == 0
@@ -1004,7 +1006,7 @@ def test_agent_sub_export_stack_bundle(tmp_path: Path) -> None:
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export", "usa1", "-o", str(output), "-c", "examples/config.yaml"],
+        ["sub", "export", "usa1", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"],
     )
 
     assert result.exit_code == 0
@@ -1023,7 +1025,7 @@ def test_agent_sub_export_rejects_missing_stack(tmp_path: Path) -> None:
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export", "missing", "-o", str(output), "-c", "examples/config.yaml"],
+        ["sub", "export", "missing", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"],
     )
 
     assert result.exit_code == 1
@@ -1083,7 +1085,7 @@ def test_agent_sub_export_sets_managed_bundle_metadata_as_root(tmp_path: Path, m
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export", "-o", str(output), "-c", "examples/config.yaml"],
+        ["sub", "export", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"],
     )
 
     assert result.exit_code == 0
@@ -1095,7 +1097,7 @@ def test_agent_sub_export_bundle_schema(tmp_path: Path) -> None:
     """验证 sub export 生成的发布包包含 schema 和 input 元数据。"""
     output = tmp_path / "sub-bundle.zip"
 
-    result = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(output), "-c", "examples/config.yaml"])
+    result = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"])
 
     assert result.exit_code == 0
     with ZipFile(output) as zip_file:
@@ -1163,7 +1165,7 @@ def test_agent_native_backup_import_rejects_subscription_bundle(tmp_path: Path) 
     sub_bundle = tmp_path / "sub-bundle.zip"
     export_result = runner.invoke(
         agent_app,
-        ["sub", "export", "usa1", "-o", str(sub_bundle), "-c", "examples/config.yaml"],
+        ["sub", "export", "usa1", "-o", str(sub_bundle), "-c", "tests/fixtures/example-project/config.yaml"],
     )
     assert export_result.exit_code == 0
 
@@ -1236,7 +1238,7 @@ port_ranges:
   clash_socks: 17000-17999
   clash_controller: 19000-19999
 """
-    stack_content = Path("examples/stacks/usa1.yaml").read_bytes()
+    stack_content = Path("tests/fixtures/example-project/stacks/usa1.yaml").read_bytes()
     backup = tmp_path / "outside-stack-backup.zip"
     files_sha256 = {
         "config/config.yaml": hashlib.sha256(config_content.encode("utf-8")).hexdigest(),
@@ -1361,7 +1363,7 @@ def test_sub_import_writes_bundle_inputs_only(tmp_path: Path) -> None:
     data_dir = tmp_path / "sub"
     export_result = runner.invoke(
         agent_app,
-        ["sub", "export", "usa1", "-o", str(bundle), "-c", "examples/config.yaml"],
+        ["sub", "export", "usa1", "-o", str(bundle), "-c", "tests/fixtures/example-project/config.yaml"],
     )
     assert export_result.exit_code == 0
 
@@ -1596,8 +1598,8 @@ def test_subscription_export_import_e2e_merges_multiple_stack_bundles(tmp_path: 
     usa1_bundle = tmp_path / "usa1-sub-bundle.zip"
     usa2_bundle = tmp_path / "usa2-sub-bundle.zip"
     data_dir = tmp_path / "sub"
-    usa1_export = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(usa1_bundle), "-c", "examples/config.yaml"])
-    usa2_export = runner.invoke(agent_app, ["sub", "export", "usa2", "-o", str(usa2_bundle), "-c", "examples/config.yaml"])
+    usa1_export = runner.invoke(agent_app, ["sub", "export", "usa1", "-o", str(usa1_bundle), "-c", "tests/fixtures/example-project/config.yaml"])
+    usa2_export = runner.invoke(agent_app, ["sub", "export", "usa2", "-o", str(usa2_bundle), "-c", "tests/fixtures/example-project/config.yaml"])
     usa1_import = runner.invoke(sub_app, ["import", str(usa1_bundle), "--data-dir", str(data_dir)])
     usa2_import = runner.invoke(sub_app, ["import", str(usa2_bundle), "--data-dir", str(data_dir)])
 
@@ -1617,7 +1619,7 @@ def test_agent_sub_export_summary_does_not_write_bundle(tmp_path: Path) -> None:
 
     result = runner.invoke(
         agent_app,
-        ["sub", "export", "usa1", "--summary", "-o", str(output), "-c", "examples/config.yaml"],
+        ["sub", "export", "usa1", "--summary", "-o", str(output), "-c", "tests/fixtures/example-project/config.yaml"],
     )
 
     assert result.exit_code == 0
@@ -1626,8 +1628,8 @@ def test_agent_sub_export_summary_does_not_write_bundle(tmp_path: Path) -> None:
     assert "inputs=1" in result.output
     assert "nodes=2" in result.output
     assert "usa1.yaml" in result.output
-    assert "usa1 usa1 relay socks" in result.output
-    assert "usa1 usa1 vmess" in result.output
+    assert "usa1-usa1 relay socks" in result.output
+    assert "usa1-usa1 vmess" in result.output
     assert not output.exists()
 
 
@@ -1800,15 +1802,15 @@ def init_cli_project(tmp_path: Path) -> Path:
 
 
 def copy_example_project(tmp_path: Path) -> Path:
-    """复制 examples 项目到临时目录，并把 base_dir 改为临时目录。"""
+    """复制测试项目 fixture 到临时目录，并把 base_dir 改为临时目录。"""
     project_dir = tmp_path / "project"
     stacks_dir = project_dir / "stacks"
     stacks_dir.mkdir(parents=True)
-    for source_path in Path("examples/stacks").glob("*.yaml"):
+    for source_path in Path("tests/fixtures/example-project/stacks").glob("*.yaml"):
         shutil.copy2(source_path, stacks_dir / source_path.name)
 
     yaml = YAML(typ="safe")
-    config_data = yaml.load(Path("examples/config.yaml").read_text(encoding="utf-8"))
+    config_data = yaml.load(Path("tests/fixtures/example-project/config.yaml").read_text(encoding="utf-8"))
     config_data["base_dir"] = str(project_dir)
     config = project_dir / "config.yaml"
     writer = YAML()

@@ -18,16 +18,16 @@ from proxystack.graph import build_reference_graph
 
 
 def test_load_config_file_reads_yaml_mapping() -> None:
-    """验证示例全局配置可以读取为字典。"""
-    config = load_config_file(Path("examples/config.yaml"))
+    """验证 fixture 全局配置可以读取为字典。"""
+    config = load_config_file(Path("tests/fixtures/example-project/config.yaml"))
 
     assert config["version"] == 1
-    assert config["base_dir"] == "./examples"
+    assert config["base_dir"] == "./tests/fixtures/example-project"
 
 
 def test_load_config_and_stacks_accept_examples() -> None:
-    """验证仓库示例配置可以通过强类型模型和跨 stack 校验。"""
-    config = load_config(Path("examples/config.yaml"))
+    """验证测试项目 fixture 可以通过强类型模型和跨 stack 校验。"""
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config)
 
     assert stack_set.stack_names == ["auto", "usa1", "usa2"]
@@ -35,8 +35,8 @@ def test_load_config_and_stacks_accept_examples() -> None:
 
 
 def test_reference_graph_indexes_examples() -> None:
-    """验证示例配置能建立 xrelay inbound 和 clash listener 索引。"""
-    config = load_config(Path("examples/config.yaml"))
+    """验证测试项目 fixture 能建立 xrelay inbound 和 clash listener 索引。"""
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config, check_system_ports=False)
 
     graph = build_reference_graph(stack_set)
@@ -53,7 +53,7 @@ def test_reference_graph_indexes_examples() -> None:
 
 def test_reference_graph_orders_dependencies_before_consumers() -> None:
     """验证 auto clash 排在被引用的边缘 xrelay 之后启动。"""
-    config = load_config(Path("examples/config.yaml"))
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config, check_system_ports=False)
 
     graph = build_reference_graph(stack_set)
@@ -69,7 +69,7 @@ def test_reference_graph_orders_dependencies_before_consumers() -> None:
 
 def test_reference_graph_excludes_disabled_stack_from_plan() -> None:
     """验证禁用 stack 不进入 endpoint 索引和 plan 输出。"""
-    config = load_config(Path("examples/config.yaml"))
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config, check_system_ports=False)
     stacks = []
     for stack in stack_set.stacks:
@@ -607,8 +607,8 @@ def test_load_config_rejects_unknown_subscription_remark_template_field(tmp_path
 
 def test_validate_rejects_duplicate_stack_name() -> None:
     """验证跨文件重复 stack name 会失败。"""
-    config = load_config(Path("examples/config.yaml"))
-    stack = load_stack(Path("examples/stacks/usa1.yaml"))
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
+    stack = load_stack(Path("tests/fixtures/example-project/stacks/usa1.yaml"))
     stack_set = StackSet(config=config, stacks=[stack, stack.model_copy(deep=True)])
 
     with pytest.raises(ConfigValidationError, match="duplicate stack name"):

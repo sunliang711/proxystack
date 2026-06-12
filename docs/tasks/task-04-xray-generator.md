@@ -21,7 +21,7 @@
 
 ## 验收标准
 
-- `examples/stacks/usa1.yaml`、`usa2.yaml`、`auto.yaml` 都能生成 JSON。
+- `tests/fixtures/example-project/stacks/usa1.yaml`、`usa2.yaml`、`auto.yaml` 都能生成 JSON。
 - `type: clash` outbound 能解析到目标 mihomo listener。
 - 生成 JSON 可格式化且字段稳定。
 - golden tests 覆盖每种 inbound 和 outbound。

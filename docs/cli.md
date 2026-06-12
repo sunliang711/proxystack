@@ -102,7 +102,7 @@ proxystack-agent doctor
 
 命令语义：
 
-- `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`；优先以 `examples/config.yaml` 为模板并改写 `base_dir`、`external_host`，模板缺失时使用内置默认值；已存在文件默认不覆盖。
+- `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`；优先以包内 `src/proxystack/templates/agent-config.yaml` 为模板并改写 `base_dir`、`external_host`，模板缺失时使用内置默认值；已存在文件默认不覆盖。
 - `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
 - `config`：安全编辑 `/opt/proxystack/config.yaml`；等价于 `edit` 不带 stack 名称，但语义更明确。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
@@ -407,7 +407,7 @@ watch_interval: 2.0
 watch_debounce: 0.3
 ```
 
-完整示例见 [examples/sub-config.yaml](../examples/sub-config.yaml)。`data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
+完整示例见 [src/proxystack/templates/sub-config.yaml](../src/proxystack/templates/sub-config.yaml)。`data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
 订阅模板可以本地覆盖，默认查找 `<data_dir>/templates/sub/` 下的 `clash.yaml.j2`、`premium-clash.yaml.j2` 和 `surge.conf.j2`。也可以在 ps-sub 配置中显式指定模板根目录：
 
 ```yaml

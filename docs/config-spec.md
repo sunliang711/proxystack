@@ -31,11 +31,11 @@
 开发环境可以使用：
 
 ```bash
-proxystack-agent validate -c ./examples/config.yaml
-proxystack-agent check -c ./examples/config.yaml
+proxystack-agent validate -c ./tests/fixtures/example-project/config.yaml
+proxystack-agent check -c ./tests/fixtures/example-project/config.yaml
 ```
 
-仓库内的 `examples/config.yaml` 同时作为开发示例和 `init` 初始配置模板；`init` 会优先读取它，并按目标环境改写 `base_dir` 和 `external_host`。如果模板文件缺失，`init` 会退回代码内置默认配置。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
+仓库内的 `src/proxystack/templates/agent-config.yaml` 是 `init` 初始配置模板；`init` 会通过 package resources 读取它，并按目标环境改写 `base_dir` 和 `external_host`。如果包内模板缺失，`init` 会退回代码内置默认配置。`tests/fixtures/example-project/config.yaml` 只作为开发和测试用完整项目 fixture。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
 
 关键规则：
 
@@ -125,7 +125,7 @@ install:
 - `external_host`：订阅节点默认对外 host。
 - `subscription`：agent 生成订阅 input/index、导出发布包和初始化 ps-sub 配置时使用的默认参数。
 - `subscription.access`：agent 本地订阅预览和初始化 ps-sub 配置时使用的访问控制。实际 HTTP 服务只读取 `sub/config.yaml` 中的 `access`；公网部署必须使用 token 或由反向代理鉴权。
-- `subscription.remark_policy`：订阅节点展示名生成策略，默认 `prefix-source`，会把 stack/source 前缀加到最终 `remark` 前，避免多个 stack 的同名节点在客户端冲突。
+- `subscription.remark_policy`：订阅节点展示名生成策略，默认 `prefix-source`，会把 stack/source 前缀用横杠加到最终 `remark` 前，避免多个 stack 的同名节点在客户端冲突。
 - `subscription.remark_template`：当 `remark_policy: template` 时必填。支持 `{source}`、`{inbound}`、`{protocol}`、`{port}`、`{user}`、`{remark}`。
 - `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
@@ -467,7 +467,7 @@ ref 两段含义：
 - `auto.clash` 的组可以使用 `url-test` 或 `load-balance`。
 - P0 auto 只支持 `type: xrelay-socks5`。如果未来需要 http 下游，再新增 `type: xrelay-http`，不要复用 `xrelay-socks5` 的语义。
 
-示例见 [auto stack 示例](../examples/stacks/auto.yaml)。
+示例见 [auto stack 示例](../tests/fixtures/example-project/stacks/auto.yaml)。
 
 ## 8. 订阅生成
 

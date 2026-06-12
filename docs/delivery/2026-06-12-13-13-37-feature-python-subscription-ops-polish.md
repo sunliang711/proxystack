@@ -6,7 +6,7 @@
 - `proxystack-sub import` 成功后输出导入摘要，包含 source、input/node/user 数量、写入或覆盖的 input，以及 `--replace-all` 删除的旧 input。
 - `proxystack-sub serve` 启动时记录 data_dir、input_dir、listen、access 类型、watch 参数、模板来源和已加载 input/source/node/user 统计。
 - inputs reload 成功日志补充 `inputs=` 字段；reload 失败仍只输出错误类型并保留旧内存索引，避免日志泄露 token/password。
-- 新增 `examples/sub-config.yaml`，覆盖 `data_dir`、`listen`、`access`、`templates_dir`、`watch_interval` 和 `watch_debounce`。
+- 新增 `src/proxystack/templates/sub-config.yaml`，覆盖 `data_dir`、`listen`、`access`、`templates_dir`、`watch_interval` 和 `watch_debounce`。
 - 更新 CLI、生成规则、部署、测试矩阵和进度文档。
 
 ## 验证

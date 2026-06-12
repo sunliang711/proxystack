@@ -30,7 +30,7 @@ def test_query_ipinfo_uses_stack_clash_socks_listener() -> None:
         )
 
     report = query_ipinfo(
-        Path("examples/config.yaml"),
+        Path("tests/fixtures/example-project/config.yaml"),
         "usa1",
         family="ipv4",
         timeout=3.0,
@@ -57,7 +57,7 @@ def test_query_ipinfo_uses_default_sources_by_family() -> None:
         return CurlResult(returncode=0, stdout='{"ip": "2001:db8::10"}', stderr="")
 
     report = query_ipinfo(
-        Path("examples/config.yaml"),
+        Path("tests/fixtures/example-project/config.yaml"),
         "usa1",
         family="all",
         curl_runner=fake_curl,
@@ -92,7 +92,7 @@ def test_query_ipinfo_emits_progress_lines_per_source() -> None:
         )
 
     report = query_ipinfo(
-        Path("examples/config.yaml"),
+        Path("tests/fixtures/example-project/config.yaml"),
         "usa1",
         family="ipv4",
         sources=("https://ipinfo.example/ok", "https://ipinfo.example/failed"),

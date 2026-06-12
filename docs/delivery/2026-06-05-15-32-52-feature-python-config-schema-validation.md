@@ -13,4 +13,4 @@
 - `make test PYTHON=.venv/bin/python`：17 passed
 - `make lint PYTHON=.venv/bin/python`：通过
 - `make build PYTHON=.venv/bin/python`：通过
-- `.venv/bin/proxystack-agent validate -c examples/config.yaml --skip-system-ports`：通过
+- `.venv/bin/proxystack-agent validate -c tests/fixtures/example-project/config.yaml --skip-system-ports`：通过

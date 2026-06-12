@@ -10,7 +10,7 @@
 - CLI 使用 Typer。
 - 日志使用 Python `logging` 的结构化封装。
 - 配置模型使用 Pydantic v2。
-- 内置 stack 模板统一维护在 `src/proxystack/templates`，作为运行时代码读取的包内资源。示例使用 `examples/config.yaml` 和 `examples/stacks/*.yaml`。
+- 内置 config、stack 和 subscription 模板统一维护在 `src/proxystack/templates`，作为运行时代码读取的包内资源。测试项目 fixture 使用 `tests/fixtures/example-project/config.yaml` 和 `tests/fixtures/example-project/stacks/*.yaml`。
 - 建立 `src/proxystack/*` 和 `tests/*` 基础目录。
 
 ## 实现步骤
@@ -20,7 +20,7 @@
 3. 创建 `src/proxystack/logging.py` 初始化结构化 logging。
 4. 创建 `src/proxystack/config` 的默认配置加载入口。
 5. 创建 `src/proxystack/templates` 放置内置模板，作为模板唯一来源。
-6. 创建 `examples/config.yaml` 和 `examples/stacks/*.yaml`。
+6. 创建 `tests/fixtures/example-project/config.yaml` 和 `tests/fixtures/example-project/stacks/*.yaml`。
 7. 创建基础 Makefile 或等价脚本：`test`、`lint`、`build`。
 
 ## 验收标准

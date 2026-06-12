@@ -451,7 +451,7 @@ def render_subscription_remark(
     }
     if config.remark_policy == "template":
         return (config.remark_template or "").format(**values)
-    return "{source} {remark}".format(**values)
+    return "{source}-{remark}".format(**values)
 
 
 def inbound_tag(inbound: Inbound) -> str:

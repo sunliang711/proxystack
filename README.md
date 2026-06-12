@@ -22,8 +22,8 @@
 - [编码规范](docs/conventions.md)
 - [参考项目](docs/reference-projects.md)
 - [开发进度](docs/PROGRESS.md)
-- [全局配置示例](examples/config.yaml)
-- [stack 示例](examples/stacks/usa1.yaml)
+- [全局配置初始化模板](src/proxystack/templates/agent-config.yaml)
+- [测试 stack fixture](tests/fixtures/example-project/stacks/usa1.yaml)
 - [add 默认模板](src/proxystack/templates/stack.pair.yaml)
 
 ## 建议技术栈

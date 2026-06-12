@@ -86,7 +86,7 @@ proxystack-agent sub export
 
 说明：
 
-- `init` 创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`，默认配置优先来自 `examples/config.yaml`。
+- `init` 创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`，默认配置优先来自包内 `src/proxystack/templates/agent-config.yaml`。
 - `setup` 会先执行幂等初始化，再安装代理核心和 geo 数据，最后安装 systemd unit。
 - `add usa1` 创建 `/opt/proxystack/stacks/usa1.yaml`。
 - `check` 校验配置并展示生成变更预览，不写运行目录、不操作 systemd。
@@ -110,7 +110,7 @@ systemd unit 文件需要安装到 `/etc/systemd/system/`，这是 systemd 的�
   templates/
 ```
 
-`config.yaml` 可参考 [examples/sub-config.yaml](../examples/sub-config.yaml)，最小生产配置应显式配置 `listen` 和 `access`，需要本地覆盖订阅模板时配置 `templates_dir`。
+`config.yaml` 可参考 [src/proxystack/templates/sub-config.yaml](../src/proxystack/templates/sub-config.yaml)，最小生产配置应显式配置 `listen` 和 `access`，需要本地覆盖订阅模板时配置 `templates_dir`。
 
 导入发布包并启动：
 
@@ -246,7 +246,7 @@ mkdir -p /opt/proxystack/sub
 vi /opt/proxystack/sub/config.yaml
 ```
 
-`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。完整示例见 [examples/sub-config.yaml](../examples/sub-config.yaml)。
+`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。完整示例见 [src/proxystack/templates/sub-config.yaml](../src/proxystack/templates/sub-config.yaml)。
 
 ```bash
 docker run -d \

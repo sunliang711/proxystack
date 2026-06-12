@@ -30,7 +30,7 @@ GOLDEN_DIR = Path("tests/golden/xray")
 )
 def test_render_xray_examples_match_golden(stack_name: str, golden_name: str) -> None:
     """验证示例 stack 生成稳定 Xray JSON。"""
-    config = load_config(Path("examples/config.yaml"))
+    config = load_config(Path("tests/fixtures/example-project/config.yaml"))
     stack_set = load_stacks(config, check_system_ports=False)
 
     assert dumps_xray_config(stack_set, stack_name) == (GOLDEN_DIR / golden_name).read_text(encoding="utf-8")
@@ -400,7 +400,7 @@ def test_xray_api_listen_rejects_public_host() -> None:
 
 def make_stack_set(stack: Stack) -> StackSet:
     """生成包含单个测试 stack 的 StackSet。"""
-    return StackSet(config=load_config(Path("examples/config.yaml")), stacks=[stack])
+    return StackSet(config=load_config(Path("tests/fixtures/example-project/config.yaml")), stacks=[stack])
 
 
 def make_stack(

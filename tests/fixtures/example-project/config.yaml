@@ -1,6 +1,6 @@
 version: 1
-# Development example base dir. Production config should use /opt/proxystack.
-base_dir: ./examples
+# 测试项目 fixture 的 base_dir。
+base_dir: ./tests/fixtures/example-project
 
 paths:
   bin: bin

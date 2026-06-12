@@ -21,8 +21,8 @@
 make test PYTHON=.venv/bin/python
 make lint PYTHON=.venv/bin/python
 make build PYTHON=.venv/bin/python
-.venv/bin/proxystack-agent render xrelay usa1 -c examples/config.yaml
-.venv/bin/proxystack-agent render xrelay usa1 -c examples/config.yaml | python -m json.tool
+.venv/bin/proxystack-agent render xrelay usa1 -c tests/fixtures/example-project/config.yaml
+.venv/bin/proxystack-agent render xrelay usa1 -c tests/fixtures/example-project/config.yaml | python -m json.tool
 ```
 
 ## 风险与后续

@@ -17,7 +17,7 @@
 ```bash
 make test PYTHON=.venv/bin/python
 make lint PYTHON=.venv/bin/python
-.venv/bin/proxystack-agent plan -c examples/config.yaml
+.venv/bin/proxystack-agent plan -c tests/fixtures/example-project/config.yaml
 ```
 
 ## 风险与后续
