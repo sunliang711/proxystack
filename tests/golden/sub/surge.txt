@@ -25,15 +25,89 @@ Manual Relay = socks5, proxy.example.com, 24001, demo-user, demo-pass, udp-relay
 [Proxy Group]
 AllProxy = select, DIRECT, AutoGroup, Manual Relay
 AutoGroup = url-test, Manual Relay, url=http://www.gstatic.com/generate_204, interval=300, tolerance=100, timeout=5
+AppleGroup = select, DIRECT, AllProxy, AutoGroup, Manual Relay
+ChinaGroup = select, DIRECT, AllProxy, AutoGroup, Manual Relay
+SpeedtestGroup = select, DIRECT, AllProxy, AutoGroup, Manual Relay
+MicrosoftGroup = select, DIRECT, AllProxy, AutoGroup, Manual Relay
+BinanceGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+CryptoGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+DiscordGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+DisneyGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+DockerGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+GoogleGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+HBOGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+IpDetectGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+NetflixGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+OpenAIGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+1PasswordGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+PaypalGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+SpotifyGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+TelegramGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+TiktokGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+TVBGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+TwitterGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+YoutubeGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+CloudflareGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+DropboxGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
+GithubGroup = select, AllProxy, DIRECT, AutoGroup, Manual Relay
 FinalGroup = select, AutoGroup, AllProxy, DIRECT, Manual Relay
 
 [Rule]
-DOMAIN-SUFFIX,local,DIRECT
-DOMAIN,localhost,DIRECT
-IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
-IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
-IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
-IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
-IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
-GEOIP,CN,DIRECT
-FINAL,FinalGroup
+
+# 内网流量走wireguard
+# IP-CIDR,10.1.1.0/24,wg,no-resolve // wireguard
+
+# > 订阅地址以及外部资源地址直连
+DOMAIN-SUFFIX, rustez.cc, DIRECT
+DOMAIN-SUFFIX, aliyuncs.com, DIRECT
+
+# MacOS
+# PROCESS-NAME, UUBooster, DIRECT
+# PROCESS-NAME, aria2c, DIRECT
+# PROCESS-NAME, fdm, DIRECT
+# PROCESS-NAME, Folx, DIRECT
+# PROCESS-NAME, NetTransport, DIRECT
+# PROCESS-NAME, Thunder, DIRECT
+# PROCESS-NAME, Transmission, DIRECT
+# PROCESS-NAME, uTorrent, DIRECT
+# PROCESS-NAME, WebTorrent, DIRECT
+# PROCESS-NAME, WebTorrent Helper, DIRECT
+
+# RULE-SET, https://ruleset.rustez.cc/surge/process.list, ProcessGroup
+
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/apple.list, AppleGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/microsoft.list, MicrosoftGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/speedtest.list, SpeedtestGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/google.list, GoogleGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/github.list, GithubGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/binance.list, BinanceGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/crypto.list, CryptoGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/twitter.list, TwitterGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/docker.list, DockerGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/dropbox.list, DropboxGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/telegram.list, TelegramGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/discord.list, DiscordGroup
+
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/ipDetect.list, IpDetectGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/openai.list, OpenAIGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/1password.list, 1PasswordGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/paypal.list, PaypalGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/spotify.list, SpotifyGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/cloudflare.list, CloudflareGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/netflix.list, NetflixGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/disney.list, DisneyGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/hbo.list, HBOGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/tiktok.list, TiktokGroup
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/tvb.list, TVBGroup
+
+RULE-SET, https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/china.list, ChinaGroup
+
+FINAL, FinalGroup

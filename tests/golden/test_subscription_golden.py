@@ -28,10 +28,11 @@ def test_subscription_formats_match_golden() -> None:
     """验证三类订阅格式输出需要显式更新 golden。"""
     _subscription_input, index = make_subscription_golden_models()
     clash_golden = (GOLDEN_DIR / "clash.yaml").read_text(encoding="utf-8")
+    premium_clash_golden = (GOLDEN_DIR / "premium-clash.yaml").read_text(encoding="utf-8")
     surge_golden = (GOLDEN_DIR / "surge.txt").read_text(encoding="utf-8")
 
     assert render_clash_subscription(index, "alice") == clash_golden
-    assert render_premium_clash_subscription(index, "alice") == clash_golden
+    assert render_premium_clash_subscription(index, "alice") == premium_clash_golden
     assert render_surge_subscription(index, "alice") == surge_golden
 
 

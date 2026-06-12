@@ -25,258 +25,264 @@ dns:
 tun:
   enable: false
 proxies:
-{{ proxies | yaml_block }}
+  - name: Manual Relay
+    type: socks5
+    server: proxy.example.com
+    port: 24001
+    username: demo-user
+    password: demo-pass
+    udp: true
 proxy-groups:
   - name: AllProxy
     type: select
     proxies:
       - AutoGroup
       - LoadBalance
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: LoadBalance
     type: load-balance
-    url: {{ test_url }}
+    url: http://www.gstatic.com/generate_204
     interval: 300
     strategy: round-robin
     proxies:
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: AutoGroup
     type: url-test
-    url: {{ test_url }}
+    url: http://www.gstatic.com/generate_204
     interval: 300
     proxies:
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: AppleGroup
     type: select
     proxies:
       - DIRECT
       - AllProxy
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: ChinaGroup
     type: select
     proxies:
       - DIRECT
       - AllProxy
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: BinanceGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: CryptoGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: DiscordGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: DisneyGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: DockerGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: GoogleGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: HboGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: IpDetectGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: MicrosoftGroup
     type: select
     proxies:
       - DIRECT
       - AllProxy
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: NetflixGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: OpenAIGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: 1PasswordGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: PaypalGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: SpeedTestGroup
     type: select
     proxies:
       - DIRECT
       - AllProxy
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: SpotifyGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: TelegramGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: TiktokGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: TvbGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: TwitterGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: CloudflareGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: DropboxGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: GithubGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
   - name: FinalGroup
     type: select
     proxies:
       - AllProxy
       - DIRECT
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+
+      - "Manual Relay"
+
 rule-providers:
   AppleRules:
     behavior: classical
