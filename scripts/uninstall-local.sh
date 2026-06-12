@@ -192,8 +192,8 @@ list_systemd_units() {
 	local pattern
 
 	for pattern in "$@"; do
-		systemctl list-units --all --full --plain --no-legend "${pattern}" 2>/dev/null | awk '{print $1}'
-		systemctl list-unit-files --full --plain --no-legend "${pattern}" 2>/dev/null | awk '{print $1}'
+		{ systemctl list-units --all --full --plain --no-legend "${pattern}" 2>/dev/null || true; } | awk '$1 !~ /@\.service$/ {print $1}'
+		{ systemctl list-unit-files --full --plain --no-legend "${pattern}" 2>/dev/null || true; } | awk '$1 !~ /@\.service$/ {print $1}'
 	done | awk 'NF && !seen[$0]++'
 }
 

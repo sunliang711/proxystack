@@ -155,6 +155,26 @@ docker exec proxystack-sub ps-sub import /tmp/sub-bundle.zip --data-dir /data
 
 如果公网暴露订阅服务，建议在反向代理层配置 HTTPS、访问控制、限流和日志。完整部署细节见 [部署方案](docs/deployment.md)。
 
+### 卸载
+
+本地部署使用 `scripts/uninstall-local.sh` 卸载 systemd unit。默认会保留 `/opt/proxystack` 下的配置、stack、运行数据、系统用户和 CLI 链接：
+
+```bash
+sudo scripts/uninstall-local.sh
+```
+
+只卸载订阅服务：
+
+```bash
+sudo scripts/uninstall-local.sh --target sub
+```
+
+如需彻底清理托管目录、系统用户和 CLI 链接，必须显式指定清理参数：
+
+```bash
+sudo scripts/uninstall-local.sh --target all --purge-data --remove-user --remove-bin
+```
+
 ## 使用
 
 ### 常用命令
