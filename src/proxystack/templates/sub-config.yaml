@@ -1,5 +1,5 @@
 data_dir: /opt/proxystack/sub
-listen: 127.0.0.1:3003
+listen: 0.0.0.0:3003
 access:
   type: token
   token: change-me

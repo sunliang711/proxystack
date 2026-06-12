@@ -26,6 +26,202 @@
 - [测试 stack fixture](tests/fixtures/example-project/stacks/usa1.yaml)
 - [add 默认模板](src/proxystack/templates/stack.pair.yaml)
 
+## 安装
+
+### 开发环境安装
+
+项目要求 Python 3.9+。在仓库根目录创建虚拟环境并以可编辑模式安装：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+安装后可以验证两个命令入口：
+
+```bash
+ps-agent version
+ps-sub version
+make test
+```
+
+`ps-agent` 是 `proxystack-agent` 的短命令别名，`ps-sub` 是 `proxystack-sub` 的短命令别名。
+
+### 生产环境首次安装
+
+Linux/systemd 环境建议使用仓库内安装脚本完成 bootstrap。脚本负责创建 `/opt/proxystack`、系统用户、Python venv、CLI 链接，并可选安装 systemd unit；mihomo、xray-core 和 geo 数据仍由 `ps-agent setup` 或 `ps-agent install all` 显式安装。
+
+```bash
+sudo scripts/install-agent.sh --install-systemd
+sudo ps-agent setup
+```
+
+默认安装后的主要目录如下：
+
+```text
+/opt/proxystack/
+  .venv/
+  bin/
+  config.yaml
+  stacks/
+  runtime/
+  publish/
+  downloads/
+  sub/
+```
+
+如需自定义源码目录、安装目录或 CLI 链接目录，可使用：
+
+```bash
+sudo scripts/install-agent.sh \
+  --source /path/to/proxystack \
+  --base-dir /opt/proxystack \
+  --bin-dir /usr/local/bin
+```
+
+更多脚本参数见 [部署脚本说明](scripts/README.md)。
+
+## 部署
+
+### 本地部署 agent
+
+`proxystack-agent` 运行在代理机器上，负责管理 stack 配置、生成 Xray/mihomo 配置、安装代理核心、管理 systemd 服务并导出订阅发布包。
+
+首次部署常用流程：
+
+```bash
+sudo ps-agent setup
+sudo ps-agent config
+sudo ps-agent add usa1
+sudo ps-agent config usa1
+sudo ps-agent check usa1
+sudo ps-agent start usa1
+sudo ps-agent status usa1
+```
+
+关键配置文件：
+
+- `/opt/proxystack/config.yaml`：全局路径、默认端口池、订阅地址、安装源和安全策略。
+- `/opt/proxystack/stacks/<name>.yaml`：单个 `xrelay -> clash/mihomo` stack 的监听端口、上游节点、订阅暴露和规则。
+
+修改配置后建议先执行 `ps-agent check [name]` 预览生成变化，再执行 `ps-agent start [name]` 或 `ps-agent restart [name]` 应用。
+
+### 本地部署订阅服务
+
+订阅服务可以和 agent 部署在同一台机器上，共用 `/opt/proxystack`，但只读写 `/opt/proxystack/sub`。
+
+```bash
+sudo ps-agent sub export
+sudo scripts/install-sub-local.sh \
+  --import-bundle /opt/proxystack/publish/sub-bundle.zip \
+  --install-systemd \
+  --start
+```
+
+后续更新订阅内容：
+
+```bash
+sudo ps-agent sub export
+sudo ps-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/proxystack/sub
+sudo ps-agent restart sub
+```
+
+### Docker 部署订阅服务
+
+远端订阅服务器可以只部署 `proxystack-sub`，不需要 mihomo、xray-core 或完整 stack 配置。先准备订阅服务配置和数据目录：
+
+```bash
+sudo install -d -m 0750 /opt/proxystack/sub
+sudo cp src/proxystack/templates/sub-config.yaml /opt/proxystack/sub/config.yaml
+sudo vi /opt/proxystack/sub/config.yaml
+```
+
+Docker 场景下，`/opt/proxystack/sub` 会挂载为容器内 `/data`，因此配置中至少需要确认 `listen: 0.0.0.0:3003`，并将 `data_dir` 改为 `/data` 或删除该字段使用默认值。
+
+然后构建并启动容器：
+
+```bash
+docker compose -f docker-compose.sub.yml up -d --build
+```
+
+导入发布包：
+
+```bash
+docker cp /opt/proxystack/publish/sub-bundle.zip proxystack-sub:/tmp/sub-bundle.zip
+docker exec proxystack-sub ps-sub import /tmp/sub-bundle.zip --data-dir /data
+```
+
+如果公网暴露订阅服务，建议在反向代理层配置 HTTPS、访问控制、限流和日志。完整部署细节见 [部署方案](docs/deployment.md)。
+
+## 使用
+
+### 常用命令
+
+```bash
+ps-agent list
+ps-agent validate
+ps-agent check
+ps-agent start
+ps-agent stop usa1
+ps-agent restart usa1
+ps-agent status
+ps-agent logs usa1 --follow
+ps-agent ipinfo usa1
+ps-agent doctor
+```
+
+目标作用域可以是全部 enabled stack、单个 stack、单个组件或订阅服务：
+
+```bash
+ps-agent start
+ps-agent start usa1
+ps-agent start xrelay/usa1
+ps-agent start clash/usa1
+ps-agent start sub
+```
+
+### 新增和管理 stack
+
+```bash
+ps-agent add usa1
+ps-agent add auto --template auto-url-test --members usa1,usa2
+ps-agent clone usa1 usa2 --allocate-ports
+ps-agent remove usa2
+```
+
+`add` 默认使用 `config.yaml` 中的 `port_ranges` 自动分配端口，并会打开编辑器让用户确认 stack 配置。自动化场景可加 `--no-edit`。
+
+### 渲染与订阅
+
+```bash
+ps-agent render model
+ps-agent render xrelay usa1
+ps-agent render clash usa1
+ps-agent render sub
+ps-agent sub export
+ps-agent sub export usa1
+ps-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/proxystack/sub
+ps-sub serve --config /opt/proxystack/sub/config.yaml
+```
+
+订阅只读取 `xrelay.inbounds[]` 中 `sub: true` 的条目，不会把 clash 的代理组、规则或 controller 配置暴露给订阅服务。
+
+### 更新与备份
+
+```bash
+ps-agent install all
+ps-agent update mihomo
+ps-agent update xray
+ps-agent update geo
+ps-agent update self --wheel proxystack-<version>-py3-none-any.whl
+ps-agent export
+ps-agent import /opt/proxystack/publish/proxystack-backup.zip
+```
+
+`install/update all` 只处理 mihomo、xray-core 和 geo 数据，不安装 systemd unit，也不会自动重启服务。systemd unit 使用 `ps-agent service install [target]`、`ps-agent service uninstall [target]` 管理。
+
 ## 建议技术栈
 
 首期建议使用 Python 实现同一项目内的两个运行组件：
