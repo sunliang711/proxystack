@@ -99,7 +99,16 @@ def serve(
             sub_config.watch_debounce,
         )
         with step_logger.step("start subscription server"):
-            uvicorn.run(create_app(state, watcher), host=sub_config.host, port=sub_config.port)
+            uvicorn.run(
+                create_app(
+                    state,
+                    watcher,
+                    templates_dir=sub_config.templates_dir,
+                    data_dir=sub_config.data_dir,
+                ),
+                host=sub_config.host,
+                port=sub_config.port,
+            )
     except (OSError, ValueError) as exc:
         if step_logger.step_index == 0:
             echo_command_error(exc)

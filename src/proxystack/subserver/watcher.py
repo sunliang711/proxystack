@@ -86,6 +86,7 @@ class PollingInputWatcher(InputWatcher):
             if next_snapshot == self._snapshot:
                 continue
             self._snapshot = next_snapshot
+            LOGGER.info("Input watcher detected change: input_dir=%s watcher=polling", self.input_dir)
             run_change_callback(self.on_change)
 
     def _read_snapshot(self) -> dict[str, tuple[int, int]]:
@@ -141,6 +142,7 @@ class InotifyInputWatcher(InputWatcher):
                 if self._stop_event.wait(self.debounce):
                     return
                 self._drain_events()
+                LOGGER.info("Input watcher detected change: input_dir=%s watcher=inotify", self.input_dir)
                 run_change_callback(self.on_change)
 
     def _read_events(self) -> bool:

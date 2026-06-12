@@ -298,7 +298,22 @@ HTTP 路由：
 - `/premium_sub/:user`：Premium Clash。P0 与普通 Clash 使用同一 YAML 输出，但渲染入口保持独立。
 - `/surge_sub/:user`：Surge。
 
-P0 的 Clash/Premium Clash 订阅只输出客户端节点列表 `proxies`，不生成 proxy-groups、rules、mode 或 controller。Surge 订阅只输出 `[Proxy]` 段。
+Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含基础监听、DNS、tun、`proxies`、默认 `proxy-groups` 和默认 `rules`。Premium Clash 保留独立路由入口，当前默认模板与普通 Clash 一致。Surge 订阅输出 `[General]`、`[Replica]`、`[Proxy]`、`[Proxy Group]` 和 `[Rule]` 段。
+
+三类订阅配置均由 Jinja2 模板渲染。模板查找顺序为：
+
+1. `ps-sub config.yaml` 中 `templates_dir/sub/<template>`。
+2. `ps-sub config.yaml` 中 `templates_dir/<template>`。
+3. `<data_dir>/templates/sub/<template>`。
+4. 包内默认模板 `src/proxystack/templates/sub/<template>`。
+
+默认模板文件名：
+
+- `clash.yaml.j2`
+- `premium-clash.yaml.j2`
+- `surge.conf.j2`
+
+模板上下文包含 `user`、`generated_at`、`sources`、`nodes`、`proxies`、`proxy_names`、`proxy_groups`、`clash_rules`、`surge_proxy_lines`、`surge_rules`、`test_url` 和 `surge_skip_proxy`。模板可使用 `yaml_block` filter 渲染 YAML 片段。
 
 订阅访问控制：
 
@@ -353,8 +368,9 @@ nodes:
 - 按 `nodes[].user` 分组生成订阅。
 - `nodes[].id` 必须全局唯一；重复 id 默认报错。
 - 启动阶段单个输入文件校验失败时服务启动失败；运行阶段 reload 失败时保留上一份可用内存索引。
-- 服务运行期间监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；文件增加、删除、修改或原子替换后会重新扫描整个 inputs 目录。
+- 服务运行期间监控 inputs 目录，Linux 优先使用 inotify，不可用时回退轮询；文件增加、删除、修改或原子替换后会重新扫描整个 inputs 目录，并输出 watcher 触发和 reload 成败日志。
 - access token 从 `<data_dir>/config.yaml` 的 `access` 字段读取，不写入发布包，也不写入 index 文件。
+- 可选 `templates_dir` 指向本地模板根目录；未配置时可直接在 `<data_dir>/templates/sub/` 放置同名模板覆盖包内默认模板。
 - input 文件必须是 `input_schema: proxystack.subscription-input`、`input_version: 1`；缺少 `input_schema` 的 v1 文件按兼容输入读取，其他 schema 或版本会失败。
 
 本地 agent 使用统一导出命令生成订阅发布包：

@@ -402,6 +402,13 @@ access:
 ```
 
 `data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
+订阅模板可以本地覆盖，默认查找 `<data_dir>/templates/sub/` 下的 `clash.yaml.j2`、`premium-clash.yaml.j2` 和 `surge.conf.j2`。也可以在 ps-sub 配置中显式指定模板根目录：
+
+```yaml
+templates_dir: /opt/proxystack/sub/templates
+```
+
+此时模板放在 `/opt/proxystack/sub/templates/sub/`；如果直接把模板放在 `templates_dir` 根目录，也会被识别。
 
 本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程是 `sub export + sub import`，运行中的服务会由 watcher 自动 reload。
 

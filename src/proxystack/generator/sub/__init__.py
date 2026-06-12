@@ -6,6 +6,7 @@ from proxystack.generator.sub.config import SubscriptionGeneratorError
 from proxystack.generator.sub.config import SubscriptionIndex
 from proxystack.generator.sub.config import SubscriptionInput
 from proxystack.generator.sub.config import SubscriptionNode
+from proxystack.generator.sub.config import SubscriptionTemplateError
 from proxystack.generator.sub.config import access_from_stack_set
 from proxystack.generator.sub.config import build_index
 from proxystack.generator.sub.config import extract_bundle_inputs
@@ -33,6 +34,7 @@ __all__ = [
     "SubscriptionIndex",
     "SubscriptionInput",
     "SubscriptionNode",
+    "SubscriptionTemplateError",
     "access_from_stack_set",
     "build_index",
     "extract_bundle_inputs",

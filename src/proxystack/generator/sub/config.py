@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 from typing import Literal
@@ -21,6 +22,9 @@ from pydantic import Field
 from pydantic import ValidationError
 from pydantic import field_validator
 from pydantic import model_validator
+from jinja2 import Environment
+from jinja2 import StrictUndefined
+from jinja2 import TemplateError
 from ruamel.yaml import YAML
 
 from proxystack.domain.models import Inbound
@@ -36,10 +40,45 @@ INDEX_VERSION = 1
 INPUT_SCHEMA = "proxystack.subscription-input"
 INPUT_VERSION = 1
 DEFAULT_ACCESS = {"type": "none"}
+SUB_TEMPLATE_DIR_NAME = "sub"
+CLASH_TEMPLATE_NAME = "clash.yaml.j2"
+PREMIUM_CLASH_TEMPLATE_NAME = "premium-clash.yaml.j2"
+SURGE_TEMPLATE_NAME = "surge.conf.j2"
+CLASH_TEST_URL = "http://www.gstatic.com/generate_204"
+DEFAULT_CLASH_RULES = [
+    "DOMAIN-SUFFIX,local,DIRECT",
+    "DOMAIN,localhost,DIRECT",
+    "IP-CIDR,127.0.0.0/8,DIRECT,no-resolve",
+    "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve",
+    "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve",
+    "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
+    "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve",
+    "GEOIP,CN,DIRECT",
+    "MATCH,Final",
+]
+SURGE_SKIP_PROXY = (
+    "127.0.0.1, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, "
+    "100.64.0.0/10, localhost, *.local"
+)
+DEFAULT_SURGE_RULES = [
+    "DOMAIN-SUFFIX,local,DIRECT",
+    "DOMAIN,localhost,DIRECT",
+    "IP-CIDR,127.0.0.0/8,DIRECT,no-resolve",
+    "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve",
+    "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve",
+    "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
+    "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve",
+    "GEOIP,CN,DIRECT",
+    "FINAL,FinalGroup",
+]
 
 
 class SubscriptionGeneratorError(ValueError):
     """订阅生成、合并或渲染失败异常。"""
+
+
+class SubscriptionTemplateError(SubscriptionGeneratorError):
+    """订阅模板读取或渲染失败异常。"""
 
 
 class SubscriptionAuth(BaseModel):
@@ -459,22 +498,211 @@ def render_stack_index(stack_set: StackSet, source: str) -> SubscriptionIndex:
     return merge_inputs([(Path(f"{source}.yaml"), subscription_input)], access=access_from_stack_set(stack_set))
 
 
-def render_clash_subscription(index: SubscriptionIndex, user: str) -> str:
+def render_clash_subscription(
+    index: SubscriptionIndex,
+    user: str,
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> str:
     """渲染普通 Clash 订阅 YAML。"""
-    return dump_yaml(render_clash_subscription_dict(index, user))
+    return render_subscription_template(
+        CLASH_TEMPLATE_NAME,
+        build_subscription_template_context(index, user),
+        template_dir=template_dir,
+        data_dir=data_dir,
+    )
 
 
-def render_premium_clash_subscription(index: SubscriptionIndex, user: str) -> str:
-    """渲染 Premium Clash 订阅 YAML；P0 与普通 Clash 使用同一结构。"""
-    return dump_yaml(render_clash_subscription_dict(index, user))
+def render_premium_clash_subscription(
+    index: SubscriptionIndex,
+    user: str,
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> str:
+    """渲染 Premium Clash 订阅 YAML；当前与普通 Clash 使用同一结构。"""
+    return render_subscription_template(
+        PREMIUM_CLASH_TEMPLATE_NAME,
+        build_subscription_template_context(index, user),
+        template_dir=template_dir,
+        data_dir=data_dir,
+    )
+
+
+def build_subscription_template_context(index: SubscriptionIndex, user: str) -> dict[str, Any]:
+    """生成三类订阅模板共享的上下文。"""
+    nodes = nodes_for_user(index, user)
+    proxies = [render_clash_proxy(node) for node in nodes]
+    proxy_names = [proxy["name"] for proxy in proxies]
+    return {
+        "user": user,
+        "generated_at": index.generated_at,
+        "sources": [*index.sources],
+        "nodes": nodes,
+        "proxies": proxies,
+        "proxy_names": proxy_names,
+        "proxy_groups": render_clash_proxy_groups(proxy_names),
+        "clash_rules": [*DEFAULT_CLASH_RULES],
+        "surge_proxy_lines": [render_surge_proxy(node) for node in nodes],
+        "surge_rules": [*DEFAULT_SURGE_RULES],
+        "test_url": CLASH_TEST_URL,
+        "surge_skip_proxy": SURGE_SKIP_PROXY,
+    }
+
+
+def render_subscription_template(
+    template_name: str,
+    context: dict[str, Any],
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> str:
+    """读取本地覆盖或包内默认模板，并用订阅上下文渲染。"""
+    source = load_subscription_template(template_name, template_dir=template_dir, data_dir=data_dir)
+    environment = build_subscription_template_environment()
+    try:
+        return environment.from_string(source).render(**context)
+    except TemplateError as exc:
+        raise SubscriptionTemplateError(f"subscription template render failed: {template_name}") from exc
+
+
+def build_subscription_template_environment() -> Environment:
+    """创建订阅模板渲染环境并注册 YAML 片段过滤器。"""
+    environment = Environment(autoescape=False, keep_trailing_newline=True, undefined=StrictUndefined)
+    environment.filters["yaml_block"] = yaml_block
+    return environment
+
+
+def load_subscription_template(
+    template_name: str,
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> str:
+    """按本地覆盖目录、data_dir 默认目录、包内默认模板顺序读取模板。"""
+    validate_subscription_template_name(template_name)
+    for template_path in subscription_template_paths(template_name, template_dir=template_dir, data_dir=data_dir):
+        try:
+            if template_path.is_file():
+                return template_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise SubscriptionTemplateError(f"subscription template could not be read: {template_path}") from exc
+    try:
+        return files("proxystack").joinpath("templates", SUB_TEMPLATE_DIR_NAME, template_name).read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise SubscriptionTemplateError(f"subscription template is missing: {template_name}") from exc
+
+
+def validate_subscription_template_name(template_name: str) -> None:
+    """校验模板名不包含路径片段，避免模板查找越界。"""
+    if Path(template_name).name != template_name:
+        raise SubscriptionTemplateError(f"unsafe subscription template name: {template_name}")
+
+
+def subscription_template_paths(
+    template_name: str,
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> list[Path]:
+    """返回本地模板候选路径，支持模板根目录和 sub 子目录两种写法。"""
+    paths: list[Path] = []
+    if template_dir is not None:
+        paths.append(template_dir / SUB_TEMPLATE_DIR_NAME / template_name)
+        paths.append(template_dir / template_name)
+    if data_dir is not None:
+        paths.append(data_dir / "templates" / SUB_TEMPLATE_DIR_NAME / template_name)
+    return unique_paths(paths)
+
+
+def unique_paths(paths: list[Path]) -> list[Path]:
+    """去重模板候选路径，避免同一路径被重复读取。"""
+    seen_paths: set[Path] = set()
+    unique: list[Path] = []
+    for path in paths:
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+        unique.append(path)
+    return unique
+
+
+def yaml_block(value: Any, indent: int = 0) -> str:
+    """把对象渲染成可嵌入模板的 YAML 块。"""
+    text = dump_yaml(value).rstrip("\n")
+    if not text or indent <= 0:
+        return text
+    prefix = " " * indent
+    return "\n".join(f"{prefix}{line}" if line else line for line in text.splitlines())
 
 
 def render_clash_subscription_dict(index: SubscriptionIndex, user: str) -> dict[str, Any]:
-    """生成 Clash 订阅字典，只包含客户端节点列表。"""
+    """生成可直接导入 Clash/Mihomo 的完整订阅字典。"""
     nodes = nodes_for_user(index, user)
+    proxies = [render_clash_proxy(node) for node in nodes]
+    proxy_names = [proxy["name"] for proxy in proxies]
     return {
-        "proxies": [render_clash_proxy(node) for node in nodes],
+        "port": 7890,
+        "socks-port": 7891,
+        "redir-port": 7892,
+        "tproxy-port": 7893,
+        "allow-lan": True,
+        "mode": "Rule",
+        "log-level": "info",
+        "external-controller": "127.0.0.1:9090",
+        "dns": {
+            "enable": False,
+            "listen": "0.0.0.0:53",
+            "enhanced-mode": "fake-ip",
+            "nameserver": [
+                "tls://dns.rubyfish.cn:853",
+                "119.29.29.29",
+                "223.5.5.5",
+            ],
+            "fallback": [
+                "tls://1.1.1.1:853",
+                "tcp://1.1.1.1:53",
+                "tcp://208.67.222.222:443",
+                "tls://dns.google",
+                "tls://dns.rubyfish.cn:853",
+                "114.114.114.114",
+                "8.8.8.8",
+            ],
+        },
+        "tun": {
+            "enable": False,
+        },
+        "proxies": proxies,
+        "proxy-groups": render_clash_proxy_groups(proxy_names),
+        "rules": [*DEFAULT_CLASH_RULES],
     }
+
+
+def render_clash_proxy_groups(proxy_names: list[str]) -> list[dict[str, Any]]:
+    """根据节点名生成默认 Clash/Mihomo 代理组。"""
+    return [
+        {
+            "name": "AllProxy",
+            "type": "select",
+            "proxies": ["auto", "loadbalance", *proxy_names, "DIRECT"],
+        },
+        {
+            "name": "loadbalance",
+            "type": "load-balance",
+            "url": CLASH_TEST_URL,
+            "interval": 300,
+            "strategy": "round-robin",
+            "proxies": [*proxy_names],
+        },
+        {
+            "name": "auto",
+            "type": "url-test",
+            "url": CLASH_TEST_URL,
+            "interval": 300,
+            "proxies": [*proxy_names],
+        },
+        {
+            "name": "Final",
+            "type": "select",
+            "proxies": ["AllProxy", "DIRECT", *proxy_names],
+        },
+    ]
 
 
 def render_clash_proxy(node: SubscriptionNode) -> dict[str, Any]:
@@ -508,13 +736,27 @@ def clash_protocol_type(protocol: str) -> str:
     return protocol
 
 
-def render_surge_subscription(index: SubscriptionIndex, user: str) -> str:
+def render_surge_subscription(
+    index: SubscriptionIndex,
+    user: str,
+    template_dir: Optional[Path] = None,
+    data_dir: Optional[Path] = None,
+) -> str:
     """渲染 Surge 订阅文本。"""
-    nodes = nodes_for_user(index, user)
-    lines = ["[Proxy]"]
-    lines.extend(render_surge_proxy(node) for node in nodes)
-    lines.append("")
-    return "\n".join(lines)
+    return render_subscription_template(
+        SURGE_TEMPLATE_NAME,
+        build_subscription_template_context(index, user),
+        template_dir=template_dir,
+        data_dir=data_dir,
+    )
+
+
+def render_surge_group_line(name: str, group_type: str, proxies: list[str], suffix: str = "") -> str:
+    """生成 Surge 代理组配置行。"""
+    proxy_part = ", ".join(proxies)
+    if suffix:
+        return f"{name} = {group_type}, {proxy_part}, {suffix}"
+    return f"{name} = {group_type}, {proxy_part}"
 
 
 def render_surge_proxy(node: SubscriptionNode) -> str:
@@ -522,7 +764,7 @@ def render_surge_proxy(node: SubscriptionNode) -> str:
     if node.protocol == "vmess":
         return (
             f"{node.remark} = vmess, {node.server}, {node.port}, "
-            f"username={node.uuid}, network={node.network}"
+            f"username={node.uuid}, network={node.network}, vmess-aead=true"
         )
     if node.protocol == "shadowsocks":
         return (
@@ -541,7 +783,7 @@ def render_surge_auth(node: SubscriptionNode) -> str:
     """生成 Surge socks/http 可选鉴权片段。"""
     if node.auth is None or node.auth.type != "password":
         return ""
-    return f", username={node.auth.username}, password={node.auth.password}"
+    return f", {node.auth.username}, {node.auth.password}"
 
 
 def nodes_for_user(index: SubscriptionIndex, user: str) -> list[SubscriptionNode]:
@@ -552,8 +794,8 @@ def nodes_for_user(index: SubscriptionIndex, user: str) -> list[SubscriptionNode
     return nodes
 
 
-def dump_yaml(value: dict[str, Any]) -> str:
-    """把字典编码为稳定、可读的 YAML 文本。"""
+def dump_yaml(value: Any) -> str:
+    """把对象编码为稳定、可读的 YAML 文本。"""
     from io import StringIO
 
     yaml = YAML()

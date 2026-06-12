@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from threading import Event
 
 from fastapi.testclient import TestClient
+from pytest import LogCaptureFixture
 from pytest import MonkeyPatch
 
 from proxystack.generator.sub import SubscriptionAccess
@@ -42,11 +44,14 @@ def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
 
     assert clash_response.status_code == 200
     assert "proxies:" in clash_response.text
+    assert "proxy-groups:" in clash_response.text
     assert "alice socks" in clash_response.text
     assert premium_response.status_code == 200
     assert "proxies:" in premium_response.text
+    assert "rules:" in premium_response.text
     assert surge_response.status_code == 200
     assert "[Proxy]" in surge_response.text
+    assert "[Proxy Group]" in surge_response.text
     assert "alice socks = socks5" in surge_response.text
 
 
@@ -83,17 +88,70 @@ def test_subscription_routes_return_404_for_missing_user(tmp_path: Path) -> None
     assert response.json()["error"]["code"] == "not_found"
 
 
-def test_subscription_state_reload_keeps_previous_index_on_bad_input(tmp_path: Path) -> None:
-    """验证 reload 失败时保留上一份可用内存索引。"""
+def test_subscription_route_returns_503_for_bad_template(tmp_path: Path) -> None:
+    """验证本地订阅模板错误时返回模板错误，而不是用户不存在。"""
+    state = loaded_state(tmp_path)
+    template_dir = tmp_path / "templates" / "sub"
+    template_dir.mkdir(parents=True)
+    (template_dir / "clash.yaml.j2").write_text("mode: {{ missing_value }}", encoding="utf-8")
+    client = TestClient(create_app(state))
+
+    response = client.get("/sub/alice", params={"token": "demo-token"})
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "template_error"
+
+
+def test_subscription_state_reload_writes_reload_logs(tmp_path: Path, caplog: LogCaptureFixture) -> None:
+    """验证 reload 成功时输出可排查的日志。"""
+    caplog.set_level(logging.INFO)
+    input_dir = tmp_path / "inputs"
+    write_input(input_dir / "manual.yaml", alice_node())
+    state = SubscriptionState(tmp_path, access=SubscriptionAccess(type="token", token="demo-token"))
+
+    assert state.reload() is True
+    assert "Subscription inputs reload started" in caplog.text
+    assert "Subscription inputs reloaded" in caplog.text
+    assert "nodes=1" in caplog.text
+
+
+def test_subscription_state_reload_keeps_previous_index_on_bad_input(
+    tmp_path: Path,
+    caplog: LogCaptureFixture,
+) -> None:
+    """验证 reload 失败时保留上一份可用内存索引，且日志不输出凭据明文。"""
     input_dir = tmp_path / "inputs"
     write_input(input_dir / "manual.yaml", alice_node())
     state = SubscriptionState(tmp_path, access=SubscriptionAccess(type="token", token="demo-token"))
     state.load()
-    (input_dir / "bad.yaml").write_text("nodes: bad\n", encoding="utf-8")
+    caplog.set_level(logging.WARNING)
+    (input_dir / "bad.yaml").write_text(
+        "\n".join(
+            [
+                "input_version: 1",
+                "source: bad",
+                'generated_at: "2026-06-05T12:00:00+08:00"',
+                "nodes:",
+                "  - id: bad:ss",
+                "    user: alice",
+                "    protocol: shadowsocks",
+                "    server: proxy.example.com",
+                "    port: 24002",
+                "    tag: ss:24002:bad",
+                "    remark: bad ss",
+                "    password: secret-pass",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     assert state.reload() is False
     assert state.snapshot().users["alice"][0].id == "test:alice"
     assert state.health().last_error
+    assert "Subscription inputs reload failed" in caplog.text
+    assert "error_type=SubscriptionGeneratorError" in caplog.text
+    assert "secret-pass" not in caplog.text
 
 
 def test_subscription_state_reload_records_filesystem_errors(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

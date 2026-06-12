@@ -142,7 +142,7 @@ install:
 
 - agent 可写 `runtime/`、`publish/`、`downloads/` 和 stack 配置文件。
 - `config.yaml` 运行期只读；只有 `init` 和 `edit` 这类配置管理命令可以写。
-- sub 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址和 access token。
+- sub 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址、access token 和可选 `templates_dir`。
 - agent 不直接写 `sub/inputs/`；订阅内容必须通过 `sub export` 生成 bundle，再由 `proxystack-sub import` 导入。
 - sub 不读取 `config.yaml`、`stacks/` 或 `runtime/`。
 - agent 和 sub 可以共用 `.venv/`，但运行期锁文件必须分开：agent 使用 `runtime/agent.lock`，sub 使用 `sub/sub.lock`。

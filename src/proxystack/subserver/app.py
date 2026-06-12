@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
@@ -16,6 +17,7 @@ from fastapi.responses import PlainTextResponse
 
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionIndex
+from proxystack.generator.sub import SubscriptionTemplateError
 from proxystack.generator.sub import render_clash_subscription
 from proxystack.generator.sub import render_premium_clash_subscription
 from proxystack.generator.sub import render_surge_subscription
@@ -23,8 +25,14 @@ from proxystack.subserver.state import SubscriptionState
 from proxystack.subserver.watcher import InputWatcher
 
 
-def create_app(state: SubscriptionState, watcher: InputWatcher | None = None) -> FastAPI:
+def create_app(
+    state: SubscriptionState,
+    watcher: InputWatcher | None = None,
+    templates_dir: Path | None = None,
+    data_dir: Path | None = None,
+) -> FastAPI:
     """创建从内存状态读取订阅索引的 FastAPI 应用。"""
+    render_data_dir = data_dir or state.data_dir
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -60,17 +68,47 @@ def create_app(state: SubscriptionState, watcher: InputWatcher | None = None) ->
     @app.get("/sub/{user}")
     def clash_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回普通 Clash 订阅。"""
-        return render_subscription_response(user, token, state, render_clash_subscription)
+        return render_subscription_response(
+            user,
+            token,
+            state,
+            lambda index, requested_user: render_clash_subscription(
+                index,
+                requested_user,
+                template_dir=templates_dir,
+                data_dir=render_data_dir,
+            ),
+        )
 
     @app.get("/premium_sub/{user}")
     def premium_clash_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回 Premium Clash 订阅。"""
-        return render_subscription_response(user, token, state, render_premium_clash_subscription)
+        return render_subscription_response(
+            user,
+            token,
+            state,
+            lambda index, requested_user: render_premium_clash_subscription(
+                index,
+                requested_user,
+                template_dir=templates_dir,
+                data_dir=render_data_dir,
+            ),
+        )
 
     @app.get("/surge_sub/{user}")
     def surge_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回 Surge 订阅。"""
-        return render_subscription_response(user, token, state, render_surge_subscription)
+        return render_subscription_response(
+            user,
+            token,
+            state,
+            lambda index, requested_user: render_surge_subscription(
+                index,
+                requested_user,
+                template_dir=templates_dir,
+                data_dir=render_data_dir,
+            ),
+        )
 
     return app
 
@@ -86,6 +124,8 @@ def render_subscription_response(
     verify_token(index, token)
     try:
         content = renderer(index, user)
+    except SubscriptionTemplateError as exc:
+        raise json_error(503, "template_error", "subscription template unavailable") from exc
     except SubscriptionGeneratorError as exc:
         raise json_error(404, "not_found", "subscription not found") from exc
     return PlainTextResponse(content)

@@ -1387,6 +1387,45 @@ access:
     assert "manual:id" in response.text
 
 
+def test_sub_serve_uses_config_templates_dir(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 serve CLI 会把配置中的 templates_dir 传给订阅渲染。"""
+    captured: dict[str, object] = {}
+    data_dir = tmp_path / "sub"
+    template_root = tmp_path / "templates"
+    (data_dir / "inputs").mkdir(parents=True)
+    (template_root / "sub").mkdir(parents=True)
+    write_cli_input(data_dir / "inputs" / "manual.yaml")
+    (template_root / "sub" / "clash.yaml.j2").write_text(
+        "mode: ConfigTemplate\nproxies:\n{{ proxies | yaml_block }}",
+        encoding="utf-8",
+    )
+    config_path = data_dir / "config.yaml"
+    config_path.write_text(
+        f"""listen: 127.0.0.1:3003
+templates_dir: {template_root}
+access:
+  type: none
+""",
+        encoding="utf-8",
+    )
+
+    def fake_run(app: object, host: str, port: int) -> None:
+        """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
+        captured["app"] = app
+        captured["host"] = host
+        captured["port"] = port
+
+    monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
+
+    result = runner.invoke(sub_app, ["serve", "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    client = TestClient(captured["app"])
+    response = client.get("/sub/alice")
+    assert response.status_code == 200
+    assert "mode: ConfigTemplate" in response.text
+
+
 def test_subscription_export_import_e2e_merges_multiple_stack_bundles(tmp_path: Path) -> None:
     """验证多个 stack 发布包连续导入后会合并到同一个订阅索引。"""
     usa1_bundle = tmp_path / "usa1-sub-bundle.zip"

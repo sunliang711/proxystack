@@ -16,12 +16,16 @@ from proxystack.config import load_config
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.generator.sub import BundleManifest
+from proxystack.generator.sub import SubscriptionNode
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionInput
+from proxystack.generator.sub import build_index
 from proxystack.generator.sub import extract_bundle_inputs
 from proxystack.generator.sub import input_to_yaml
 from proxystack.generator.sub import merge_input_files
+from proxystack.generator.sub import render_clash_subscription
 from proxystack.generator.sub import render_stack_input
+from proxystack.generator.sub import render_surge_subscription
 from proxystack.generator.sub import write_bundle
 from proxystack.subserver import SubscriptionState
 
@@ -199,6 +203,105 @@ def test_render_stack_input_does_not_include_clash_config() -> None:
     assert "rules" not in rendered_input
     assert "controller" not in rendered_input
     assert "mode" not in rendered_input
+
+
+def test_subscription_renderers_emit_full_configs_and_surge_auth_syntax() -> None:
+    """验证订阅输出包含完整配置段，并使用 Surge 官方鉴权语法。"""
+    nodes = [
+        SubscriptionNode(
+            id="manual:vmess",
+            user="alice",
+            protocol="vmess",
+            server="proxy.example.com",
+            port=24001,
+            tag="vmess:24001:manual",
+            remark="Alice VMess",
+            uuid="11111111-1111-4111-8111-111111111111",
+            network="raw",
+        ),
+        SubscriptionNode(
+            id="manual:ss",
+            user="alice",
+            protocol="shadowsocks",
+            server="proxy.example.com",
+            port=24002,
+            tag="ss:24002:manual",
+            remark="Alice SS",
+            cipher="chacha20-ietf-poly1305",
+            password="ss-pass",
+        ),
+        SubscriptionNode(
+            id="manual:socks",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24003,
+            tag="socks5:24003:manual",
+            remark="Alice Socks",
+            udp=True,
+            auth={"type": "password", "username": "sock-user", "password": "sock-pass"},
+        ),
+        SubscriptionNode(
+            id="manual:http",
+            user="alice",
+            protocol="http",
+            server="proxy.example.com",
+            port=24004,
+            tag="http:24004:manual",
+            remark="Alice HTTP",
+            auth={"type": "password", "username": "http-user", "password": "http-pass"},
+        ),
+    ]
+    index = build_index(nodes, ["manual"])
+
+    clash = YAML(typ="safe").load(render_clash_subscription(index, "alice"))
+    proxy_names = ["Alice VMess", "Alice SS", "Alice Socks", "Alice HTTP"]
+    assert clash["mode"] == "Rule"
+    assert [proxy["name"] for proxy in clash["proxies"]] == proxy_names
+    assert clash["proxy-groups"][0]["proxies"] == ["auto", "loadbalance", *proxy_names, "DIRECT"]
+    assert clash["rules"][-1] == "MATCH,Final"
+
+    surge = render_surge_subscription(index, "alice")
+    assert "[General]" in surge
+    assert "[Proxy Group]" in surge
+    assert "[Rule]" in surge
+    assert (
+        "Alice VMess = vmess, proxy.example.com, 24001, "
+        "username=11111111-1111-4111-8111-111111111111, network=raw, vmess-aead=true"
+    ) in surge
+    assert "Alice Socks = socks5, proxy.example.com, 24003, sock-user, sock-pass, udp-relay=true" in surge
+    assert "Alice HTTP = http, proxy.example.com, 24004, http-user, http-pass" in surge
+    assert "Alice Socks = socks5, proxy.example.com, 24003, username=" not in surge
+
+
+def test_subscription_renderer_uses_data_dir_template_override(tmp_path: Path) -> None:
+    """验证订阅渲染会读取 data_dir 下的本地模板覆盖。"""
+    template_dir = tmp_path / "templates" / "sub"
+    template_dir.mkdir(parents=True)
+    (template_dir / "clash.yaml.j2").write_text(
+        "mode: LocalTemplate\nproxies:\n{{ proxies | yaml_block }}",
+        encoding="utf-8",
+    )
+    index = build_index(
+        [
+            SubscriptionNode(
+                id="manual:socks",
+                user="alice",
+                protocol="socks5",
+                server="proxy.example.com",
+                port=24003,
+                tag="socks5:24003:manual",
+                remark="Alice Socks",
+            )
+        ],
+        ["manual"],
+    )
+
+    rendered = render_clash_subscription(index, "alice", data_dir=tmp_path)
+
+    assert "mode: LocalTemplate" in rendered
+    assert "Alice Socks" in rendered
+    assert "proxy-groups:" not in rendered
 
 
 def test_merge_input_files_rejects_duplicate_node_id(tmp_path: Path) -> None:

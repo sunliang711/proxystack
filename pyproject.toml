@@ -33,7 +33,7 @@ ps-sub = "proxystack.cli.sub:run"
 where = ["src"]
 
 [tool.setuptools.package-data]
-proxystack = ["templates/*.yaml", "templates/README.md"]
+proxystack = ["templates/*.yaml", "templates/README.md", "templates/sub/*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

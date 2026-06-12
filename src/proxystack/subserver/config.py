@@ -30,6 +30,7 @@ class SubServerConfig(BaseModel):
     data_dir: Path = DEFAULT_SUB_DATA_DIR
     listen: str = "127.0.0.1:3003"
     access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
+    templates_dir: Optional[Path] = None
     watch_interval: float = Field(default=2.0, gt=0)
     watch_debounce: float = Field(default=0.3, ge=0)
 

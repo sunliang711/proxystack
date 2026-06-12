@@ -242,7 +242,7 @@ mkdir -p /opt/proxystack/sub
 vi /opt/proxystack/sub/config.yaml
 ```
 
-`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。
+`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。
 
 ```bash
 docker run -d \

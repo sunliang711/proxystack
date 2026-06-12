@@ -1,0 +1,32 @@
+[General]
+http-listen = 0.0.0.0:8888
+socks5-listen = 0.0.0.0:8889
+internet-test-url = {{ test_url }}
+proxy-test-url = {{ test_url }}
+test-timeout = 3
+ipv6 = false
+show-error-page-for-reject = true
+dns-server = 119.29.29.29, system
+loglevel = notify
+skip-proxy = {{ surge_skip_proxy }}
+exclude-simple-hostnames = true
+allow-wifi-access = true
+allow-hotspot-access = true
+
+[Replica]
+hide-apple-request = true
+hide-crashlytics-request = true
+hide-udp = false
+keyword-filter-type = false
+
+[Proxy]
+{% for proxy_line in surge_proxy_lines %}{{ proxy_line }}
+{% endfor %}
+[Proxy Group]
+AllProxy = select, DIRECT, AutoGroup{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}
+AutoGroup = url-test{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, url={{ test_url }}, interval=300, tolerance=100, timeout=5
+FinalGroup = select, AutoGroup, AllProxy, DIRECT{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}
+
+[Rule]
+{% for rule in surge_rules %}{{ rule }}{% if not loop.last %}
+{% endif %}{% endfor %}

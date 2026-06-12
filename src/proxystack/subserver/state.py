@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from threading import RLock
 from typing import Optional
@@ -11,6 +12,8 @@ from proxystack.generator.sub import SubscriptionAccess
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionIndex
 from proxystack.generator.sub import merge_input_files
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -42,15 +45,28 @@ class SubscriptionState:
 
     def reload(self) -> bool:
         """重新扫描 inputs；成功时原子替换内存索引，失败时保留旧索引。"""
+        LOGGER.info("Subscription inputs reload started: input_dir=%s", self.input_dir)
         try:
             index = merge_input_files(self.input_dir, access=self.access)
         except (OSError, SubscriptionGeneratorError) as exc:
             with self._lock:
                 self._last_error = str(exc)
+            LOGGER.warning(
+                "Subscription inputs reload failed: input_dir=%s error_type=%s",
+                self.input_dir,
+                exc.__class__.__name__,
+            )
             return False
         with self._lock:
             self._index = index
             self._last_error = None
+        LOGGER.info(
+            "Subscription inputs reloaded: input_dir=%s sources=%d nodes=%d users=%d",
+            self.input_dir,
+            len(index.sources),
+            len(index.nodes),
+            len(index.users),
+        )
         return True
 
     def snapshot(self) -> SubscriptionIndex:
