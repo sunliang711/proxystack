@@ -571,6 +571,40 @@ def test_validate_rejects_duplicate_subscription_listen_port(tmp_path: Path) -> 
         load_stacks(config, check_system_ports=False)
 
 
+def test_load_config_accepts_subscription_remark_template(tmp_path: Path) -> None:
+    """验证订阅节点名模板配置可以被全局配置加载。"""
+    project_dir = write_project(tmp_path, valid_stack_yaml("edge"))
+    config_path = project_dir / "config.yaml"
+    config_path.write_text(
+        valid_config_yaml(project_dir).replace(
+            "subscription:\n",
+            'subscription:\n  remark_policy: template\n  remark_template: "{source}/{inbound}/{user}/{remark}"\n',
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.subscription.remark_policy == "template"
+    assert config.subscription.remark_template == "{source}/{inbound}/{user}/{remark}"
+
+
+def test_load_config_rejects_unknown_subscription_remark_template_field(tmp_path: Path) -> None:
+    """验证订阅节点名模板只允许使用受支持的占位符。"""
+    project_dir = write_project(tmp_path, valid_stack_yaml("edge"))
+    config_path = project_dir / "config.yaml"
+    config_path.write_text(
+        valid_config_yaml(project_dir).replace(
+            "subscription:\n",
+            'subscription:\n  remark_policy: template\n  remark_template: "{stack}/{remark}"\n',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="unsupported subscription remark template field: stack"):
+        load_config(config_path)
+
+
 def test_validate_rejects_duplicate_stack_name() -> None:
     """验证跨文件重复 stack name 会失败。"""
     config = load_config(Path("examples/config.yaml"))

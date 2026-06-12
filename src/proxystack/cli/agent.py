@@ -1314,6 +1314,8 @@ def echo_subscription_bundle_summary(
             f"  - {input_summary.name}: source={input_summary.source} "
             f"nodes={input_summary.nodes} users={input_summary.users}"
         )
+        for remark in input_summary.remarks:
+            typer.echo(f"    - {remark}")
 
 
 def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: bool) -> list[Path]:

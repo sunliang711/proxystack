@@ -67,6 +67,7 @@ subscription:
   source: local
   listen: 127.0.0.1:3003
   base_url: https://sub.example.com
+  remark_policy: prefix-source
   access:
     type: token
     token: demo-subscription-token
@@ -124,6 +125,8 @@ install:
 - `external_host`：订阅节点默认对外 host。
 - `subscription`：agent 生成订阅 input/index、导出发布包和初始化 ps-sub 配置时使用的默认参数。
 - `subscription.access`：agent 本地订阅预览和初始化 ps-sub 配置时使用的访问控制。实际 HTTP 服务只读取 `sub/config.yaml` 中的 `access`；公网部署必须使用 token 或由反向代理鉴权。
+- `subscription.remark_policy`：订阅节点展示名生成策略，默认 `prefix-source`，会把 stack/source 前缀加到最终 `remark` 前，避免多个 stack 的同名节点在客户端冲突。
+- `subscription.remark_template`：当 `remark_policy: template` 时必填。支持 `{source}`、`{inbound}`、`{protocol}`、`{port}`、`{user}`、`{remark}`。
 - `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。

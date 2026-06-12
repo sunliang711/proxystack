@@ -32,6 +32,7 @@ from proxystack.domain.models import Inbound
 from proxystack.domain.models import InboundUser
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
+from proxystack.domain.models import SubscriptionConfig
 from proxystack.domain.models import is_shadowsocks_2022_method
 
 SUPPORTED_INPUT_EXTENSIONS = {".yaml", ".yml", ".json"}
@@ -90,6 +91,7 @@ class SubscriptionInputSummary:
     source: str
     nodes: int
     users: int
+    remarks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -324,14 +326,22 @@ def render_inbound_nodes(stack_set: StackSet, stack: Stack, inbound: Inbound) ->
 
 def render_inbound_node(stack_set: StackSet, stack: Stack, inbound: Inbound) -> SubscriptionNode:
     """把单个 xrelay inbound 映射为订阅节点。"""
+    user = inbound.user or "default"
     node_data: dict[str, Any] = {
         "id": f"{stack.name}:{inbound.name}",
-        "user": inbound.user or "default",
+        "user": user,
         "protocol": inbound.protocol,
         "server": inbound.server or stack_set.config.external_host,
         "port": inbound.port,
         "tag": inbound_tag(inbound),
-        "remark": inbound.remark or inbound.tag or f"{stack.name}-{inbound.name}",
+        "remark": render_subscription_remark(
+            stack_set.config.subscription,
+            stack.name,
+            inbound,
+            user,
+            inbound.remark,
+            inbound.remark or inbound.tag or f"{stack.name}-{inbound.name}",
+        ),
     }
     if inbound.udp:
         node_data["udp"] = inbound.udp
@@ -362,7 +372,14 @@ def render_vmess_user_node(
         "server": inbound.server or stack_set.config.external_host,
         "port": inbound.port,
         "tag": vmess_user.tag or f"{inbound_tag(inbound)}:{vmess_user.user}",
-        "remark": vmess_user.remark or vmess_user.tag or f"{stack.name}-{inbound.name}-{vmess_user.user}",
+        "remark": render_subscription_remark(
+            stack_set.config.subscription,
+            stack.name,
+            inbound,
+            vmess_user.user,
+            vmess_user.remark,
+            vmess_user.remark or vmess_user.tag or f"{stack.name}-{inbound.name}-{vmess_user.user}",
+        ),
         "uuid": vmess_user.uuid,
         "network": inbound.network,
     }
@@ -386,7 +403,14 @@ def render_shadowsocks_user_node(
         "server": inbound.server or stack_set.config.external_host,
         "port": inbound.port,
         "tag": shadowsocks_user.tag or f"{inbound_tag(inbound)}:{shadowsocks_user.user}",
-        "remark": shadowsocks_user.remark or shadowsocks_user.tag or f"{stack.name}-{inbound.name}-{shadowsocks_user.user}",
+        "remark": render_subscription_remark(
+            stack_set.config.subscription,
+            stack.name,
+            inbound,
+            shadowsocks_user.user,
+            shadowsocks_user.remark,
+            shadowsocks_user.remark or shadowsocks_user.tag or f"{stack.name}-{inbound.name}-{shadowsocks_user.user}",
+        ),
         "method": method,
         "cipher": method,
         "password": shadowsocks_node_password(inbound, shadowsocks_user),
@@ -402,6 +426,32 @@ def shadowsocks_node_password(inbound: Inbound, shadowsocks_user: InboundUser) -
     if is_shadowsocks_2022_method(inbound_method):
         return f"{inbound.password}:{shadowsocks_user.password}"
     return shadowsocks_user.password or ""
+
+
+def render_subscription_remark(
+    config: SubscriptionConfig,
+    source: str,
+    inbound: Inbound,
+    user: str,
+    configured_remark: Optional[str],
+    preserve_remark: str,
+) -> str:
+    """按订阅 remark 策略生成客户端最终看到的节点名。"""
+    fallback_remark = f"{inbound.protocol}:{inbound.port}:{user}"
+    remark = configured_remark or fallback_remark
+    if config.remark_policy == "preserve":
+        return preserve_remark
+    values = {
+        "source": source,
+        "inbound": inbound.name,
+        "protocol": inbound.protocol,
+        "port": inbound.port,
+        "user": user,
+        "remark": remark,
+    }
+    if config.remark_policy == "template":
+        return (config.remark_template or "").format(**values)
+    return "{source} {remark}".format(**values)
 
 
 def inbound_tag(inbound: Inbound) -> str:
@@ -518,6 +568,7 @@ def input_summary(name: str, subscription_input: SubscriptionInput) -> Subscript
         source=subscription_input.source,
         nodes=len(subscription_input.nodes),
         users=len({node.user for node in subscription_input.nodes}),
+        remarks=tuple(node.remark for node in subscription_input.nodes),
     )
 
 

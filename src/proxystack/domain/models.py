@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from string import Formatter
 from typing import Annotated
 from typing import Any
 from typing import Optional
@@ -18,6 +19,7 @@ from pydantic import model_validator
 Port = Annotated[int, Field(ge=1, le=65535)]
 Name = Annotated[str, Field(min_length=1)]
 BUILTIN_RULE_TARGETS = {"DIRECT", "REJECT"}
+SUBSCRIPTION_REMARK_TEMPLATE_FIELDS = {"source", "inbound", "protocol", "port", "user", "remark"}
 SHADOWSOCKS_2022_METHODS = {
     "2022-blake3-aes-128-gcm",
     "2022-blake3-aes-256-gcm",
@@ -65,6 +67,8 @@ class SubscriptionConfig(ProxystackModel):
     listen: str = "127.0.0.1:3003"
     base_url: Optional[str] = None
     access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
+    remark_policy: Literal["preserve", "prefix-source", "template"] = "prefix-source"
+    remark_template: Optional[str] = None
 
     @field_validator("listen")
     @classmethod
@@ -72,6 +76,26 @@ class SubscriptionConfig(ProxystackModel):
         """校验订阅服务监听地址包含合法端口。"""
         parse_listen(value)
         return value
+
+    @field_validator("remark_template")
+    @classmethod
+    def validate_remark_template(cls, value: Optional[str]) -> Optional[str]:
+        """校验订阅节点名模板只使用明确支持的占位符。"""
+        if value is None:
+            return value
+        for _literal_text, field_name, _format_spec, _conversion in Formatter().parse(value):
+            if field_name is None:
+                continue
+            if field_name not in SUBSCRIPTION_REMARK_TEMPLATE_FIELDS:
+                raise ValueError(f"unsupported subscription remark template field: {field_name}")
+        return value
+
+    @model_validator(mode="after")
+    def validate_remark_policy(self) -> "SubscriptionConfig":
+        """校验 template 策略必须提供订阅节点名模板。"""
+        if self.remark_policy == "template" and not self.remark_template:
+            raise ValueError("remark_template is required when remark_policy is template")
+        return self
 
 
 class PortRange(ProxystackModel):

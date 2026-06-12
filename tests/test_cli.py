@@ -1626,6 +1626,8 @@ def test_agent_sub_export_summary_does_not_write_bundle(tmp_path: Path) -> None:
     assert "inputs=1" in result.output
     assert "nodes=2" in result.output
     assert "usa1.yaml" in result.output
+    assert "usa1 usa1 relay socks" in result.output
+    assert "usa1 usa1 vmess" in result.output
     assert not output.exists()
 
 
