@@ -1273,7 +1273,7 @@ def test_sub_help_is_available() -> None:
 
 def test_sub_command_help_is_available() -> None:
     """验证 proxystack-sub P0 子命令都提供 help 输出。"""
-    for command in [["version"], ["import"], ["serve"]]:
+    for command in [["version"], ["config"], ["import"], ["clear"], ["serve"]]:
         result = runner.invoke(sub_app, [*command, "--help"])
 
         assert result.exit_code == 0, command
@@ -1285,6 +1285,74 @@ def test_sub_version_is_available() -> None:
 
     assert result.exit_code == 0
     assert "proxystack-sub" in result.output
+
+
+def test_sub_config_creates_default_config(tmp_path: Path) -> None:
+    """验证 proxystack-sub config 会创建并校验默认 config.yaml。"""
+    data_dir = tmp_path / "sub"
+    config_path = data_dir / "config.yaml"
+
+    result = runner.invoke(sub_app, ["config", "--data-dir", str(data_dir), "--editor", "true"])
+
+    assert result.exit_code == 0, result.output
+    assert "编辑校验通过" in result.output
+    config_data = YAML(typ="safe").load(config_path.read_text(encoding="utf-8"))
+    assert config_data["data_dir"] == str(data_dir)
+    assert config_data["listen"] == "127.0.0.1:3003"
+    assert config_data["access"]["type"] == "none"
+
+
+def test_sub_config_rejects_invalid_edit_before_replacing(tmp_path: Path) -> None:
+    """验证 proxystack-sub config 编辑失败时不会替换原 config.yaml。"""
+    data_dir = tmp_path / "sub"
+    data_dir.mkdir()
+    config_path = data_dir / "config.yaml"
+    config_path.write_text(
+        f"""data_dir: {data_dir}
+listen: 127.0.0.1:3003
+access:
+  type: none
+""",
+        encoding="utf-8",
+    )
+    original_text = config_path.read_text(encoding="utf-8")
+    editor = tmp_path / "bad_sub_config_editor.py"
+    editor.write_text(
+        """
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(text.replace("listen: 127.0.0.1:3003", "listen: ["), encoding="utf-8")
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(sub_app, ["config", "--config", str(config_path), "--editor", f"{sys.executable} {editor}"])
+
+    assert result.exit_code == 1
+    assert "配置编辑失败" in result.output
+    assert config_path.read_text(encoding="utf-8") == original_text
+
+
+def test_sub_config_check_only_validates_existing_config(tmp_path: Path) -> None:
+    """验证 proxystack-sub config --check-only 只校验配置，不启动编辑器。"""
+    data_dir = tmp_path / "sub"
+    data_dir.mkdir()
+    config_path = data_dir / "config.yaml"
+    config_path.write_text(
+        """listen: 127.0.0.1:3003
+access:
+  type: none
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(sub_app, ["config", "--config", str(config_path), "--check-only"])
+
+    assert result.exit_code == 0
+    assert "编辑校验通过" in result.output
 
 
 def test_sub_import_writes_bundle_inputs_only(tmp_path: Path) -> None:
@@ -1335,6 +1403,33 @@ def test_sub_import_rejects_duplicate_proxy_name(tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert "duplicate proxy name for user: user=alice name=same proxy" in result.output
     assert not (data_dir / "inputs").exists() or list((data_dir / "inputs").iterdir()) == []
+
+
+def test_sub_clear_removes_imported_inputs_only(tmp_path: Path) -> None:
+    """验证 proxystack-sub clear 只清理 inputs 中受管理的导入节点文件。"""
+    data_dir = tmp_path / "sub"
+    input_dir = data_dir / "inputs"
+    input_dir.mkdir(parents=True)
+    write_cli_input(input_dir / "manual.yaml")
+    (input_dir / "other.json").write_text("{}", encoding="utf-8")
+    (input_dir / "keep.txt").write_text("keep", encoding="utf-8")
+    config_path = data_dir / "config.yaml"
+    config_path.write_text(
+        """listen: 127.0.0.1:3003
+access:
+  type: none
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(sub_app, ["clear", "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    assert "已清空导入节点：inputs=2" in result.output
+    assert "manual.yaml" in result.output
+    assert "other.json" in result.output
+    assert sorted(path.name for path in input_dir.iterdir()) == ["keep.txt"]
+    assert config_path.exists()
 
 
 def test_sub_serve_uses_config_access_and_memory_index(

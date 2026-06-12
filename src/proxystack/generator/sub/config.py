@@ -1071,10 +1071,13 @@ def extract_bundle_inputs_with_result(
     )
 
 
-def clear_managed_input_files(input_dir: Path) -> None:
-    """清理旧订阅 input，确保 replace-all 后 inputs 只来自本次 bundle。"""
+def clear_managed_input_files(input_dir: Path) -> tuple[str, ...]:
+    """清理旧订阅 input，确保 replace-all 或 clear 后 inputs 只保留非导入文件。"""
+    removed_inputs: list[str] = []
     for path in scan_input_files(input_dir):
+        removed_inputs.append(path.name)
         path.unlink()
+    return tuple(removed_inputs)
 
 
 def write_input_atomically(path: Path, content: bytes) -> None:

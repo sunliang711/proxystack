@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import tempfile
 from typing import Optional
 
 import typer
 import uvicorn
 
 from proxystack.cli.common import get_distribution_version
+from proxystack.cli.lifecycle import run_editor
+from proxystack.cli.lifecycle import write_text_if_changed
 from proxystack.generator.sub import BundleImportResult
+from proxystack.generator.sub import clear_managed_input_files
 from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import extract_bundle_inputs_with_result
 from proxystack.generator.sub import find_subscription_template_source
@@ -21,6 +25,9 @@ from proxystack.subserver import SubscriptionState
 from proxystack.subserver import create_app
 from proxystack.subserver.config import apply_cli_overrides
 from proxystack.subserver.config import load_sub_server_config
+from proxystack.subserver.config import load_sub_server_config_file
+from proxystack.subserver.config import resolve_sub_config_path
+from proxystack.subserver.config import sub_server_config_to_yaml
 from proxystack.subserver.config import SubServerConfig
 from proxystack.subserver.watcher import create_input_watcher
 
@@ -62,6 +69,25 @@ def version() -> None:
     typer.echo(f"proxystack-sub {get_distribution_version()}")
 
 
+@app.command("config")
+def config_command(
+    config: Optional[Path] = typer.Option(None, "--config", "-c", help="ps-sub 配置文件路径。"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="订阅服务数据目录；未指定 --config 时用于推导配置路径。"),
+    editor: Optional[str] = typer.Option(None, "--editor", help="覆盖 EDITOR，例如 --editor true。"),
+    check_only: bool = typer.Option(False, "--check-only", help="只校验目标文件，不启动编辑器。"),
+) -> None:
+    """安全编辑 ps-sub config.yaml。"""
+    try:
+        config_path = resolve_sub_config_path(config, data_dir)
+        default_data_dir = data_dir or config_path.parent
+        ensure_sub_config_file(config_path, default_data_dir)
+        path = edit_sub_config(config_path, default_data_dir, editor, check_only)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"配置编辑失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"编辑校验通过：{path}")
+
+
 @app.command("import")
 def import_bundle(
     bundle_path: Path = typer.Argument(..., help="订阅发布包 zip 路径。"),
@@ -80,6 +106,25 @@ def import_bundle(
             echo_command_error(exc)
         raise typer.Exit(code=1) from exc
     echo_import_result(import_result)
+
+
+@app.command("clear")
+def clear(
+    config: Optional[Path] = typer.Option(None, "--config", "-c", help="ps-sub 配置文件路径。"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="订阅服务数据目录；覆盖配置文件。"),
+) -> None:
+    """清空 inputs 目录中已导入的订阅节点。"""
+    try:
+        sub_config = apply_cli_overrides(load_sub_server_config(config, data_dir=data_dir), data_dir=data_dir)
+        input_dir = sub_config.data_dir / "inputs"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        removed_inputs = clear_managed_input_files(input_dir)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"清空导入节点失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"已清空导入节点：inputs={len(removed_inputs)}")
+    for input_name in removed_inputs:
+        typer.echo(f"  - {input_name}")
 
 
 @app.command("serve")
@@ -143,6 +188,38 @@ def echo_import_result(import_result: BundleImportResult) -> None:
         typer.echo("已删除旧 input：")
         for input_name in import_result.removed_inputs:
             typer.echo(f"  - {input_name}")
+
+
+def ensure_sub_config_file(config_path: Path, default_data_dir: Path) -> None:
+    """确保 ps-sub config.yaml 存在；缺失时写入可编辑默认配置。"""
+    if config_path.exists():
+        return
+    config = SubServerConfig(data_dir=default_data_dir)
+    write_text_if_changed(config_path, sub_server_config_to_yaml(config))
+
+
+def edit_sub_config(
+    config_path: Path,
+    default_data_dir: Path,
+    editor: Optional[str],
+    check_only: bool,
+) -> Path:
+    """安全编辑 ps-sub config.yaml，校验通过后再替换原文件。"""
+    if check_only:
+        load_sub_server_config_file(config_path, default_data_dir)
+        return config_path
+    original_text = config_path.read_text(encoding="utf-8")
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".yaml", delete=False) as temp_file:
+        temp_path = Path(temp_file.name)
+        temp_file.write(original_text)
+    try:
+        run_editor(editor, temp_path)
+        load_sub_server_config_file(temp_path, default_data_dir)
+        edited_text = temp_path.read_text(encoding="utf-8")
+        write_text_if_changed(config_path, edited_text)
+    finally:
+        temp_path.unlink(missing_ok=True)
+    return config_path
 
 
 def log_subscription_server_configuration(sub_config: SubServerConfig) -> None:

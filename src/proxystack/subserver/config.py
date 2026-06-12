@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import StringIO
 from pathlib import Path
 from typing import Any
 from typing import Optional
@@ -66,12 +67,26 @@ def load_sub_server_config(
             raise SubscriptionGeneratorError(f"sub config file could not be read: {config_path}")
         return SubServerConfig(data_dir=data_dir or DEFAULT_SUB_DATA_DIR)
     try:
-        config_data = load_yaml_mapping(config_path)
-        if "data_dir" not in config_data:
-            config_data["data_dir"] = config_path.parent
-        return SubServerConfig.model_validate(config_data)
+        return load_sub_server_config_file(config_path, data_dir or config_path.parent)
     except (ValueError, ValidationError) as exc:
         raise SubscriptionGeneratorError(f"invalid sub config file: {config_path}") from exc
+
+
+def load_sub_server_config_file(path: Path, default_data_dir: Path) -> SubServerConfig:
+    """读取指定 ps-sub 配置文件，并用给定目录补齐缺省 data_dir。"""
+    config_data = load_yaml_mapping(path)
+    if "data_dir" not in config_data:
+        config_data["data_dir"] = default_data_dir
+    return SubServerConfig.model_validate(config_data)
+
+
+def sub_server_config_to_yaml(config: SubServerConfig) -> str:
+    """把 ps-sub 配置对象编码为可编辑 YAML。"""
+    yaml = YAML()
+    yaml.default_flow_style = False
+    stream = StringIO()
+    yaml.dump(config.model_dump(mode="json", exclude_none=True), stream)
+    return stream.getvalue()
 
 
 def resolve_sub_config_path(path: Optional[Path], data_dir: Optional[Path]) -> Path:
