@@ -51,11 +51,12 @@ make test
 
 ### 生产环境首次安装
 
-Linux/systemd 环境建议使用仓库内安装脚本完成 bootstrap。脚本负责创建 `/opt/proxystack`、系统用户、Python venv、CLI 链接，并可选安装 systemd unit；mihomo、xray-core 和 geo 数据仍由 `ps-agent setup` 或 `ps-agent install all` 显式安装。
+Linux/systemd 环境建议使用仓库内安装脚本完成 bootstrap，再由 `ps-agent setup` 补齐运行依赖和 systemd unit。安装脚本负责创建 `/opt/proxystack`、系统用户、Python venv 和 CLI 链接；mihomo、xray-core、geo 数据与 systemd unit 由 `ps-agent setup` 显式安装。
 
 ```bash
-sudo scripts/install-agent.sh --install-systemd
+sudo scripts/install-agent.sh
 sudo ps-agent setup
+sudo ps-agent doctor
 ```
 
 默认安装后的主要目录如下：
@@ -93,6 +94,7 @@ sudo scripts/install-agent.sh \
 
 ```bash
 sudo ps-agent setup
+sudo ps-agent doctor
 sudo ps-agent config
 sudo ps-agent add usa1
 sudo ps-agent config usa1

@@ -26,13 +26,16 @@ sudo scripts/install-agent.sh
 
 ```bash
 sudo ps-agent setup
+sudo ps-agent doctor
 sudo ps-agent add usa1
 sudo ps-agent config usa1
 sudo ps-agent check usa1
 sudo ps-agent start usa1
 ```
 
-安装 systemd unit：
+`--install-systemd` 适用于只想在 bootstrap 阶段提前安装 unit、暂不执行 `setup` 下载代理核心的高级场景。普通首次安装优先使用上面的 `ps-agent setup` 主路径。
+
+提前安装 systemd unit：
 
 ```bash
 sudo scripts/install-agent.sh \

@@ -248,12 +248,14 @@ print_next_steps() {
 	local config_path="${BASE_DIR}/config.yaml"
 	local agent_bin="${BIN_DIR}/ps-agent"
 	local setup_command
+	local doctor_command
 	local add_command
 	local edit_command
 	local check_command
 	local start_command
 
 	setup_command="$(quote_command sudo "${agent_bin}" setup --config "${config_path}" --base-dir "${BASE_DIR}")"
+	doctor_command="$(quote_command sudo "${agent_bin}" doctor --config "${config_path}")"
 	add_command="$(quote_command sudo "${agent_bin}" add usa1 --config "${config_path}")"
 	edit_command="$(quote_command sudo "${agent_bin}" config usa1 --config "${config_path}")"
 	check_command="$(quote_command sudo "${agent_bin}" check usa1 --config "${config_path}")"
@@ -262,6 +264,7 @@ print_next_steps() {
 	break_step_line
 	printf 'Next steps:\n' >&2
 	printf '  %s\n' "${setup_command}" >&2
+	printf '  %s\n' "${doctor_command}" >&2
 	printf '  %s\n' "${add_command}" >&2
 	printf '  %s\n' "${edit_command}" >&2
 	printf '  %s\n' "${check_command}" >&2

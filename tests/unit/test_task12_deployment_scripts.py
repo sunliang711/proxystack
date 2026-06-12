@@ -106,6 +106,7 @@ def test_install_agent_dry_run_stays_inside_bootstrap_boundary() -> None:
     assert "proxystack-agent service install" in output
     assert "Next steps:" in output
     assert "ps-agent setup" in output
+    assert "ps-agent doctor" in output
     assert "ps-agent start usa1" in output
     assert "print next steps" not in output
     assert "proxystack-agent install all" not in output
