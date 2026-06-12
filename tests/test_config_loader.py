@@ -16,6 +16,10 @@ from proxystack.domain.validation import validate_stack_set
 from proxystack.graph import ServiceNode
 from proxystack.graph import build_reference_graph
 
+SS2022_SERVER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+SS2022_ALICE_KEY = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+SS2022_BOB_KEY = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
+
 
 def test_load_config_file_reads_yaml_mapping() -> None:
     """验证 fixture 全局配置可以读取为字典。"""
@@ -410,13 +414,13 @@ def test_load_stack_accepts_shadowsocks_2022_users(tmp_path: Path) -> None:
             "      listen: 0.0.0.0\n"
             "      port: 24002\n"
             "      method: 2022-blake3-aes-256-gcm\n"
-            "      password: server-key\n"
+            f"      password: {SS2022_SERVER_KEY}\n"
             "      sub: true\n"
             "      users:\n"
             "        - user: alice\n"
-            "          password: alice-key\n"
+            f"          password: {SS2022_ALICE_KEY}\n"
             "        - user: bob\n"
-            "          password: bob-key\n"
+            f"          password: {SS2022_BOB_KEY}\n"
             "    - name: vmess\n",
         ),
         encoding="utf-8",
@@ -425,7 +429,7 @@ def test_load_stack_accepts_shadowsocks_2022_users(tmp_path: Path) -> None:
     stack = load_stack(stack_path)
 
     inbound = stack.xrelay.inbounds[1]
-    assert [shadowsocks_user.password for shadowsocks_user in inbound.users] == ["alice-key", "bob-key"]
+    assert [shadowsocks_user.password for shadowsocks_user in inbound.users] == [SS2022_ALICE_KEY, SS2022_BOB_KEY]
 
 
 def test_load_stack_rejects_shadowsocks_2022_user_method(tmp_path: Path) -> None:
@@ -440,11 +444,11 @@ def test_load_stack_rejects_shadowsocks_2022_user_method(tmp_path: Path) -> None
             "      listen: 0.0.0.0\n"
             "      port: 24002\n"
             "      method: 2022-blake3-aes-256-gcm\n"
-            "      password: server-key\n"
+            f"      password: {SS2022_SERVER_KEY}\n"
             "      sub: true\n"
             "      users:\n"
             "        - user: alice\n"
-            "          password: alice-key\n"
+            f"          password: {SS2022_ALICE_KEY}\n"
             "          method: aes-256-gcm\n"
             "    - name: vmess\n",
         ),

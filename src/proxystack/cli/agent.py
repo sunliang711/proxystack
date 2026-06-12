@@ -347,13 +347,16 @@ def import_backup(
     try:
         target_base_dir = base_dir or config.parent
         plan = read_native_backup(backup_path, target_base_dir)
-        imported_paths = write_native_backup_plan(plan, config, force)
+        imported_files = write_native_backup_plan(plan, config, force)
     except (ValidationError, ConfigValidationError, ValueError, NativeBackupError, OSError) as exc:
         typer.echo(f"原生配置备份包导入失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"原生配置备份包已导入：{backup_path}")
-    for path in imported_paths:
-        typer.echo(f"  - {path}")
+    for action, path in imported_files:
+        if force:
+            typer.echo(f"  - {action} {path}")
+        else:
+            typer.echo(f"  - {path}")
 
 
 @app.command(rich_help_panel=INSTALL_HELP_PANEL)
@@ -1318,8 +1321,8 @@ def echo_subscription_bundle_summary(
             typer.echo(f"    - {remark}")
 
 
-def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: bool) -> list[Path]:
-    """把已校验的原生备份计划写入目标 agent 目录。"""
+def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: bool) -> list[tuple[str, Path]]:
+    """把已校验的原生备份计划写入目标 agent 目录，并标记写入动作。"""
     ensure_import_stacks_dir_inside_base_dir(plan)
     target_files = [(config_path, plan.config_content)]
     target_files.extend((plan.config.stacks_dir / stack_file.name, stack_file.content) for stack_file in plan.stack_files)
@@ -1328,11 +1331,12 @@ def write_native_backup_plan(plan: NativeBackupPlan, config_path: Path, force: b
         if existing_paths:
             raise ValueError(f"target file already exists: {existing_paths[0]}")
     ensure_project_dirs(plan.config)
-    written_paths: list[Path] = []
+    written_files: list[tuple[str, Path]] = []
     for path, content in target_files:
+        action = "overwritten" if path.exists() else "created"
         write_bytes_if_changed(path, content)
-        written_paths.append(path)
-    return written_paths
+        written_files.append((action, path))
+    return written_files
 
 
 def ensure_import_stacks_dir_inside_base_dir(plan: NativeBackupPlan) -> None:

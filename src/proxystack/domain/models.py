@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from pathlib import Path
 from string import Formatter
 from typing import Annotated
@@ -24,6 +26,11 @@ SHADOWSOCKS_2022_METHODS = {
     "2022-blake3-aes-128-gcm",
     "2022-blake3-aes-256-gcm",
     "2022-blake3-chacha20-poly1305",
+}
+SHADOWSOCKS_2022_KEY_LENGTHS = {
+    "2022-blake3-aes-128-gcm": 16,
+    "2022-blake3-aes-256-gcm": 32,
+    "2022-blake3-chacha20-poly1305": 32,
 }
 
 
@@ -390,6 +397,7 @@ class Inbound(ProxystackModel):
                 raise ValueError("password is required for shadowsocks inbound")
             if not (self.method or self.cipher):
                 raise ValueError("method or cipher is required for shadowsocks inbound")
+            self.validate_shadowsocks_2022_passwords()
             if self.users:
                 if self.user or self.remark:
                     raise ValueError("user and remark must be configured under shadowsocks users")
@@ -432,6 +440,25 @@ class Inbound(ProxystackModel):
             if is_shadowsocks_2022_method(inbound_method) and (shadowsocks_user.method or shadowsocks_user.cipher):
                 raise ValueError("shadowsocks 2022 users must not set method or cipher")
 
+    def validate_shadowsocks_2022_passwords(self) -> None:
+        """校验 SS2022 的 ServerPassword 和 UserPassword 都是合法 base64 PSK。"""
+        inbound_method = self.method or self.cipher or ""
+        if not is_shadowsocks_2022_method(inbound_method):
+            return
+        validate_shadowsocks_2022_psk(
+            self.password or "",
+            inbound_method,
+            "shadowsocks 2022 inbound password",
+        )
+        for shadowsocks_user in self.users:
+            if not shadowsocks_user.password:
+                continue
+            validate_shadowsocks_2022_psk(
+                shadowsocks_user.password,
+                inbound_method,
+                f"shadowsocks 2022 user password for {shadowsocks_user.user}",
+            )
+
 
 def inbound_user_email(inbound_user: InboundUser) -> str:
     """返回 Xray 用户统计 email，未显式配置时使用业务 user 标识。"""
@@ -441,6 +468,17 @@ def inbound_user_email(inbound_user: InboundUser) -> str:
 def is_shadowsocks_2022_method(method: str) -> bool:
     """判断 shadowsocks method 是否属于 SS2022 方法。"""
     return method in SHADOWSOCKS_2022_METHODS
+
+
+def validate_shadowsocks_2022_psk(value: str, method: str, label: str) -> None:
+    """校验 SS2022 PSK 是 base64 字符串，且解码长度符合 method 要求。"""
+    try:
+        decoded = base64.b64decode(value.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise ValueError(f"{label} must be a base64-encoded PSK for {method}") from exc
+    expected_length = SHADOWSOCKS_2022_KEY_LENGTHS[method]
+    if len(decoded) != expected_length:
+        raise ValueError(f"{label} must decode to {expected_length} bytes for {method}")
 
 
 class XrelayOutbound(ProxystackModel):

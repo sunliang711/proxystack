@@ -98,6 +98,7 @@ shadowsocks 规则：
 - `users` 非空时启用多用户，生成到 Xray `settings.users[]`。
 - 传统 SS 多用户允许 `users[].method` 或 `users[].cipher` 覆盖单个用户 method，未配置时继承 inbound method。
 - SS2022 多用户不允许配置 `users[].method` 或 `users[].cipher`，统一使用 inbound method。
+- SS2022 的 inbound `password` 和 `users[].password` 必须是 base64 PSK；`2022-blake3-aes-128-gcm` 使用 16 字节 key，`2022-blake3-aes-256-gcm` 和 `2022-blake3-chacha20-poly1305` 使用 32 字节 key。
 - SS2022 订阅节点密码使用 `ServerPassword:UserPassword`，其中 ServerPassword 来自 inbound `password`，UserPassword 来自 `users[].password`。
 - 支持 method：`2022-blake3-aes-128-gcm`、`2022-blake3-aes-256-gcm`、`2022-blake3-chacha20-poly1305`、`aes-256-gcm`、`aes-128-gcm`、`chacha20-poly1305`、`chacha20-ietf-poly1305`、`xchacha20-poly1305`、`xchacha20-ietf-poly1305`、`none`、`plain`。
 

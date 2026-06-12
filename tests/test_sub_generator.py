@@ -31,6 +31,9 @@ from proxystack.generator.sub import write_bundle
 from proxystack.subserver import SubscriptionState
 
 runner = CliRunner()
+SS2022_SERVER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+SS2022_ALICE_KEY = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+SS2022_BOB_KEY = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
 
 
 def test_render_stack_input_filters_sub_true_and_protocol_fields() -> None:
@@ -173,16 +176,16 @@ def test_render_stack_input_expands_shadowsocks_2022_users() -> None:
                         "listen": "0.0.0.0",
                         "port": 24001,
                         "method": "2022-blake3-aes-256-gcm",
-                        "password": "server-key",
+                        "password": SS2022_SERVER_KEY,
                         "sub": True,
                         "users": [
                             {
                                 "user": "alice",
-                                "password": "alice-key",
+                                "password": SS2022_ALICE_KEY,
                             },
                             {
                                 "user": "bob",
-                                "password": "bob-key",
+                                "password": SS2022_BOB_KEY,
                             },
                         ],
                     }
@@ -196,8 +199,8 @@ def test_render_stack_input_expands_shadowsocks_2022_users() -> None:
 
     assert list(nodes) == ["edge:ss2022:alice", "edge:ss2022:bob"]
     assert nodes["edge:ss2022:alice"].method == "2022-blake3-aes-256-gcm"
-    assert nodes["edge:ss2022:alice"].password == "server-key:alice-key"
-    assert nodes["edge:ss2022:bob"].password == "server-key:bob-key"
+    assert nodes["edge:ss2022:alice"].password == f"{SS2022_SERVER_KEY}:{SS2022_ALICE_KEY}"
+    assert nodes["edge:ss2022:bob"].password == f"{SS2022_SERVER_KEY}:{SS2022_BOB_KEY}"
 
 
 def test_render_stack_input_can_preserve_legacy_remarks() -> None:

@@ -311,7 +311,8 @@ vmess 只支持 `users` 结构；单用户也写成一条 `users` 记录。
 shadowsocks 可以继续使用顶层 `method/password/user/remark` 表达单用户，也可以使用 `users` 表达多用户。
 
 - 传统 SS 多用户：inbound 顶层 `method/password` 仍要配置；`users[].method` 可覆盖单个用户的 method，未配置时继承 inbound method。
-- SS2022 多用户：inbound 顶层 `method` 必须是 SS2022 method，顶层 `password` 是 ServerPassword；`users[].password` 是 UserPassword；订阅侧密码会生成 `ServerPassword:UserPassword`。
+- SS2022 多用户：inbound 顶层 `method` 必须是 SS2022 method，顶层 `password` 是 base64 PSK 格式的 ServerPassword；`users[].password` 是 base64 PSK 格式的 UserPassword；订阅侧密码会生成 `ServerPassword:UserPassword`。
+- SS2022 PSK 长度取决于 method：`2022-blake3-aes-128-gcm` 需要 `openssl rand -base64 16`；`2022-blake3-aes-256-gcm` 和 `2022-blake3-chacha20-poly1305` 需要 `openssl rand -base64 32`。
 - SS2022 users 不允许配置 `users[].method` 或 `users[].cipher`。
 - shadowsocks 多用户不使用 inbound 顶层 `user/remark`，必须写在 `users[]` 中。
 - 同一 inbound 内 `users[].user`、最终 email 和最终订阅 tag 不能重复。
@@ -327,16 +328,16 @@ shadowsocks 可以继续使用顶层 `method/password/user/remark` 表达单用�
   listen: 0.0.0.0
   port: 4302
   method: 2022-blake3-aes-256-gcm
-  password: server-key
+  password: <server-psk-from-openssl-rand-base64-32>
   udp: true
   sub: true
   users:
     - user: alice
-      password: alice-key
+      password: <alice-psk-from-openssl-rand-base64-32>
       email: alice@example.com
       remark: alice ss2022
     - user: bob
-      password: bob-key
+      password: <bob-psk-from-openssl-rand-base64-32>
       remark: bob ss2022
 ```
 

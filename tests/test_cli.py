@@ -1159,6 +1159,27 @@ def test_agent_native_backup_import_refuses_existing_files_without_force(tmp_pat
     assert "target file already exists" in result.output
 
 
+def test_agent_native_backup_import_force_reports_created_and_overwritten_files(tmp_path: Path) -> None:
+    """验证 --force 导入原生备份包时区分展示新建和覆盖文件。"""
+    source_config = copy_example_project(tmp_path / "source")
+    backup = tmp_path / "proxystack-backup.zip"
+    target_config = tmp_path / "target" / "config.yaml"
+    export_result = runner.invoke(agent_app, ["export", "-o", str(backup), "-c", str(source_config)])
+    first_import = runner.invoke(agent_app, ["import", str(backup), "-c", str(target_config)])
+    created_stack = target_config.parent / "stacks" / "usa2.yaml"
+    target_config.write_text("stale config\n", encoding="utf-8")
+    created_stack.unlink()
+
+    result = runner.invoke(agent_app, ["import", "--force", str(backup), "-c", str(target_config)])
+
+    assert export_result.exit_code == 0
+    assert first_import.exit_code == 0
+    assert result.exit_code == 0, result.output
+    assert f"  - overwritten {target_config}" in result.output
+    assert f"  - overwritten {target_config.parent / 'stacks' / 'usa1.yaml'}" in result.output
+    assert f"  - created {created_stack}" in result.output
+
+
 def test_agent_native_backup_import_rejects_subscription_bundle(tmp_path: Path) -> None:
     """验证 agent 原生导入拒绝误导入 sub-bundle.zip。"""
     sub_bundle = tmp_path / "sub-bundle.zip"

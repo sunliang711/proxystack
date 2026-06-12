@@ -18,6 +18,9 @@ from proxystack.generator.xray import dumps_xray_config
 from proxystack.generator.xray import normalize_internal_endpoint_address
 
 GOLDEN_DIR = Path("tests/golden/xray")
+SS2022_SERVER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+SS2022_ALICE_KEY = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+SS2022_BOB_KEY = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI="
 
 
 @pytest.mark.parametrize(
@@ -164,16 +167,16 @@ def test_render_xray_shadowsocks_2022_inbound_supports_multiple_users() -> None:
                     "listen": "0.0.0.0",
                     "port": 26001,
                     "method": "2022-blake3-aes-256-gcm",
-                    "password": "server-key",
+                    "password": SS2022_SERVER_KEY,
                     "sub": True,
                     "users": [
                         {
                             "user": "alice",
-                            "password": "alice-key",
+                            "password": SS2022_ALICE_KEY,
                         },
                         {
                             "user": "bob",
-                            "password": "bob-key",
+                            "password": SS2022_BOB_KEY,
                         },
                     ],
                 }
@@ -185,19 +188,71 @@ def test_render_xray_shadowsocks_2022_inbound_supports_multiple_users() -> None:
 
     assert rendered_config["inbounds"][0]["settings"] == {
         "method": "2022-blake3-aes-256-gcm",
-        "password": "server-key",
+        "password": SS2022_SERVER_KEY,
         "network": "tcp",
         "users": [
             {
-                "password": "alice-key",
+                "password": SS2022_ALICE_KEY,
                 "email": "alice",
             },
             {
-                "password": "bob-key",
+                "password": SS2022_BOB_KEY,
                 "email": "bob",
             },
         ],
     }
+
+
+def test_shadowsocks_2022_rejects_non_base64_psk() -> None:
+    """验证 SS2022 password 不是 base64 PSK 时在配置校验阶段失败。"""
+    with pytest.raises(ValueError, match="shadowsocks 2022 inbound password must be a base64-encoded PSK"):
+        make_stack(
+            "ss2022",
+            {"type": "direct"},
+            [
+                {
+                    "name": "ss2022",
+                    "protocol": "shadowsocks",
+                    "listen": "0.0.0.0",
+                    "port": 26001,
+                    "method": "2022-blake3-aes-256-gcm",
+                    "password": "server-key",
+                    "sub": True,
+                    "users": [
+                        {
+                            "user": "alice",
+                            "password": SS2022_ALICE_KEY,
+                        },
+                    ],
+                }
+            ],
+        )
+
+
+def test_shadowsocks_2022_rejects_wrong_psk_length() -> None:
+    """验证 SS2022 password base64 解码长度和 method 不匹配时失败。"""
+    with pytest.raises(ValueError, match="shadowsocks 2022 user password for alice must decode to 32 bytes"):
+        make_stack(
+            "ss2022",
+            {"type": "direct"},
+            [
+                {
+                    "name": "ss2022",
+                    "protocol": "shadowsocks",
+                    "listen": "0.0.0.0",
+                    "port": 26001,
+                    "method": "2022-blake3-aes-256-gcm",
+                    "password": SS2022_SERVER_KEY,
+                    "sub": True,
+                    "users": [
+                        {
+                            "user": "alice",
+                            "password": "AAAAAAAAAAAAAAAAAAAAAA==",
+                        },
+                    ],
+                }
+            ],
+        )
 
 
 def test_render_xray_socks5_outbound_matches_golden() -> None:
