@@ -40,6 +40,10 @@ clash:
       - name: local
         listen: 127.0.0.1
         port: 17093
+    http:
+      - name: local
+        listen: 127.0.0.1
+        port: 18093
   upstreams:
     - name: usa1-local
       type: xrelay-socks5

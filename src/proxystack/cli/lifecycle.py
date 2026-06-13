@@ -210,6 +210,7 @@ subscription:
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 7001-7101
+  clash_http: 7201-7301
   xray_api_range: 10001-10999
   clash_controller: 19000-19999
 
@@ -483,7 +484,7 @@ def rewrite_ref_string(value: str, source: str, target: str) -> str:
 
 
 def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> None:
-    """按全局端口池为 stack 内 xrelay inbound、Xray API、clash socks 和 controller 分配端口。"""
+    """按全局端口池为 stack 内 xrelay inbound、Xray API、clash listener 和 controller 分配端口。"""
     used_ports = collect_used_ports(config)
     xrelay_data = stack_data.setdefault("xrelay", {})
     inbounds = xrelay_data.get("inbounds", [])
@@ -498,6 +499,11 @@ def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> No
     socks_ports = allocate_from_range(config.port_ranges.clash_socks.start, config.port_ranges.clash_socks.end, used_ports, len(socks_listeners))
     for socks_data, port in zip(socks_listeners, socks_ports):
         socks_data["port"] = port
+        used_ports.add(port)
+    http_listeners = listener_data.get("http", [])
+    http_ports = allocate_from_range(config.port_ranges.clash_http.start, config.port_ranges.clash_http.end, used_ports, len(http_listeners))
+    for http_data, port in zip(http_listeners, http_ports):
+        http_data["port"] = port
         used_ports.add(port)
 
     api_data = xrelay_data.get("api", {})
@@ -587,6 +593,7 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
     rows: list[dict[str, str]] = []
     for stack in stack_set.stacks:
         clash_ports = ",".join(str(listener.port) for listener in stack.clash.listeners.socks)
+        clash_http_ports = ",".join(str(listener.port) for listener in stack.clash.listeners.http)
         generated_components = generated_stack_components(generated_dir, stack)
         running_components = running_stack_components(stack)
         rows.append(
@@ -601,6 +608,7 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
                 "xrelay_ports": format_xrelay_inbounds(stack.xrelay.inbounds),
                 "xrelay_api_port": format_xrelay_api_port(config, stack),
                 "clash_socks": clash_ports or "-",
+                "clash_http": clash_http_ports or "-",
                 "clash_controller": stack.clash.controller.listen,
             }
         )

@@ -46,6 +46,7 @@ def test_render_mihomo_output_is_yaml() -> None:
 
     assert parsed_config["ipv6"] is True
     assert parsed_config["socks-port"] == 17093
+    assert parsed_config["port"] == 18093
     assert [proxy["name"] for proxy in parsed_config["proxies"]] == ["usa1-local", "usa2-local"]
 
 
@@ -217,6 +218,36 @@ def test_render_mihomo_requires_one_socks_listener() -> None:
         dumps_mihomo_config(stack_set, "nolisten")
 
 
+def test_render_mihomo_http_listener_uses_port_field() -> None:
+    """验证 HTTP listener 会生成 mihomo 的 HTTP 代理 port 字段。"""
+    stack_set = make_stack_set(
+        make_stack(
+            "http",
+            listeners={
+                "socks": [socks_listener()],
+                "http": [http_listener()],
+            },
+        )
+    )
+
+    rendered_config = render_mihomo_config(stack_set, "http")
+
+    assert rendered_config["socks-port"] == 17001
+    assert rendered_config["port"] == 18001
+
+
+def test_clash_http_listener_requires_same_listen_as_socks() -> None:
+    """验证 P0 的 HTTP listener 必须和 socks listener 使用同一监听地址。"""
+    with pytest.raises(ValueError, match="same listen address"):
+        make_stack(
+            "http",
+            listeners={
+                "socks": [socks_listener()],
+                "http": [http_listener(listen="0.0.0.0")],
+            },
+        )
+
+
 def test_clash_mixed_listener_rejected_by_model() -> None:
     """验证 listeners.mixed 会在模型校验阶段失败，生成器不会静默忽略。"""
     with pytest.raises(ValueError, match="listeners.mixed is not supported in P0"):
@@ -303,6 +334,15 @@ def socks_listener() -> dict[str, Any]:
         "name": "local",
         "listen": "127.0.0.1",
         "port": 17001,
+    }
+
+
+def http_listener(listen: str = "127.0.0.1") -> dict[str, Any]:
+    """生成默认 clash HTTP listener。"""
+    return {
+        "name": "local",
+        "listen": listen,
+        "port": 18001,
     }
 
 

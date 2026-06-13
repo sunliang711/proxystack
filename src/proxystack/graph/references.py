@@ -128,7 +128,7 @@ def index_xrelay_inbounds(stack: Stack) -> dict[str, Endpoint]:
 
 
 def index_clash_listeners(stack: Stack) -> dict[str, Endpoint]:
-    """建立单个 stack 的唯一 clash socks listener 三段 ref 索引。"""
+    """建立单个 stack 的 clash listener 三段 ref 索引。"""
     endpoints: dict[str, Endpoint] = {}
     for listener_index, listener in enumerate(stack.clash.listeners.socks):
         ref = f"{stack.name}.clash.socks"
@@ -141,5 +141,17 @@ def index_clash_listeners(stack: Stack) -> dict[str, Endpoint]:
             listen=listener.listen,
             port=listener.port,
             path=f"stacks.{stack.name}.clash.listeners.socks[{listener_index}]",
+        )
+    for listener_index, listener in enumerate(stack.clash.listeners.http):
+        ref = f"{stack.name}.clash.http"
+        endpoints[ref] = Endpoint(
+            ref=ref,
+            stack=stack.name,
+            component="clash",
+            kind="http",
+            name=listener.name,
+            listen=listener.listen,
+            port=listener.port,
+            path=f"stacks.{stack.name}.clash.listeners.http[{listener_index}]",
         )
     return endpoints

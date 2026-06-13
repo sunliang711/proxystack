@@ -103,6 +103,7 @@ class PortRanges(ProxystackModel):
 
     xrelay_inbound: PortRange
     clash_socks: PortRange
+    clash_http: PortRange
     xray_api_range: PortRange
     clash_controller: PortRange
 
@@ -614,10 +615,26 @@ class SocksListener(ProxystackModel):
         return value
 
 
+class HttpListener(ProxystackModel):
+    """mihomo HTTP listener 配置。"""
+
+    name: Name
+    listen: str = "127.0.0.1"
+    port: Port
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """校验 listener 名称适合作为 ref 片段。"""
+        validate_identifier(value, "listener name")
+        return value
+
+
 class ClashListeners(ProxystackModel):
-    """mihomo listener 集合，P0 只支持一个 socks listener。"""
+    """mihomo listener 集合，P0 支持一个 socks listener 和一个 HTTP listener。"""
 
     socks: list[SocksListener] = Field(default_factory=list)
+    http: list[HttpListener] = Field(default_factory=list)
     mixed: Optional[Any] = None
 
     @model_validator(mode="after")
@@ -627,7 +644,12 @@ class ClashListeners(ProxystackModel):
             raise ValueError("listeners.mixed is not supported in P0")
         if len(self.socks) > 1:
             raise ValueError("only one socks listener is supported in P0")
+        if len(self.http) > 1:
+            raise ValueError("only one http listener is supported in P0")
         ensure_unique([listener.name for listener in self.socks], "duplicate socks listener name")
+        ensure_unique([listener.name for listener in self.http], "duplicate http listener name")
+        if self.socks and self.http and self.socks[0].listen != self.http[0].listen:
+            raise ValueError("socks and http listeners must use the same listen address in P0")
         return self
 
 

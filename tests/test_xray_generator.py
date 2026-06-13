@@ -16,6 +16,7 @@ from proxystack.domain.models import StackSet
 from proxystack.generator.xray import XrayGeneratorError
 from proxystack.generator.xray import dumps_xray_config
 from proxystack.generator.xray import normalize_internal_endpoint_address
+from proxystack.graph import ReferenceGraphError
 
 GOLDEN_DIR = Path("tests/golden/xray")
 SS2022_SERVER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -314,6 +315,37 @@ def test_render_xray_clash_wildcard_listener_matches_golden() -> None:
     )
 
 
+def test_render_xray_clash_http_listener_rejected() -> None:
+    """验证 xray 的 clash outbound 不能引用 HTTP listener。"""
+    stack_set = make_stack_set(
+        make_stack(
+            "httpclash",
+            {"type": "clash", "ref": "httpclash.clash.http"},
+            [socks_noauth_inbound()],
+            clash_enabled=True,
+            clash_listeners={
+                "socks": [
+                    {
+                        "name": "local",
+                        "listen": "127.0.0.1",
+                        "port": 17001,
+                    }
+                ],
+                "http": [
+                    {
+                        "name": "local",
+                        "listen": "127.0.0.1",
+                        "port": 18001,
+                    }
+                ],
+            },
+        )
+    )
+
+    with pytest.raises(ReferenceGraphError, match="must target socks listener"):
+        dumps_xray_config(stack_set, "httpclash")
+
+
 @pytest.mark.parametrize(
     ("address", "expected_address"),
     [
@@ -468,6 +500,7 @@ def make_stack(
     xrelay_enabled: bool = True,
     clash_enabled: bool = False,
     listener_listen: str = "127.0.0.1",
+    clash_listeners: Optional[dict[str, Any]] = None,
     xrelay_overrides: Optional[dict[str, Any]] = None,
 ) -> Stack:
     """生成测试用 stack 模型，避免 golden 测试依赖额外 YAML 文件。"""
@@ -501,7 +534,7 @@ def make_stack(
                     "listen": "127.0.0.1:19001",
                     "secret": "demo-secret",
                 },
-                "listeners": {
+                "listeners": clash_listeners or {
                     "socks": [
                         {
                             "name": "local",

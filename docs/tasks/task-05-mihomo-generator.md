@@ -10,11 +10,11 @@
 
 - 新建 `src/proxystack/generator/mihomo`。
 - 生成 map/struct 后通过 YAML encoder 输出。
-- P0 只支持一个 socks listener；mixed listener 预留到 P1。
+- P0 支持一个 socks listener 和一个可选 HTTP listener；mixed listener 预留到 P1。
 
 ## 实现步骤
 
-1. 已生成基础字段：`mode`、`allow-lan`、`bind-address`、`external-controller`、`secret`、`socks-port`。
+1. 已生成基础字段：`mode`、`allow-lan`、`bind-address`、`external-controller`、`secret`、`socks-port` 和可选 HTTP 代理 `port`。
 2. 已通过结构化 dict/list 和 YAML encoder 输出 mihomo YAML。
 3. 已生成 raw upstream 到 `proxies`，并强制使用 upstream 名称作为 proxy `name`。
 4. 已生成 `xrelay-socks5` upstream 到本机 socks5 proxy，支持 wildcard listen 归一和 password auth。

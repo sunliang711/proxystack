@@ -36,6 +36,8 @@ port_ranges:
   xrelay_inbound: 4300-4399
   # mihomo/clash socks listener 自动分配端口范围。
   clash_socks: 7001-7101
+  # mihomo/clash HTTP listener 自动分配端口范围。
+  clash_http: 7201-7301
   # Xray API 自动分配端口范围。
   xray_api_range: 10001-10999
   # mihomo/clash REST controller 自动分配端口范围。

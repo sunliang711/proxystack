@@ -50,6 +50,10 @@ clash:
       - name: local
         listen: 127.0.0.1
         port: 17091
+    http:
+      - name: local
+        listen: 127.0.0.1
+        port: 18091
   upstreams:
     - name: server-a
       type: raw

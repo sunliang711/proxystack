@@ -1032,6 +1032,7 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
             "xrelay_ports": row["xrelay_ports"],
             "xray_api": row["xrelay_api_port"],
             "clash_socks": row["clash_socks"],
+            "clash_http": row["clash_http"],
             "clash_controller": row["clash_controller"],
         }
         for row in rows
@@ -1046,6 +1047,7 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
         ("xrelay_ports", "Xrelay Ports"),
         ("xray_api", "Xray API"),
         ("clash_socks", "Clash Socks"),
+        ("clash_http", "Clash HTTP"),
         ("clash_controller", "Clash Controller"),
     ]
     widths = {

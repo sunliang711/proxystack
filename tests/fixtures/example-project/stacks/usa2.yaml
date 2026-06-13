@@ -40,6 +40,10 @@ clash:
       - name: local
         listen: 127.0.0.1
         port: 17092
+    http:
+      - name: local
+        listen: 127.0.0.1
+        port: 18092
   upstreams:
     - name: server-b
       type: raw

@@ -301,6 +301,8 @@ def render_clash_outbound(outbound: XrelayOutbound, graph: ReferenceGraph, outbo
     endpoint = graph.index.resolve_clash_listener(outbound.ref or "")
     if endpoint is None:
         raise XrayGeneratorError(f"clash listener ref does not exist: {outbound.ref}")
+    if endpoint.kind != "socks":
+        raise XrayGeneratorError(f"clash listener ref must target socks listener: {outbound.ref}")
     return render_proxy_outbound(
         "socks",
         normalize_internal_endpoint_address(endpoint.listen),

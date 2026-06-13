@@ -163,13 +163,14 @@ ipv6: true
 external-controller: 127.0.0.1:19091
 ```
 
-P0 只支持一个 socks listener。配置中 socks listener 多于一个时，校验层必须报错，生成器不能静默选择第一个：
+P0 支持一个 socks listener 和一个可选 HTTP listener。配置中同类 listener 多于一个时，校验层必须报错，生成器不能静默选择第一个；同时配置 socks 和 HTTP 时，两者必须使用相同 `listen`，因为基础端口共享 `bind-address`：
 
 ```yaml
 socks-port: 17091
+port: 18091
 ```
 
-`listeners.mixed` 和 `mixed-port` 预留到 P1。P0 如果遇到 mixed listener，应在校验阶段报错并提示暂不支持。如未来需要多个 mihomo listener，再扩展到 mihomo 的高级 listeners 配置。
+`listeners.mixed` 和 `mixed-port` 预留到 P1。P0 如果遇到 mixed listener，应在校验阶段报错并提示暂不支持，不用 `mixed-port` 替换 `socks-port`。如未来需要多个 mihomo listener，再扩展到 mihomo 的高级 listeners 配置。
 
 ### upstreams -> proxies
 

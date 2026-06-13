@@ -71,6 +71,8 @@ flowchart LR
   inbound --> xray["Xray"]
   xray --> clash_socks["mihomo 本地 socks 端口"]
   clash_socks --> mihomo["mihomo"]
+  http_client["本机 HTTP 代理客户端"] --> clash_http["mihomo 本地 HTTP 端口"]
+  clash_http --> mihomo
   mihomo --> upstream["真实上游节点或本机 xrelay inbound"]
 ```
 

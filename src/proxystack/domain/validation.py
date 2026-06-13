@@ -119,6 +119,14 @@ def collect_port_bindings(stack_set: StackSet) -> list[PortBinding]:
                     path=f"stacks.{stack.name}.clash.listeners.socks[{listener_index}].port",
                 )
             )
+        for listener_index, listener in enumerate(stack.clash.listeners.http):
+            bindings.append(
+                PortBinding(
+                    host=listener.listen,
+                    port=listener.port,
+                    path=f"stacks.{stack.name}.clash.listeners.http[{listener_index}].port",
+                )
+            )
         controller_host, controller_port = parse_listen(stack.clash.controller.listen)
         bindings.append(
             PortBinding(

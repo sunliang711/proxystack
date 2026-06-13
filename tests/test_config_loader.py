@@ -749,6 +749,18 @@ def test_config_requires_xray_api_range(tmp_path: Path) -> None:
         load_config(config_path)
 
 
+def test_config_requires_clash_http_range(tmp_path: Path) -> None:
+    """验证全局端口池必须显式配置 clash HTTP 端口范围。"""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        valid_config_yaml(tmp_path).replace("  clash_http: 7201-7301\n", ""),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="clash_http"):
+        load_config(config_path)
+
+
 def test_config_rejects_removed_subscription_remark_policy(tmp_path: Path) -> None:
     """验证旧订阅命名策略配置不再被接受。"""
     config_path = tmp_path / "config.yaml"
@@ -788,6 +800,7 @@ subscription:
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 7001-7101
+  clash_http: 7201-7301
   xray_api_range: 10001-10999
   clash_controller: 19000-19999
 """

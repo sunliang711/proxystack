@@ -3,9 +3,10 @@ log-level: info
 ipv6: true
 allow-lan: false
 bind-address: 127.0.0.1
+socks-port: 17093
+port: 18093
 external-controller: 127.0.0.1:19093
 secret: demo-auto-clash-api-secret
-socks-port: 17093
 proxies:
   - name: usa1-local
     type: socks5

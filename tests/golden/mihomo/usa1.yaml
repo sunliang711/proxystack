@@ -3,9 +3,10 @@ log-level: info
 ipv6: true
 allow-lan: false
 bind-address: 127.0.0.1
+socks-port: 17091
+port: 18091
 external-controller: 127.0.0.1:19091
 secret: demo-usa1-clash-api-secret
-socks-port: 17091
 proxies:
   - name: server-a
     type: vmess

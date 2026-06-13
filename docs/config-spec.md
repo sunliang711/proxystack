@@ -69,6 +69,7 @@ subscription:
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 7001-7101
+  clash_http: 7201-7301
   xray_api_range: 10001-10999
   clash_controller: 19000-19999
 
@@ -120,7 +121,7 @@ install:
 - `external_host`：订阅节点默认对外 host；发布订阅前必须取消注释并设置为真实域名或公网 IP，`sub export` 会在缺失时失败。
 - `subscription`：agent 生成订阅 input/index 和导出发布包时使用的默认参数。
 - `sub/config.yaml`：订阅服务自身配置，默认来自 `src/proxystack/templates/sub-config.yaml`；实际 HTTP 服务只读取这里的 `listen`、`access`、`templates_dir`、`watch_*` 和 `managed_config`。
-- `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池；`xrelay_inbound` 分配入口端口，`xray_api_range` 分配 Xray API，`clash_socks` 分配 mihomo/clash socks listener，`clash_controller` 分配 mihomo/clash REST controller。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
+- `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池；`xrelay_inbound` 分配入口端口，`xray_api_range` 分配 Xray API，`clash_socks` 分配 mihomo/clash socks listener，`clash_http` 分配 mihomo/clash HTTP listener，`clash_controller` 分配 mihomo/clash REST controller。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。
 - `install`：二进制安装和更新默认版本。
@@ -192,6 +193,10 @@ clash:
       - name: local
         listen: 127.0.0.1
         port: 17091
+    http:
+      - name: local
+        listen: 127.0.0.1
+        port: 18091
   upstreams:
     - name: server-a
       type: raw
@@ -372,7 +377,7 @@ xrelay 的 `outbound.type` 支持：
 
 | type | 含义 | 首期状态 |
 | --- | --- | --- |
-| `clash` | 指向某个 mihomo 本地 socks 监听端口；mixed listener 预留到 P1 | P0 |
+| `clash` | 指向某个 mihomo 本地 socks 监听端口；HTTP listener 只用于本地客户端接入，mixed listener 预留到 P1 | P0 |
 | `socks5` | 指向外部 socks5 代理，支持 username/password | P0 |
 | `http` | 指向外部 http 代理，支持 username/password | P0 |
 | `direct` | Xray freedom outbound | P0 |
@@ -395,7 +400,7 @@ ref 三段含义：
 
 - 第一段 `usa1`：目标 stack 名称。
 - 第二段 `clash`：目标组件类型。
-- 第三段 `socks`：目标 listener 类型，当前只支持唯一 socks listener。
+- 第三段 `socks`：目标 listener 类型；xrelay outbound 只支持引用唯一 socks listener。
 
 这样 xrelay 不需要重复填写 clash 的 socks 端口；端口只在目标 stack 的 `clash.listeners` 中声明一次。
 
@@ -415,7 +420,7 @@ mode: Rule
 - `Global`：所有流量交给 `GLOBAL` 代理组，适合临时测试。
 - `Direct`：全部直连，适合排障。
 
-P0 中只生成 `listeners.socks`，并且最多允许一个条目。`listeners.mixed` 作为 P1 预留字段，P0 校验层如果遇到该字段应报错并提示暂不支持，不能静默忽略或生成 `mixed-port`。
+P0 中生成 `listeners.socks` 和可选的 `listeners.http`，两者都最多允许一个条目；同时配置时必须使用相同 `listen`，因为 mihomo 基础端口共享 `bind-address`。`listeners.socks` 生成 `socks-port`，`listeners.http` 生成 HTTP 代理 `port`。`listeners.mixed` 作为 P1 预留字段，P0 校验层如果遇到该字段应报错并提示暂不支持，不能静默忽略或生成 `mixed-port`。
 
 ### rules
 

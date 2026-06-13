@@ -398,6 +398,7 @@ def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: P
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
     assert config_data["port_ranges"]["xrelay_inbound"] == "24000-24999"
+    assert config_data["port_ranges"]["clash_http"] == "7201-7301"
     assert config_data["port_ranges"]["xray_api_range"] == "10001-10999"
 
 
@@ -451,7 +452,9 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     assert "xrelay,clash  xrelay" in result.output
     assert "Xrelay Ports" in result.output
     assert "Xray API" in result.output
+    assert "Clash HTTP" in result.output
     assert "10091" in result.output
+    assert "18091" in result.output
     assert "socks5:24001,vmess:24101" in result.output
     assert "alice/socks5:24001" not in result.output
 
@@ -487,6 +490,8 @@ def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path
     assert [inbound["port"] for inbound in usa2["xrelay"]["inbounds"]] == [4302, 4303]
     assert usa1["clash"]["listeners"]["socks"][0]["port"] == 7001
     assert usa2["clash"]["listeners"]["socks"][0]["port"] == 7002
+    assert usa1["clash"]["listeners"]["http"][0]["port"] == 7201
+    assert usa2["clash"]["listeners"]["http"][0]["port"] == 7202
     assert usa1["xrelay"]["api"]["listen"] == "127.0.0.1:10001"
     assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:11001"
     assert usa2["xrelay"]["api"]["listen"] == "127.0.0.1:10002"
@@ -514,6 +519,8 @@ def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
     assert cloned_stack["xrelay"]["inbounds"][0]["port"] != source_stack["xrelay"]["inbounds"][0]["port"]
     assert cloned_stack["xrelay"]["api"]["listen"] == "127.0.0.1:10001"
     assert cloned_stack["clash"]["listeners"]["socks"][0]["port"] != source_stack["clash"]["listeners"]["socks"][0]["port"]
+    assert cloned_stack["clash"]["listeners"]["http"][0]["port"] != source_stack["clash"]["listeners"]["http"][0]["port"]
+    assert cloned_stack["clash"]["listeners"]["http"][0]["port"] == 7201
     assert cloned_stack["clash"]["controller"]["listen"] == "127.0.0.1:19000"
 
 
@@ -529,6 +536,7 @@ def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatc
     inbound_ports = [inbound["port"] for inbound in stack_data["xrelay"]["inbounds"]]
     assert inbound_ports == [4300, 4301]
     assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 7001
+    assert stack_data["clash"]["listeners"]["http"][0]["port"] == 7201
     assert stack_data["xrelay"]["api"]["listen"] == "127.0.0.1:10001"
     assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:11001"
 
@@ -1315,6 +1323,7 @@ subscription:
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 7001-7101
+  clash_http: 7201-7301
   xray_api_range: 10001-10999
   clash_controller: 19000-19999
 """
@@ -2010,6 +2019,7 @@ subscription:
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 7001-7101
+  clash_http: 7201-7301
   xray_api_range: 10001-10999
   clash_controller: 19000-19999
 """.lstrip(),

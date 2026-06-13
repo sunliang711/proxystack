@@ -5,12 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 from io import StringIO
 from typing import Any
+from typing import Optional
 
 from ruamel.yaml import YAML
 
 from proxystack.domain.models import ClashGroup
 from proxystack.domain.models import ClashRules
 from proxystack.domain.models import ClashUpstream
+from proxystack.domain.models import HttpListener
 from proxystack.domain.models import Inbound
 from proxystack.domain.models import SocksListener
 from proxystack.domain.models import Stack
@@ -40,20 +42,32 @@ def render_mihomo_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]
     """生成指定启用 stack 的 mihomo 配置字典，供 CLI render 和运行配置写入复用。"""
     stack = get_enabled_clash_stack(stack_set, stack_name)
     listener = get_single_socks_listener(stack)
+    http_listener = get_optional_http_listener(stack)
     graph = build_reference_graph(stack_set)
-    return {
+    config: dict[str, Any] = {
         "mode": stack.clash.mode,
         "log-level": "info",
         "ipv6": True,
         "allow-lan": not is_loopback_listen_host(listener.listen),
         "bind-address": listener.listen,
-        "external-controller": stack.clash.controller.listen,
-        "secret": stack.clash.controller.secret,
         "socks-port": listener.port,
-        "proxies": [render_proxy(stack_set, graph, upstream) for upstream in stack.clash.upstreams],
-        "proxy-groups": [render_proxy_group(group) for group in stack.clash.groups],
-        "rules": render_rules(stack.clash.rules),
     }
+    if http_listener is not None:
+        config["port"] = http_listener.port
+    config.update(
+        {
+            "external-controller": stack.clash.controller.listen,
+            "secret": stack.clash.controller.secret,
+        }
+    )
+    config.update(
+        {
+            "proxies": [render_proxy(stack_set, graph, upstream) for upstream in stack.clash.upstreams],
+            "proxy-groups": [render_proxy_group(group) for group in stack.clash.groups],
+            "rules": render_rules(stack.clash.rules),
+        }
+    )
+    return config
 
 
 def dumps_mihomo_config(stack_set: StackSet, stack_name: str) -> str:
@@ -84,6 +98,15 @@ def get_single_socks_listener(stack: Stack) -> SocksListener:
     if len(stack.clash.listeners.socks) != 1:
         raise MihomoGeneratorError(f"exactly one clash socks listener is required: {stack.name}")
     return stack.clash.listeners.socks[0]
+
+
+def get_optional_http_listener(stack: Stack) -> Optional[HttpListener]:
+    """读取 P0 可选 HTTP listener；配置多个时拒绝生成歧义入口。"""
+    if len(stack.clash.listeners.http) > 1:
+        raise MihomoGeneratorError(f"at most one clash http listener is supported: {stack.name}")
+    if not stack.clash.listeners.http:
+        return None
+    return stack.clash.listeners.http[0]
 
 
 def is_loopback_listen_host(host: str) -> bool:
