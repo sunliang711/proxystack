@@ -25,6 +25,7 @@ from proxystack.generator.sub import extract_bundle_inputs
 from proxystack.generator.sub import input_to_yaml
 from proxystack.generator.sub import merge_input_files
 from proxystack.generator.sub import render_clash_subscription
+from proxystack.generator.sub import render_premium_clash_subscription
 from proxystack.generator.sub import render_stack_input
 from proxystack.generator.sub import render_surge_subscription
 from proxystack.generator.sub import write_bundle
@@ -419,7 +420,7 @@ def test_subscription_renderers_emit_full_configs_and_surge_auth_syntax() -> Non
 
 
 def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None:
-    """验证 Surge 输出按 region 和 remark 前缀生成地区代理组。"""
+    """验证 Surge 和 Premium 输出按 region 和 remark 前缀生成地区代理组。"""
     nodes = [
         SubscriptionNode(
             id="manual:us",
@@ -471,6 +472,14 @@ def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None
     index = build_index(nodes, ["manual"])
 
     surge = render_surge_subscription(index, "alice")
+    premium_text = render_premium_clash_subscription(index, "alice")
+    premium = YAML(typ="safe").load(premium_text)
+    surge_group_names = [
+        line.split(" = ", 1)[0]
+        for line in surge.split("[Proxy Group]\n", 1)[1].split("\n[Rule]", 1)[0].splitlines()
+        if line.strip()
+    ]
+    premium_group_names = [group["name"] for group in premium["proxy-groups"]]
 
     assert "🇺🇸 美国节点 = url-test, Node US" in surge
     assert "🇯🇵 日本节点 = url-test, [JP] Tokyo" in surge
@@ -482,6 +491,29 @@ def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None
     assert "ProxyList = select, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点" in surge
     assert "AutoGroup = url-test, Node US, [JP] Tokyo, HK_01, Manual Relay, AUS-Relay" in surge
     assert "FinalList = select, ProxyList, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点" in surge
+    assert premium_group_names == surge_group_names
+    assert "icon-url:" not in premium_text
+    assert premium["proxy-groups"][premium_group_names.index("OpenAI")]["icon"] == (
+        "https://raw.githubusercontent.com/sunliang711/icons/main/chatgpt33.webp"
+    )
+    assert premium["rule-providers"]["OpenAIRules"]["url"] == (
+        "https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/openai.yaml"
+    )
+    assert premium["rule-providers"]["ChinaIPRules"]["url"] == (
+        "https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/chinaIP.yaml"
+    )
+    provider_names = set(premium["rule-providers"])
+    rule_provider_names = {rule.split(",")[1] for rule in premium["rules"] if rule.startswith("RULE-SET,")}
+    assert rule_provider_names == provider_names
+    assert all(
+        provider["url"].startswith("https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/")
+        and provider["url"].endswith(".yaml")
+        for provider in premium["rule-providers"].values()
+    )
+    assert "RULE-SET,AdsRules,REJECT" in premium["rules"]
+    assert "RULE-SET,EpicRules,Game" in premium["rules"]
+    assert "RULE-SET,ChinaIPRules,China" in premium["rules"]
+    assert premium["rules"][-1] == "MATCH,FinalList"
 
 
 def test_subscription_renderer_uses_data_dir_template_override(tmp_path: Path) -> None:

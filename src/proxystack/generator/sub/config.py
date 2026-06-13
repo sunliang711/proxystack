@@ -687,7 +687,7 @@ def render_premium_clash_subscription(
     template_dir: Optional[Path] = None,
     data_dir: Optional[Path] = None,
 ) -> str:
-    """渲染 Premium Clash 订阅 YAML；当前与普通 Clash 使用同一结构。"""
+    """渲染 Premium Clash 订阅 YAML。"""
     return render_subscription_template(
         PREMIUM_CLASH_TEMPLATE_NAME,
         build_subscription_template_context(index, user),

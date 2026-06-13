@@ -27,469 +27,534 @@ tun:
 proxies:
 {{ proxies | yaml_block }}
 proxy-groups:
-  - name: AllProxy
-    type: select
-    proxies:
-      - AutoGroup
-      - LoadBalance
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: LoadBalance
-    type: load-balance
-    url: {{ test_url }}
-    interval: 300
-    strategy: round-robin
-    proxies:
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
   - name: AutoGroup
     type: url-test
     url: {{ test_url }}
-    interval: 300
+    interval: 120
+    tolerance: 100
     proxies:
 {% for proxy_name in proxy_names %}
       - {{ proxy_name | tojson }}
 {% endfor %}
-  - name: AppleGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
+{% for region_group in surge_region_groups %}
+  - name: {{ region_group.name }}
+{% if region_group.proxy_names %}
+    type: url-test
+    url: {{ test_url }}
+    interval: 120
+    tolerance: 100
+    proxies:
+{% for proxy_name in region_group.proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
+{% else %}
     type: select
     proxies:
       - DIRECT
-      - AllProxy
+{% endif %}
+{% if region_group.region == "HK" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Hong_Kong.png
+{% elif region_group.region == "JP" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Japan.png
+{% elif region_group.region == "US" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/United_States.png
+{% elif region_group.region == "DE" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Germany.png
+{% elif region_group.region == "TW" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/China.png
+{% elif region_group.region == "KR" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/South_Korea.png
+{% elif region_group.region == "SG" %}
+    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Singapore.png
+{% endif %}
+{% endfor %}
+  - name: ProxyList
+    type: select
+    proxies:
       - AutoGroup
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
 {% for proxy_name in proxy_names %}
       - {{ proxy_name | tojson }}
 {% endfor %}
-  - name: ChinaGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
+  - name: FinalList
+    type: select
+    proxies:
+      - ProxyList
+      - AutoGroup
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp
+  - name: Claude
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/claude.webp
+  - name: Cursor
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/cursor.png
+  - name: OpenAI
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/chatgpt33.webp
+  - name: OtherAI
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/ai.jpeg
+  - name: Google
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/google3.png
+  - name: Meta
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/meta.jpeg
+  - name: Apple
     type: select
     proxies:
       - DIRECT
-      - AllProxy
+      - ProxyList
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
 {% endfor %}
-  - name: BinanceGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: CryptoGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: DiscordGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: DisneyGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: DockerGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: GoogleGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: HboGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: IpDetectGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: MicrosoftGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/applew.png
+  - name: Microsoft
     type: select
     proxies:
       - DIRECT
-      - AllProxy
+      - ProxyList
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
 {% endfor %}
-  - name: NetflixGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/windows.png
+  - name: Binance
     type: select
     proxies:
-      - AllProxy
+      - ProxyList
       - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
 {% endfor %}
-  - name: OpenAIGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/binance2.png
+  - name: Crypto
     type: select
     proxies:
-      - AllProxy
+      - ProxyList
       - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
 {% endfor %}
-  - name: 1PasswordGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/bitcoin.png
+  - name: Github
     type: select
     proxies:
-      - AllProxy
+      - ProxyList
       - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
 {% endfor %}
-  - name: PaypalGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/github.png
+  - name: Dropbox
     type: select
     proxies:
-      - AllProxy
+      - ProxyList
       - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
 {% endfor %}
-  - name: SpeedTestGroup
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/dropbox.png
+  - name: 1password
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/1password.png
+  - name: Telegram
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/telegram.webp
+  - name: Twitter
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/twitter3.png
+  - name: Discord
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/discord4.png
+  - name: Docker
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/docker5.png
+  - name: IP
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/ip2.png
+  - name: Netflix
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/netflix.png
+  - name: Disney+
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/disney.png
+  - name: Spotify
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/spotify.png
+  - name: TikTok
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/tiktok.png
+  - name: GlobalMedia
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
+  - name: SpeedtestGroup
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
+  - name: Game
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/game.png
+  - name: Overseas
+    type: select
+    proxies:
+      - ProxyList
+      - DIRECT
+{% for region_group in surge_region_groups %}
+      - {{ region_group.name }}
+{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/overseas.png
+  - name: China
     type: select
     proxies:
       - DIRECT
-      - AllProxy
+      - ProxyList
       - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: SpotifyGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: TelegramGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: TiktokGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: TvbGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: TwitterGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: CloudflareGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: DropboxGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: GithubGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
-  - name: FinalGroup
-    type: select
-    proxies:
-      - AllProxy
-      - DIRECT
-      - AutoGroup
-{% for proxy_name in proxy_names %}
-      - {{ proxy_name | tojson }}
-{% endfor %}
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/china.png
 rule-providers:
-  AppleRules:
+  AdsRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/apple.yaml
-    path: ./rules/apple.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/ads.yaml
+    path: ./rules/ads.yaml
     interval: 86400
-
-  ChinaRules:
+  OpenAIRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/china.yaml
-    path: ./rules/china.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/openai.yaml
+    path: ./rules/openai.yaml
     interval: 86400
-
-  CryptoRules:
+  ClaudeRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/crypto.yaml
-    path: ./rules/crypto.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/claude.yaml
+    path: ./rules/claude.yaml
     interval: 86400
-
-  DiscordRules:
+  CursorRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/discord.yaml
-    path: ./rules/discord.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/cursor.yaml
+    path: ./rules/cursor.yaml
     interval: 86400
-
-  DisneyRules:
+  OtherAIRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/disney.yaml
-    path: ./rules/disney.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/other-ai.yaml
+    path: ./rules/other-ai.yaml
     interval: 86400
-
-  DockerRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/docker.yaml
-    path: ./rules/docker.yaml
-    interval: 86400
-
   GoogleRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/google.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/google.yaml
     path: ./rules/google.yaml
     interval: 86400
-
-  HboRules:
+  MetaRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/hbo.yaml
-    path: ./rules/hbo.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/meta.yaml
+    path: ./rules/meta.yaml
     interval: 86400
-
-  InternationalRules:
+  AppleRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/international.yaml
-    path: ./rules/international.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/apple.yaml
+    path: ./rules/apple.yaml
     interval: 86400
-
-  IpDetectRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/ipDetect.yaml
-    path: ./rules/ipDetect.yaml
-    interval: 86400
-
   MicrosoftRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/microsoft.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/microsoft.yaml
     path: ./rules/microsoft.yaml
     interval: 86400
-
-  NetflixRules:
+  BinanceRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/netflix.yaml
-    path: ./rules/netflix.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/binance.yaml
+    path: ./rules/binance.yaml
     interval: 86400
-
-  OpenaiRules:
+  CryptoRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/openai.yaml
-    path: ./rules/openai.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/crypto.yaml
+    path: ./rules/crypto.yaml
     interval: 86400
-
   1PasswordRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/1password.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/1password.yaml
     path: ./rules/1password.yaml
     interval: 86400
-
-  PaypalRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/paypal.yaml
-    path: ./rules/paypal.yaml
-    interval: 86400
-
-  SpeedTestRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/speedtest.yaml
-    path: ./rules/speedtest.yaml
-    interval: 86400
-
-  SpotifyRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/spotify.yaml
-    path: ./rules/spotify.yaml
-    interval: 86400
-
-
-  TelegramRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/telegram.yaml
-    path: ./rules/telegram.yaml
-    interval: 86400
-
-  TiktokRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/tiktok.yaml
-    path: ./rules/tiktok.yaml
-    interval: 86400
-
-  TvbRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/tvb.yaml
-    path: ./rules/tvb.yaml
-    interval: 86400
-
-  TwitterRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/twitter.yaml
-    path: ./rules/twitter.yaml
-    interval: 86400
-
-  CloudflareRules:
-    behavior: classical
-    type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/cloudflare.yaml
-    path: ./rules/cloudflare.yaml
-    interval: 86400
-
   DropboxRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/dropbox.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/dropbox.yaml
     path: ./rules/dropbox.yaml
     interval: 86400
-
   GithubRules:
     behavior: classical
     type: http
-    url: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/clash/github.yaml
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/github.yaml
     path: ./rules/github.yaml
     interval: 86400
-
-
-#分流规则引用
+  DockerRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/docker.yaml
+    path: ./rules/docker.yaml
+    interval: 86400
+  IpDetectRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/ipDetect.yaml
+    path: ./rules/ipDetect.yaml
+    interval: 86400
+  TelegramRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/telegram.yaml
+    path: ./rules/telegram.yaml
+    interval: 86400
+  TwitterRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/twitter.yaml
+    path: ./rules/twitter.yaml
+    interval: 86400
+  DiscordRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/discord.yaml
+    path: ./rules/discord.yaml
+    interval: 86400
+  EpicRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/epic.yaml
+    path: ./rules/epic.yaml
+    interval: 86400
+  SonyRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/sony.yaml
+    path: ./rules/sony.yaml
+    interval: 86400
+  SteamRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/steam.yaml
+    path: ./rules/steam.yaml
+    interval: 86400
+  NintendoRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/nintendo.yaml
+    path: ./rules/nintendo.yaml
+    interval: 86400
+  NetflixRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/netflix.yaml
+    path: ./rules/netflix.yaml
+    interval: 86400
+  DisneyRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/disney.yaml
+    path: ./rules/disney.yaml
+    interval: 86400
+  SpotifyRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/spotify.yaml
+    path: ./rules/spotify.yaml
+    interval: 86400
+  TikTokRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/tiktok.yaml
+    path: ./rules/tiktok.yaml
+    interval: 86400
+  GlobalMediaRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/globalmedia.yaml
+    path: ./rules/globalmedia.yaml
+    interval: 86400
+  ChinaRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/china.yaml
+    path: ./rules/china.yaml
+    interval: 86400
+  OverseasRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/overseas.yaml
+    path: ./rules/overseas.yaml
+    interval: 86400
+  ChinaIPRules:
+    behavior: classical
+    type: http
+    url: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/clash/chinaIP.yaml
+    path: ./rules/chinaIP.yaml
+    interval: 86400
 rules:
-
-  - DOMAIN-SUFFIX,rustez.cc,DIRECT
-  - DOMAIN-SUFFIX,aliyuncs.com,DIRECT
-
-  - RULE-SET,ChinaRules,ChinaGroup
-
-  - RULE-SET,AppleRules,AppleGroup
-  - RULE-SET,MicrosoftRules,MicrosoftGroup
-
-  - RULE-SET,SpeedTestRules,SpeedTestGroup
-
-  - RULE-SET,GoogleRules,GoogleGroup
-  - RULE-SET,GithubRules,GithubGroup
-
-  - RULE-SET,CryptoRules,BinanceGroup
-  - RULE-SET,CryptoRules,CryptoGroup
-
-  - RULE-SET,TwitterRules,TwitterGroup
-  - RULE-SET,DockerRules,DockerGroup
-  - RULE-SET,DropboxRules,DropboxGroup
-  - RULE-SET,TelegramRules,TelegramGroup
-  - RULE-SET,DiscordRules,DiscordGroup
-
-
-  - RULE-SET,IpDetectRules,IpDetectGroup
-
-  - RULE-SET,OpenaiRules,OpenAIGroup
-
-  - RULE-SET,1PasswordRules,1PasswordGroup
-
-  - RULE-SET,PaypalRules,PaypalGroup
-  - RULE-SET,SpotifyRules,SpotifyGroup
-  - RULE-SET,CloudflareRules,CloudflareGroup
-
-  - RULE-SET,NetflixRules,NetflixGroup
-  - RULE-SET,DisneyRules,DisneyGroup
-  - RULE-SET,HboRules,HboGroup
-  - RULE-SET,TiktokRules,TiktokGroup
-  - RULE-SET,TvbRules,TvbGroup
-
-
-
-  - MATCH,FinalGroup
+  - DOMAIN-SUFFIX,sub.rustez.cc,DIRECT
+  - RULE-SET,AdsRules,REJECT
+  - RULE-SET,OpenAIRules,OpenAI
+  - RULE-SET,ClaudeRules,Claude
+  - RULE-SET,CursorRules,Cursor
+  - RULE-SET,OtherAIRules,OtherAI
+  - RULE-SET,GoogleRules,Google
+  - RULE-SET,MetaRules,Meta
+  - RULE-SET,AppleRules,Apple
+  - RULE-SET,MicrosoftRules,Microsoft
+  - RULE-SET,BinanceRules,Binance
+  - RULE-SET,CryptoRules,Crypto
+  - RULE-SET,1PasswordRules,1password
+  - RULE-SET,DropboxRules,Dropbox
+  - RULE-SET,GithubRules,Github
+  - RULE-SET,DockerRules,Docker
+  - RULE-SET,IpDetectRules,IP
+  - RULE-SET,TelegramRules,Telegram
+  - RULE-SET,TwitterRules,Twitter
+  - RULE-SET,DiscordRules,Discord
+  - RULE-SET,EpicRules,Game
+  - RULE-SET,SonyRules,Game
+  - RULE-SET,SteamRules,Game
+  - RULE-SET,NintendoRules,Game
+  - RULE-SET,NetflixRules,Netflix
+  - RULE-SET,DisneyRules,Disney+
+  - RULE-SET,SpotifyRules,Spotify
+  - RULE-SET,TikTokRules,TikTok
+  - RULE-SET,GlobalMediaRules,GlobalMedia
+  - RULE-SET,ChinaRules,China
+  - RULE-SET,OverseasRules,Overseas
+  - RULE-SET,ChinaIPRules,China
+  - MATCH,FinalList

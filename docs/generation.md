@@ -302,10 +302,10 @@ stacks/*.yaml xrelay.inbounds[] where sub == true
 HTTP 路由：
 
 - `/sub/:user`：普通 Clash。
-- `/premium_sub/:user`：Premium Clash。P0 与普通 Clash 使用同一 YAML 输出，但渲染入口保持独立。
+- `/premium_sub/:user`：Premium Clash。
 - `/surge_sub/:user`：Surge。
 
-Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含基础监听、DNS、tun、`proxies`、默认 `proxy-groups` 和默认 `rules`。Premium Clash 保留独立路由入口，当前默认模板与普通 Clash 一致。Surge 订阅输出 `[General]`、`[Replica]`、`[Proxy]`、`[Proxy Group]` 和 `[Rule]` 段；HTTP `/surge_sub/:user` 响应会在第一行输出 `#!MANAGED-CONFIG ... interval=86400 strict=true`，让 Surge 自动刷新托管配置。默认 `[Proxy Group]` 会包含带 emoji 和 `icon-url` 的常用地区组、实际出现的其他两位地区组和 `OtherRegion`，地区优先来自 `nodes[].region`，缺失时从 `remark` 前缀解析 `US-xxx`、`[US] xxx` 或 `HK_01` 这类格式。默认模板直接列出节点，不再生成 `MySub`、`policy-path` 或 `include-other-group`。
+Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含基础监听、DNS、tun、`proxies`、默认 `proxy-groups` 和默认 `rules`。Premium Clash 默认模板的 `proxy-groups` 与 Surge 默认 `[Proxy Group]` 的组名和数量保持一致，并使用 Mihomo/Clash Premium 的 `icon` 字段承载 Surge 对应的 `icon-url`；业务组、`icon`、`rule-providers` 和 `rules` 都直接写在 `premium-clash.yaml.j2` 中，方便手动修改。Premium Clash 的 `rule-providers` 使用 R2 上的 Clash YAML 规则源，路径从 Surge 的 `/surge/*.list` 对应转换为 `/clash/*.yaml`。Surge 订阅输出 `[General]`、`[Replica]`、`[Proxy]`、`[Proxy Group]` 和 `[Rule]` 段；HTTP `/surge_sub/:user` 响应会在第一行输出 `#!MANAGED-CONFIG ... interval=86400 strict=true`，让 Surge 自动刷新托管配置。默认 `[Proxy Group]` 会包含带 emoji 和 `icon-url` 的常用地区组、实际出现的其他两位地区组和 `OtherRegion`，地区优先来自 `nodes[].region`，缺失时从 `remark` 前缀解析 `US-xxx`、`[US] xxx` 或 `HK_01` 这类格式。默认模板直接列出节点，不再生成 `MySub`、`policy-path` 或 `include-other-group`。
 
 三类订阅配置均由 Jinja2 模板渲染。模板查找顺序为：
 
@@ -320,7 +320,7 @@ Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含
 - `premium-clash.yaml.j2`
 - `surge.conf.j2`
 
-模板上下文包含 `user`、`generated_at`、`sources`、`nodes`、`proxies`、`proxy_names`、`proxy_groups`、`clash_rules`、`surge_proxy_lines`、`surge_region_groups`、`surge_rules`、`test_url`、`surge_skip_proxy`、`surge_proxylist_icon_url`、`surge_auto_icon_url`、`managed_config_url`、`managed_config_interval` 和 `managed_config_strict`。模板可使用 `yaml_block` filter 渲染 YAML 片段。
+公共模板上下文包含 `user`、`generated_at`、`sources`、`nodes`、`proxies`、`proxy_names`、`proxy_groups`、`clash_rules`、`surge_proxy_lines`、`surge_region_groups`、`surge_rules`、`test_url`、`surge_skip_proxy`、`surge_proxylist_icon_url` 和 `surge_auto_icon_url`。Surge HTTP 渲染会额外注入 `managed_config_url`、`managed_config_interval` 和 `managed_config_strict`。模板可使用 `yaml_block` filter 渲染 YAML 片段。
 
 订阅访问控制：
 
