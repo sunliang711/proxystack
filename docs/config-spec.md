@@ -372,6 +372,8 @@ xrelay 的 `outbound.type` 支持：
 | `http` | 指向外部 http 代理，支持 username/password | P0 |
 | `direct` | Xray freedom outbound | P0 |
 
+生成的 Xray outbound `tag` 固定为 `egress-{stack}`，不单独提供配置项。
+
 `type: clash` 使用 `ref`，例如：
 
 ```yaml

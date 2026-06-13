@@ -44,7 +44,7 @@
   ],
   "outbounds": [
     {
-      "tag": "proxy",
+      "tag": "egress-usa2",
       "protocol": "socks",
       "settings": {
         "servers": [

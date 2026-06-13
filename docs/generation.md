@@ -117,6 +117,8 @@ xrelay outbound 生成 Xray `outbounds`：
 - `type: http`：生成 Xray http outbound。
 - `type: direct`：生成 freedom outbound。
 
+生成的 Xray outbound `tag` 固定为 `egress-{stack}`，例如 `egress-usa1`，便于日志和 stats 中按 stack 区分出口。
+
 `type: clash` 示例：
 
 ```yaml

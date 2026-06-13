@@ -356,6 +356,7 @@ def test_render_xray_output_is_json() -> None:
 
     parsed_config = json.loads(dumps_xray_config(stack_set, "jsoncheck"))
 
+    assert parsed_config["outbounds"][0]["tag"] == "egress-jsoncheck"
     assert parsed_config["outbounds"][0]["protocol"] == "freedom"
     assert "api" not in parsed_config
     assert "stats" not in parsed_config

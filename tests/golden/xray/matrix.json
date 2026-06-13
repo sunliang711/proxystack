@@ -82,7 +82,7 @@
   ],
   "outbounds": [
     {
-      "tag": "proxy",
+      "tag": "egress-matrix",
       "protocol": "freedom",
       "settings": {}
     }

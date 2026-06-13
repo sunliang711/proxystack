@@ -16,7 +16,7 @@
   ],
   "outbounds": [
     {
-      "tag": "proxy",
+      "tag": "egress-httpout",
       "protocol": "http",
       "settings": {
         "servers": [

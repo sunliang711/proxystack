@@ -24,7 +24,7 @@ from proxystack.domain.models import resolve_xrelay_stats_config
 from proxystack.graph import ReferenceGraph
 from proxystack.graph import build_reference_graph
 
-XRAY_OUTBOUND_TAG = "proxy"
+XRAY_OUTBOUND_TAG_PREFIX = "egress"
 XRAY_POLICY_STATS_FIELDS = {
     "statsInboundUplink": "stats_inbound_uplink",
     "statsInboundDownlink": "stats_inbound_downlink",
@@ -61,7 +61,7 @@ def render_xray_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]:
     if policy_config.enabled or stats_config.enabled:
         config["policy"] = render_xray_policy(policy_config, stats_config.enabled)
     config["inbounds"] = [render_inbound(inbound) for inbound in stack.xrelay.inbounds]
-    config["outbounds"] = [render_outbound(stack.xrelay.outbound, graph)]
+    config["outbounds"] = [render_outbound(stack.xrelay.outbound, graph, stack.name)]
     return config
 
 
@@ -273,24 +273,30 @@ def inbound_account(inbound: Inbound) -> dict[str, str]:
     }
 
 
-def render_outbound(outbound: XrelayOutbound, graph: ReferenceGraph) -> dict[str, Any]:
+def render_outbound(outbound: XrelayOutbound, graph: ReferenceGraph, stack_name: str) -> dict[str, Any]:
     """按 xrelay outbound 类型生成 Xray outbound 配置。"""
+    outbound_tag = xray_outbound_tag(stack_name)
     if outbound.type == "clash":
-        return render_clash_outbound(outbound, graph)
+        return render_clash_outbound(outbound, graph, outbound_tag)
     if outbound.type == "socks5":
-        return render_proxy_outbound("socks", outbound.server, outbound.port, outbound.username, outbound.password)
+        return render_proxy_outbound("socks", outbound.server, outbound.port, outbound.username, outbound.password, outbound_tag)
     if outbound.type == "http":
-        return render_proxy_outbound("http", outbound.server, outbound.port, outbound.username, outbound.password)
+        return render_proxy_outbound("http", outbound.server, outbound.port, outbound.username, outbound.password, outbound_tag)
     if outbound.type == "direct":
         return {
-            "tag": XRAY_OUTBOUND_TAG,
+            "tag": outbound_tag,
             "protocol": "freedom",
             "settings": {},
         }
     raise XrayGeneratorError(f"unsupported xray outbound type: {outbound.type}")
 
 
-def render_clash_outbound(outbound: XrelayOutbound, graph: ReferenceGraph) -> dict[str, Any]:
+def xray_outbound_tag(stack_name: str) -> str:
+    """生成包含 stack 名的 Xray 出口 tag，便于日志和 stats 排查。"""
+    return f"{XRAY_OUTBOUND_TAG_PREFIX}-{stack_name}"
+
+
+def render_clash_outbound(outbound: XrelayOutbound, graph: ReferenceGraph, outbound_tag: str) -> dict[str, Any]:
     """解析 clash socks listener ref 并生成指向 mihomo 的 socks outbound。"""
     endpoint = graph.index.resolve_clash_listener(outbound.ref or "")
     if endpoint is None:
@@ -301,6 +307,7 @@ def render_clash_outbound(outbound: XrelayOutbound, graph: ReferenceGraph) -> di
         endpoint.port,
         None,
         None,
+        outbound_tag,
     )
 
 
@@ -310,6 +317,7 @@ def render_proxy_outbound(
     port: Optional[int],
     username: Optional[str],
     password: Optional[str],
+    outbound_tag: str,
 ) -> dict[str, Any]:
     """生成 socks/http outbound 通用配置。"""
     if address is None or port is None:
@@ -328,7 +336,7 @@ def render_proxy_outbound(
             }
         ]
     return {
-        "tag": XRAY_OUTBOUND_TAG,
+        "tag": outbound_tag,
         "protocol": protocol,
         "settings": {
             "servers": [server],
