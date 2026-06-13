@@ -44,134 +44,7 @@ proxy-groups:
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
 
-  - name: 🇭🇰 香港节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Hong_Kong.png
-
-
-  - name: 🇯🇵 日本节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Japan.png
-
-
-  - name: 🇺🇸 美国节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/United_States.png
-
-
-  - name: 🇩🇪 德国节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Germany.png
-
-
-  - name: 🇨🇳 台湾节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/China.png
-
-
-  - name: 🇰🇷 韩国节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/South_Korea.png
-
-
-  - name: 🇸🇬 新加坡节点
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Singapore.png
-
-
-  - name: GBRegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: CARegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: AURegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: FRRegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: NLRegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: TRRegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: INRegion
-
-    type: select
-    proxies:
-      - DIRECT
-
-
-
-  - name: OtherRegion
-
+  - name: 🌐 其他地区
     type: url-test
     url: http://www.gstatic.com/generate_204
     interval: 120
@@ -182,42 +55,13 @@ proxy-groups:
 
 
 
-
   - name: ProxyList
     type: select
     proxies:
       - AutoGroup
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
 
       - "Manual Relay"
@@ -230,35 +74,7 @@ proxy-groups:
       - AutoGroup
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
 
       - "Manual Relay"
@@ -270,35 +86,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/claude.webp
   - name: Cursor
@@ -307,35 +95,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/cursor.png
   - name: OpenAI
@@ -344,35 +104,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/chatgpt33.webp
   - name: OtherAI
@@ -381,35 +113,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/ai.jpeg
   - name: Google
@@ -418,35 +122,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/google3.png
   - name: Meta
@@ -455,35 +131,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/meta.jpeg
   - name: Apple
@@ -493,35 +141,7 @@ proxy-groups:
       - ProxyList
       - AutoGroup
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/applew.png
   - name: Microsoft
@@ -531,35 +151,7 @@ proxy-groups:
       - ProxyList
       - AutoGroup
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/windows.png
   - name: Binance
@@ -568,35 +160,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/binance2.png
   - name: Crypto
@@ -605,35 +169,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/bitcoin.png
   - name: Github
@@ -642,35 +178,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/github.png
   - name: Dropbox
@@ -679,35 +187,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/dropbox.png
   - name: 1password
@@ -716,35 +196,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/1password.png
   - name: Telegram
@@ -753,35 +205,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/telegram.webp
   - name: Twitter
@@ -790,35 +214,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/twitter3.png
   - name: Discord
@@ -827,35 +223,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/discord4.png
   - name: Docker
@@ -864,35 +232,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/docker5.png
   - name: IP
@@ -901,35 +241,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/ip2.png
   - name: Netflix
@@ -938,35 +250,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/netflix.png
   - name: Disney+
@@ -975,35 +259,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/disney.png
   - name: Spotify
@@ -1012,35 +268,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/spotify.png
   - name: TikTok
@@ -1049,35 +277,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/tiktok.png
   - name: GlobalMedia
@@ -1086,35 +286,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
   - name: SpeedtestGroup
@@ -1123,35 +295,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
   - name: Game
@@ -1160,35 +304,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/game.png
   - name: Overseas
@@ -1197,35 +313,7 @@ proxy-groups:
       - ProxyList
       - DIRECT
 
-      - 🇭🇰 香港节点
-
-      - 🇯🇵 日本节点
-
-      - 🇺🇸 美国节点
-
-      - 🇩🇪 德国节点
-
-      - 🇨🇳 台湾节点
-
-      - 🇰🇷 韩国节点
-
-      - 🇸🇬 新加坡节点
-
-      - GBRegion
-
-      - CARegion
-
-      - AURegion
-
-      - FRRegion
-
-      - NLRegion
-
-      - TRRegion
-
-      - INRegion
-
-      - OtherRegion
+      - 🌐 其他地区
 
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/overseas.png
   - name: China

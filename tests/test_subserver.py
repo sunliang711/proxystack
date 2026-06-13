@@ -70,7 +70,7 @@ def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
     assert "[Proxy]" in surge_response.text
     assert "[Proxy Group]" in surge_response.text
     assert "alice socks = socks5" in surge_response.text
-    assert "OtherRegion = url-test, alice socks" in surge_response.text
+    assert "🌐 其他地区 = url-test, alice socks" in surge_response.text
 
 
 def test_surge_subscription_uses_public_base_url_for_managed_config(tmp_path: Path) -> None:

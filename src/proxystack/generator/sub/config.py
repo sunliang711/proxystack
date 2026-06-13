@@ -77,6 +77,34 @@ SURGE_REGION_METADATA = {
         "name": "🇸🇬 新加坡节点",
         "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Singapore.png",
     },
+    "GB": {
+        "name": "🇬🇧 英国节点",
+        "icon_url": None,
+    },
+    "CA": {
+        "name": "🇨🇦 加拿大节点",
+        "icon_url": None,
+    },
+    "AU": {
+        "name": "🇦🇺 澳大利亚节点",
+        "icon_url": None,
+    },
+    "FR": {
+        "name": "🇫🇷 法国节点",
+        "icon_url": None,
+    },
+    "NL": {
+        "name": "🇳🇱 荷兰节点",
+        "icon_url": None,
+    },
+    "TR": {
+        "name": "🇹🇷 土耳其节点",
+        "icon_url": None,
+    },
+    "IN": {
+        "name": "🇮🇳 印度节点",
+        "icon_url": None,
+    },
 }
 SURGE_COMMON_REGION_CODES = ("HK", "JP", "US", "DE", "TW", "KR", "SG", "GB", "CA", "AU", "FR", "NL", "TR", "IN")
 OTHER_REGION_CODE = "OTHER"
@@ -972,6 +1000,7 @@ def render_surge_region_groups(nodes: list[SubscriptionNode]) -> list[dict[str, 
             "proxy_names": grouped_proxy_names[region],
         }
         for region in [*SURGE_COMMON_REGION_CODES, *sorted(extra_regions), OTHER_REGION_CODE]
+        if grouped_proxy_names[region]
     ]
 
 
@@ -999,10 +1028,10 @@ def is_region_code(value: str) -> bool:
 def surge_region_group_name(region: str) -> str:
     """返回 Surge 地区代理组名称。"""
     if region == OTHER_REGION_CODE:
-        return "OtherRegion"
+        return "🌐 其他地区"
     metadata = SURGE_REGION_METADATA.get(region)
     if metadata is None:
-        return f"{region}Region"
+        return f"{region}地区"
     return metadata["name"]
 
 

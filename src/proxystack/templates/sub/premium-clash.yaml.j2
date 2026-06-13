@@ -39,7 +39,6 @@ proxy-groups:
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/auto.png
 {% for region_group in surge_region_groups %}
   - name: {{ region_group.name }}
-{% if region_group.proxy_names %}
     type: url-test
     url: {{ test_url }}
     interval: 120
@@ -48,25 +47,8 @@ proxy-groups:
 {% for proxy_name in region_group.proxy_names %}
       - {{ proxy_name | tojson }}
 {% endfor %}
-{% else %}
-    type: select
-    proxies:
-      - DIRECT
-{% endif %}
-{% if region_group.region == "HK" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Hong_Kong.png
-{% elif region_group.region == "JP" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Japan.png
-{% elif region_group.region == "US" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/United_States.png
-{% elif region_group.region == "DE" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Germany.png
-{% elif region_group.region == "TW" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/China.png
-{% elif region_group.region == "KR" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/South_Korea.png
-{% elif region_group.region == "SG" %}
-    icon: https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Singapore.png
+{% if region_group.icon_url %}
+    icon: {{ region_group.icon_url }}
 {% endif %}
 {% endfor %}
   - name: ProxyList

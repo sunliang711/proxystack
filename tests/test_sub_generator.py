@@ -451,6 +451,16 @@ def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None
             remark="HK_01",
         ),
         SubscriptionNode(
+            id="manual:gb",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24006,
+            tag="socks5:24006:manual",
+            remark="London",
+            region="GB",
+        ),
+        SubscriptionNode(
             id="manual:other",
             user="alice",
             protocol="socks5",
@@ -484,13 +494,15 @@ def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None
     assert "🇺🇸 美国节点 = url-test, Node US" in surge
     assert "🇯🇵 日本节点 = url-test, [JP] Tokyo" in surge
     assert "🇭🇰 香港节点 = url-test, HK_01" in surge
+    assert "🇬🇧 英国节点 = url-test, London" in surge
     assert "icon-url=https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/United_States.png" in surge
-    assert "AURegion = select, DIRECT" in surge
-    assert "CARegion = select, DIRECT" in surge
-    assert "OtherRegion = url-test, Manual Relay, AUS-Relay" in surge
-    assert "ProxyList = select, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点" in surge
-    assert "AutoGroup = url-test, Node US, [JP] Tokyo, HK_01, Manual Relay, AUS-Relay" in surge
-    assert "FinalList = select, ProxyList, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点" in surge
+    assert "GBRegion" not in surge
+    assert "AURegion" not in surge
+    assert "CARegion" not in surge
+    assert "🌐 其他地区 = url-test, Manual Relay, AUS-Relay" in surge
+    assert "ProxyList = select, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点, 🇬🇧 英国节点, 🌐 其他地区" in surge
+    assert "AutoGroup = url-test, Node US, [JP] Tokyo, HK_01, London, Manual Relay, AUS-Relay" in surge
+    assert "FinalList = select, ProxyList, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点, 🇬🇧 英国节点, 🌐 其他地区" in surge
     assert premium_group_names == surge_group_names
     assert "icon-url:" not in premium_text
     assert premium["proxy-groups"][premium_group_names.index("OpenAI")]["icon"] == (
