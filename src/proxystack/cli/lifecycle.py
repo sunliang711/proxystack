@@ -34,7 +34,6 @@ from proxystack.domain.validation import collect_port_bindings
 from proxystack.domain.validation import is_port_available
 from proxystack.domain.validation import validate_stack_set
 from proxystack.generator.mihomo import dumps_mihomo_config
-from proxystack.generator.sub import access_from_stack_set
 from proxystack.generator.sub import index_to_json
 from proxystack.generator.sub import input_to_yaml
 from proxystack.generator.sub import merge_inputs
@@ -199,11 +198,7 @@ external_host: {external_host}
 
 subscription:
   source: local
-  listen: 0.0.0.0:3003
   remark_policy: prefix-source
-  access:
-    type: token
-    token: change-me-subscription-token
 
 port_ranges:
   xrelay_inbound: 24000-24999
@@ -309,14 +304,12 @@ def ensure_sub_config(config: GlobalConfig, force: bool = False) -> Path:
 
 
 def sub_config_yaml(config: GlobalConfig) -> str:
-    """把全局订阅监听和 access 初始值写成 ps-sub 配置 YAML。"""
+    """根据 ps-sub 模板生成独立配置 YAML。"""
     yaml = YAML()
     yaml.default_flow_style = False
     stream = StringIO()
     sub_config = default_sub_server_config(config.resolve_path(config.paths.sub))
     config_data = sub_config.model_dump(mode="json", exclude_none=True)
-    config_data["listen"] = config.subscription.listen
-    config_data["access"] = config.subscription.access.model_dump(mode="json", exclude_none=True)
     yaml.dump(config_data, stream)
     return stream.getvalue()
 
@@ -772,7 +765,6 @@ def compile_sub_files(stack_set: StackSet, generated_dir: Path) -> list[Generate
         subscription_input = subscription_input.model_copy(update={"generated_at": input_generated_at})
     subscription_index = merge_inputs(
         [(Path(f"{source}.yaml"), subscription_input)],
-        access=access_from_stack_set(stack_set),
     )
     index_generated_at = read_generated_at(generated_dir / index_relative_path)
     if index_generated_at:

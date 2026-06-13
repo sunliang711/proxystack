@@ -208,10 +208,6 @@ paths:
 external_host: proxy.example.com
 subscription:
   source: local
-  listen: 127.0.0.1:3003
-  access:
-    type: token
-    token: test-token
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 17000-17999

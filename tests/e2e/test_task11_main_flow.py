@@ -84,7 +84,7 @@ def test_init_add_validate_start_sub_export_import_serve_main_flow(tmp_path: Pat
 
     client = TestClient(served["app"])
     health = client.get("/health")
-    subscription = client.get("/sub/user1", params={"token": "demo-subscription-token"})
+    subscription = client.get("/sub/user1", params={"token": "change-me"})
 
     assert health.status_code == 200
     assert subscription.status_code == 200

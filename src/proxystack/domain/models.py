@@ -53,35 +53,12 @@ class ConfigPaths(ProxystackModel):
     sub: str = "sub"
 
 
-class SubscriptionAccess(ProxystackModel):
-    """订阅访问控制配置。"""
-
-    type: Literal["none", "token"] = "token"
-    token: Optional[str] = None
-
-    @model_validator(mode="after")
-    def validate_token(self) -> "SubscriptionAccess":
-        """校验 token 模式必须提供明文 token。"""
-        if self.type == "token" and not self.token:
-            raise ValueError("token is required when subscription access type is token")
-        return self
-
-
 class SubscriptionConfig(ProxystackModel):
     """订阅服务和发布包默认配置。"""
 
     source: Literal["local"] = "local"
-    listen: str = "0.0.0.0:3003"
-    access: SubscriptionAccess = Field(default_factory=SubscriptionAccess)
     remark_policy: Literal["preserve", "prefix-source", "template"] = "prefix-source"
     remark_template: Optional[str] = None
-
-    @field_validator("listen")
-    @classmethod
-    def validate_listen(cls, value: str) -> str:
-        """校验订阅服务监听地址包含合法端口。"""
-        parse_listen(value)
-        return value
 
     @field_validator("remark_template")
     @classmethod

@@ -291,7 +291,7 @@ def test_agent_render_sub_example() -> None:
     rendered_index = json.loads(result.output)
     assert "alice" in rendered_index["users"]
     assert "upstreams" not in result.output
-    assert rendered_index["access"]["type"] == "token"
+    assert rendered_index["access"]["type"] == "none"
 
 
 def test_agent_render_model_example() -> None:
@@ -341,7 +341,7 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     sub_config = YAML(typ="safe").load((project_dir / "sub" / "config.yaml").read_text(encoding="utf-8"))
     assert sub_config["data_dir"] == str(project_dir / "sub")
     assert sub_config["listen"] == "0.0.0.0:3003"
-    assert sub_config["access"]["token"] == "demo-subscription-token"
+    assert sub_config["access"]["token"] == "change-me"
 
 
 def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -969,7 +969,7 @@ def test_agent_check_config_check_only_and_doctor(tmp_path: Path) -> None:
     assert "Binaries:" in doctor_result.output
     assert "Systemd units:" in doctor_result.output
     assert "Ports:" in doctor_result.output
-    assert "subscription.listen" in doctor_result.output
+    assert "stacks.usa1.xrelay.inbounds" in doctor_result.output
 
 
 def test_agent_sub_export_all_stacks_bundle(tmp_path: Path) -> None:
@@ -1250,9 +1250,7 @@ paths:
   stacks: {outside_stacks}
 external_host: proxy.example.com
 subscription:
-  access:
-    type: token
-    token: demo-token
+  source: local
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 17000-17999
@@ -1910,10 +1908,6 @@ paths:
 external_host: proxy.example.com
 subscription:
   source: local
-  listen: 127.0.0.1:3003
-  access:
-    type: token
-    token: test-token
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 17000-17999

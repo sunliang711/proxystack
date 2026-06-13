@@ -321,8 +321,8 @@ Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含
 
 订阅访问控制：
 
-- agent 全局 `subscription.access` 只用于本地 `render sub` 预览和生成初始 sub 配置。
-- `proxystack-sub serve` 的 HTTP 鉴权只读取 ps-sub 配置文件中的 `access` 字段。
+- agent 全局配置不再包含订阅服务 access；本地 `render sub` 预览默认输出 `access.type: none`。
+- `proxystack-sub serve` 的 HTTP 鉴权只读取 ps-sub 配置文件中的 `access` 字段，默认配置来自 `src/proxystack/templates/sub-config.yaml`。
 - `access.type: token` 时，HTTP 路由必须校验 `token` query 参数或等价的反向代理鉴权头。
 - `access.type: none` 只允许本地监听或明确的公网风险确认。
 - token 只用于访问订阅 HTTP 服务，不写入订阅节点。

@@ -8,7 +8,6 @@ import pytest
 from ruamel.yaml import YAML
 
 from proxystack.config import load_stack
-from proxystack.domain.models import GlobalConfig
 from proxystack.domain.models import Stack
 
 
@@ -19,15 +18,6 @@ def test_examples_stack_files_load_individually() -> None:
     stacks = [load_stack(stack_path) for stack_path in stack_paths]
 
     assert [stack.name for stack in stacks] == [stack_path.stem for stack_path in stack_paths]
-
-
-def test_global_config_rejects_missing_subscription_token() -> None:
-    """验证 token 鉴权缺少 token 时全局配置校验失败。"""
-    config_data = load_yaml(Path("tests/fixtures/example-project/config.yaml"))
-    config_data["subscription"]["access"]["token"] = ""
-
-    with pytest.raises(ValidationError, match="token is required"):
-        GlobalConfig.model_validate(config_data)
 
 
 def test_stack_rejects_missing_published_socks_password() -> None:

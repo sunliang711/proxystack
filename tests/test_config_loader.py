@@ -561,20 +561,6 @@ def test_validate_rejects_duplicate_xray_api_listen_port(tmp_path: Path) -> None
         load_stacks(config, check_system_ports=False)
 
 
-def test_validate_rejects_duplicate_subscription_listen_port(tmp_path: Path) -> None:
-    """验证订阅服务监听端口会参与全局端口冲突校验。"""
-    project_dir = write_project(tmp_path, valid_stack_yaml("edge"))
-    config_path = project_dir / "config.yaml"
-    config_path.write_text(
-        valid_config_yaml(project_dir).replace("subscription:\n", "subscription:\n  listen: 127.0.0.1:24001\n"),
-        encoding="utf-8",
-    )
-    config = load_config(config_path)
-
-    with pytest.raises(ConfigValidationError, match="subscription.listen"):
-        load_stacks(config, check_system_ports=False)
-
-
 def test_load_config_accepts_subscription_remark_template(tmp_path: Path) -> None:
     """验证订阅节点名模板配置可以被全局配置加载。"""
     project_dir = write_project(tmp_path, valid_stack_yaml("edge"))
@@ -808,9 +794,7 @@ paths:
   stacks: stacks
 external_host: proxy.example.com
 subscription:
-  access:
-    type: token
-    token: demo-token
+  source: local
 port_ranges:
   xrelay_inbound: 24000-24999
   clash_socks: 17000-17999

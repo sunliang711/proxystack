@@ -101,14 +101,6 @@ def validate_public_inbound_auth(config: GlobalConfig, stacks: list[Stack]) -> l
 def collect_port_bindings(stack_set: StackSet) -> list[PortBinding]:
     """收集所有本地监听端口，供唯一性和占用检查使用。"""
     bindings: list[PortBinding] = []
-    subscription_host, subscription_port = parse_listen(stack_set.config.subscription.listen)
-    bindings.append(
-        PortBinding(
-            host=subscription_host,
-            port=subscription_port,
-            path="subscription.listen",
-        )
-    )
     stacks = stack_set.stacks
     for stack in stacks:
         for inbound_index, inbound in enumerate(stack.xrelay.inbounds):

@@ -461,12 +461,6 @@ def inbound_tag(inbound: Inbound) -> str:
     return f"{inbound.protocol}:{inbound.port}:{inbound.name}"
 
 
-def access_from_stack_set(stack_set: StackSet) -> SubscriptionAccess:
-    """从全局配置提取订阅访问控制信息。"""
-    access = stack_set.config.subscription.access
-    return SubscriptionAccess.model_validate(access.model_dump())
-
-
 def input_to_yaml(subscription_input: SubscriptionInput) -> str:
     """把订阅 input 编码为稳定 YAML 文本。"""
     return dump_yaml(subscription_input.model_dump(mode="json", exclude_none=True))
@@ -630,7 +624,7 @@ def build_index(
 def render_stack_index(stack_set: StackSet, source: str) -> SubscriptionIndex:
     """从当前 stack 直接生成订阅索引。"""
     subscription_input = render_stack_input(stack_set, source)
-    return merge_inputs([(Path(f"{source}.yaml"), subscription_input)], access=access_from_stack_set(stack_set))
+    return merge_inputs([(Path(f"{source}.yaml"), subscription_input)])
 
 
 def render_clash_subscription(

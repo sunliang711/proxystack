@@ -17,14 +17,9 @@ external_host: proxy.example.com
 subscription:
   # 订阅输入来源；支持全集：local。
   source: local
-  listen: 0.0.0.0:3003
   # 订阅节点名称策略；支持全集：preserve、prefix-source、template。
   # template 模式可配合 remark_template 自定义节点名称。
   remark_policy: prefix-source
-  access:
-    # 订阅访问控制类型；支持全集：none、token。
-    type: token
-    token: demo-subscription-token
 
 port_ranges:
   # Only used by add/clone --allocate-ports.
