@@ -412,6 +412,8 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     assert "Running" in result.output
     assert "xrelay,clash  xrelay" in result.output
     assert "Xrelay Ports" in result.output
+    assert "Xray API" in result.output
+    assert "10091" in result.output
     assert "socks5:24001,vmess:24101" in result.output
     assert "alice/socks5:24001" not in result.output
 

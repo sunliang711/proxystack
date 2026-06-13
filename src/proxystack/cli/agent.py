@@ -1030,6 +1030,7 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
             "generated": row["generated"],
             "running": row["running"],
             "xrelay_ports": row["xrelay_ports"],
+            "xray_api": row["xrelay_api_port"],
             "clash_socks": row["clash_socks"],
             "clash_controller": row["clash_controller"],
         }
@@ -1043,6 +1044,7 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
         ("services", "Services"),
         ("generated", "Generated"),
         ("xrelay_ports", "Xrelay Ports"),
+        ("xray_api", "Xray API"),
         ("clash_socks", "Clash Socks"),
         ("clash_controller", "Clash Controller"),
     ]

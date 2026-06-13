@@ -29,6 +29,7 @@ from proxystack.domain.models import Inbound
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import parse_listen
+from proxystack.domain.models import resolve_xrelay_api_config
 from proxystack.domain.models import validate_identifier
 from proxystack.domain.validation import collect_port_bindings
 from proxystack.domain.validation import is_port_available
@@ -596,11 +597,23 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
                 "generated": format_component_list(generated_components),
                 "running": format_component_list(running_components),
                 "xrelay_ports": format_xrelay_inbounds(stack.xrelay.inbounds),
+                "xrelay_api_port": format_xrelay_api_port(config, stack),
                 "clash_socks": clash_ports or "-",
                 "clash_controller": stack.clash.controller.listen,
             }
         )
     return rows
+
+
+def format_xrelay_api_port(config: GlobalConfig, stack: Stack) -> str:
+    """返回 stack 的 Xray API 端口；API 或 xrelay 禁用时显示占位符。"""
+    if not stack.xrelay.enabled:
+        return "-"
+    api_config = resolve_xrelay_api_config(config.defaults.xrelay, stack.xrelay)
+    if not api_config.enabled:
+        return "-"
+    _host, port = parse_listen(api_config.listen)
+    return str(port)
 
 
 def generated_stack_components(generated_dir: Path, stack: Stack) -> list[str]:
