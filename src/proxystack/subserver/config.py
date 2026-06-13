@@ -15,6 +15,7 @@ from pydantic import Field
 from pydantic import ValidationError
 from pydantic import field_validator
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.error import YAMLError
 
 from proxystack.domain.models import parse_listen
@@ -138,8 +139,67 @@ def sub_server_config_to_yaml(config: SubServerConfig) -> str:
     yaml = YAML()
     yaml.default_flow_style = False
     stream = StringIO()
-    yaml.dump(config.model_dump(mode="json", exclude_none=True), stream)
+    yaml.dump(sub_server_config_to_commented_mapping(config), stream)
     return stream.getvalue()
+
+
+def sub_server_config_to_mapping(config: SubServerConfig) -> dict[str, Any]:
+    """把 ps-sub 配置对象转换为 YAML 输出 mapping，保留需要用户编辑的空占位。"""
+    config_data = config.model_dump(mode="json", exclude_none=True)
+    config_data["managed_config"] = config.managed_config.model_dump(mode="json", exclude_none=False)
+    return config_data
+
+
+def sub_server_config_to_commented_mapping(config: SubServerConfig) -> CommentedMap:
+    """把 ps-sub 配置对象转换为带字段说明的 YAML mapping。"""
+    config_data = to_commented_mapping(sub_server_config_to_mapping(config))
+    apply_sub_config_comments(config_data)
+    return config_data
+
+
+def to_commented_mapping(config_data: dict[str, Any]) -> CommentedMap:
+    """递归转换普通 dict，供 ruamel.yaml 输出注释。"""
+    commented = CommentedMap()
+    for key, value in config_data.items():
+        if isinstance(value, dict):
+            commented[key] = to_commented_mapping(value)
+        else:
+            commented[key] = value
+    return commented
+
+
+def apply_sub_config_comments(config_data: CommentedMap) -> None:
+    """为 ps-sub 配置各字段添加可编辑说明。"""
+    comments: dict[tuple[str, ...], str] = {
+        ("data_dir",): "订阅服务数据目录；inputs 子目录会存放导入的订阅发布包内容。",
+        ("listen",): "HTTP 服务监听地址，格式为 host:port。",
+        ("access",): "订阅访问控制配置；生产环境建议使用 token。",
+        ("access", "type"): "访问控制类型；支持 none、token。",
+        ("access", "token"): "token 模式使用的访问令牌；type=token 时必须填写。",
+        ("templates_dir",): "订阅模板覆盖目录；不需要自定义模板时可保持默认。",
+        ("watch_interval",): "inputs 目录轮询间隔，单位秒；inotify 不可用时生效。",
+        ("watch_debounce",): "inputs 变更防抖时间，单位秒；避免保存过程触发重复加载。",
+        ("managed_config",): "Surge 托管配置头参数；用于 /surge_sub/:user 输出 #!MANAGED-CONFIG。",
+        ("managed_config", "enabled"): "是否输出 Surge 托管配置头。",
+        ("managed_config", "public_base_url"): "公网访问前缀；反代部署时填写，例如 https://example.com/api/sub；留空时使用请求 URL。",
+        ("managed_config", "interval"): "Surge 托管配置刷新间隔，单位秒。",
+        ("managed_config", "strict"): "是否启用 Surge strict 模式。",
+    }
+    for key_path, comment in comments.items():
+        set_comment_before_key(config_data, key_path, comment)
+
+
+def set_comment_before_key(config_data: CommentedMap, key_path: tuple[str, ...], comment: str) -> None:
+    """按路径给存在的配置项添加前置注释。"""
+    target = config_data
+    for key in key_path[:-1]:
+        next_target = target.get(key)
+        if not isinstance(next_target, CommentedMap):
+            return
+        target = next_target
+    final_key = key_path[-1]
+    if final_key in target:
+        target.yaml_set_comment_before_after_key(final_key, before=comment, indent=2 * (len(key_path) - 1))
 
 
 def resolve_sub_config_path(path: Optional[Path], data_dir: Optional[Path]) -> Path:

@@ -45,6 +45,7 @@ from proxystack.graph import ReferenceGraph
 from proxystack.graph import ServiceNode
 from proxystack.graph import build_reference_graph
 from proxystack.subserver.config import default_sub_server_config
+from proxystack.subserver.config import sub_server_config_to_yaml
 
 MANIFEST_VERSION = 1
 MANIFEST_NAME = "manifest.json"
@@ -312,13 +313,8 @@ def ensure_sub_config(config: GlobalConfig, force: bool = False) -> Path:
 
 def sub_config_yaml(config: GlobalConfig) -> str:
     """根据 ps-sub 模板生成独立配置 YAML。"""
-    yaml = YAML()
-    yaml.default_flow_style = False
-    stream = StringIO()
     sub_config = default_sub_server_config(config.resolve_path(config.paths.sub))
-    config_data = sub_config.model_dump(mode="json", exclude_none=True)
-    yaml.dump(config_data, stream)
-    return stream.getvalue()
+    return sub_server_config_to_yaml(sub_config)
 
 
 def ensure_existing_stack_metadata(config: GlobalConfig) -> None:

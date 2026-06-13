@@ -37,6 +37,27 @@ from proxystack.systemd import CommandResult
 from scripts.build_package import clean_build_state
 
 runner = CliRunner()
+SUB_CONFIG_COMMENT_SNIPPETS = (
+    "订阅服务数据目录",
+    "HTTP 服务监听地址",
+    "订阅访问控制配置",
+    "访问控制类型",
+    "token 模式使用的访问令牌",
+    "订阅模板覆盖目录",
+    "inputs 目录轮询间隔",
+    "inputs 变更防抖时间",
+    "Surge 托管配置头参数",
+    "是否输出 Surge 托管配置头",
+    "公网访问前缀",
+    "Surge 托管配置刷新间隔",
+    "是否启用 Surge strict 模式",
+)
+
+
+def assert_sub_config_has_field_comments(config_text: str) -> None:
+    """验证生成的 ps-sub 配置为每个配置项保留说明。"""
+    for comment in SUB_CONFIG_COMMENT_SNIPPETS:
+        assert comment in config_text
 
 
 class FakeSystemdRunner:
@@ -338,10 +359,14 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
         "sub/inputs",
     ]:
         assert (project_dir / relative_path).is_dir()
-    sub_config = YAML(typ="safe").load((project_dir / "sub" / "config.yaml").read_text(encoding="utf-8"))
+    sub_config_text = (project_dir / "sub" / "config.yaml").read_text(encoding="utf-8")
+    assert_sub_config_has_field_comments(sub_config_text)
+    sub_config = YAML(typ="safe").load(sub_config_text)
     assert sub_config["data_dir"] == str(project_dir / "sub")
     assert sub_config["listen"] == "0.0.0.0:3003"
     assert sub_config["access"]["token"] == "change-me"
+    assert "public_base_url" in sub_config["managed_config"]
+    assert sub_config["managed_config"]["public_base_url"] is None
 
 
 def test_agent_init_leaves_external_host_unset_by_default(tmp_path: Path) -> None:
@@ -1351,12 +1376,16 @@ def test_sub_config_creates_default_config(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "编辑校验通过" in result.output
-    config_data = YAML(typ="safe").load(config_path.read_text(encoding="utf-8"))
+    config_text = config_path.read_text(encoding="utf-8")
+    assert_sub_config_has_field_comments(config_text)
+    config_data = YAML(typ="safe").load(config_text)
     assert config_data["data_dir"] == str(data_dir)
     assert config_data["listen"] == "0.0.0.0:3003"
     assert config_data["access"]["type"] == "token"
     assert config_data["access"]["token"] == "change-me"
     assert config_data["managed_config"]["enabled"] is True
+    assert "public_base_url" in config_data["managed_config"]
+    assert config_data["managed_config"]["public_base_url"] is None
     assert config_data["managed_config"]["interval"] == 86400
     assert config_data["managed_config"]["strict"] is True
 
