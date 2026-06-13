@@ -139,7 +139,7 @@ install:
 同机部署目录边界：
 
 - agent 可写 `runtime/`、`publish/`、`downloads/` 和 stack 配置文件。
-- `config.yaml` 运行期只读；只有 `init` 和 `edit` 这类配置管理命令可以写。
+- `config.yaml` 运行期只读；只有 `init` 和 `config` 这类配置管理命令可以写。
 - sub 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址、access token、可选 `templates_dir` 和 Surge 托管配置头参数。
 - agent 不直接写 `sub/inputs/`；订阅内容必须通过 `sub export` 生成 bundle，再由 `proxystack-sub import` 导入。
 - sub 不读取 `config.yaml`、`stacks/` 或 `runtime/`。

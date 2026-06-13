@@ -13,6 +13,8 @@ proxystack-agent
   list
   remove
   clone
+  export
+  import
   check
   start
   stop
@@ -33,7 +35,9 @@ proxystack-agent
 
 proxystack-sub
   version
+  config
   import
+  clear
   serve
 ```
 
@@ -64,7 +68,7 @@ ps-sub = proxystack-sub
     inputs/
 ```
 
-- `config.yaml`：全局配置和默认值；agent 运行期不写，只有 `init` 和 `edit` 这类配置管理命令可以写。
+- `config.yaml`：全局配置和默认值；agent 运行期不写，只有 `init` 和 `config` 这类配置管理命令可以写。
 - `stacks/<name>.yaml`：单个 stack 配置，包含该 stack 的 xrelay 和 clash。
 - `runtime/`：manifest、生成文件和运行状态。
 - `publish/`：订阅发布包。
@@ -104,10 +108,8 @@ proxystack-agent doctor
 
 - `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`；优先以包内 `src/proxystack/templates/agent-config.yaml` 为模板并改写 `base_dir`，`external_host` 默认保留为注释示例，模板缺失时使用内置默认值；已存在文件默认不覆盖。
 - `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
-- `config`：安全编辑 `/opt/proxystack/config.yaml`；等价于 `edit` 不带 stack 名称，但语义更明确。
+- `config`：安全编辑 `/opt/proxystack/config.yaml` 或 `/opt/proxystack/stacks/<name>.yaml`。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
-- `edit`：编辑 `/opt/proxystack/config.yaml`。
-- `edit <name>`：编辑 `/opt/proxystack/stacks/<name>.yaml`。
 - `list`：列出 stack 文件、enabled 状态、角色、生成文件状态、运行状态、xrelay `user/protocol:port` 和 clash 主要端口；默认不做系统端口占用检查，需要严格检查时使用 `--check-system-ports`。
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
@@ -139,11 +141,11 @@ proxystack-agent start sub          # 只操作本地订阅服务
 
 `sub` 只代表本机部署的 `proxystack-sub.service`。远端 Docker 部署的订阅服务由 `proxystack-sub` 容器命令或 Docker 管理。本机 `sub` 服务只使用 `/opt/proxystack/sub`，不读取全局 `config.yaml` 和 `stacks/`。
 
-Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake unit_dir 隔离真实 `systemctl`、`journalctl` 和 `/etc/systemd/system`。`service log --follow/-f` 直接流式输出 journal。订阅服务命令是 `proxystack-sub import/serve`。
+Task09 P0 已接入真实 systemd runner；测试通过 fake runner 和 fake unit_dir 隔离真实 `systemctl`、`journalctl` 和 `/etc/systemd/system`。`service log --follow/-f` 直接流式输出 journal。订阅服务命令是 `proxystack-sub config/import/clear/serve`。
 
 服务生命周期命令默认跳过系统端口占用检查，避免在服务已经运行并占用自身监听端口时阻断 `status/restart/start` 等操作；配置结构、ref 和重复端口仍会校验。`start sub` 不读取或改写 stack 文件，也不会创建 `runtime/generated`。
 
-## 5. add/edit/clone/remove
+## 5. add/config/clone/remove
 
 ```bash
 proxystack-agent add usa1
@@ -168,7 +170,7 @@ proxystack-agent remove usa2
 
 `add --from-file` 要求输入文件是单个 stack 配置，包含 `name`、`xrelay` 和 `clash`。写入前必须校验文件名和 `name` 一致。
 
-`add` 创建 stack 后默认会打开编辑器并在保存后校验；自动化脚本可使用 `--no-edit` 跳过编辑。独立的 `config` 命令用于编辑全局 `config.yaml`；`edit <name>` 用于再次编辑已有 stack，`edit` 不带名称时仍兼容编辑全局 `config.yaml`。
+`add` 创建 stack 后默认会打开编辑器并在保存后校验；自动化脚本可使用 `--no-edit` 跳过编辑。`config` 不带名称时编辑全局 `config.yaml`，带 stack 名称时编辑已有 `stacks/<name>.yaml`。
 
 `add` 默认会基于 `config.yaml` 的 `port_ranges` 自动分配 xrelay inbound、xrelay API、clash socks 和 clash controller 端口，避免连续新增 stack 时撞上模板固定端口。需要保留模板端口时使用 `--keep-template-ports`；此时端口仍必须合法、唯一且未被系统占用。
 
@@ -333,7 +335,7 @@ unit 内容约束：
 
 - 三个 unit 均使用 `User=proxystack`、`Group=proxystack`、`NoNewPrivileges=true`、`ProtectSystem=strict`、`ProtectHome=true`、`PrivateTmp=true`。
 - `proxystack-xray@.service` 只执行 `/opt/proxystack/bin/xray run -config /opt/proxystack/runtime/generated/xray/%i.json`。
-- `proxystack-clash@.service` 只执行 `/opt/proxystack/bin/mihomo -f /opt/proxystack/runtime/generated/mihomo/%i.yaml`。
+- `proxystack-clash@.service` 只执行 `/opt/proxystack/bin/mihomo -d /opt/proxystack/runtime/mihomo/%i -f /opt/proxystack/runtime/generated/mihomo/%i.yaml`。
 - xray/clash unit 的 `ReadWritePaths` 仅包含 agent runtime 相关目录。
 - `proxystack-sub.service` 只执行 `proxystack-sub serve --config <sub_dir>/config.yaml`，`ReadWritePaths` 仅包含 `config.paths.sub`。
 
@@ -372,8 +374,10 @@ proxystack-agent sub export usa1 -o /opt/proxystack/publish/usa1-sub-bundle.zip
 proxystack-agent sub export usa1 --summary
 proxystack-agent sub validate-inputs --input-dir ./inputs
 proxystack-agent render sub --input-dir ./inputs
+proxystack-sub config --data-dir /opt/proxystack/sub
 proxystack-sub import sub-bundle.zip
 proxystack-sub import sub-bundle.zip --replace-all
+proxystack-sub clear --data-dir /opt/proxystack/sub
 proxystack-sub serve --config /opt/proxystack/sub/config.yaml
 ```
 
@@ -432,14 +436,12 @@ Subscription inputs reloaded: input_dir=/opt/proxystack/sub/inputs inputs=3 sour
 
 本机 systemd 生命周期由 `proxystack-agent service ... sub` 或 `proxystack-agent start sub/status sub/logs sub` 管理；订阅内容变更的主流程是 `sub export + sub import`，运行中的服务会由 watcher 自动 reload。
 
-## 12. mihomo 辅助命令
+## 12. mihomo 诊断命令
 
-P1 实现：
+当前实现：
 
 ```bash
-proxystack-agent mihomo groups usa1
-proxystack-agent mihomo set usa1 AllProxy server-a
-proxystack-agent mihomo ipinfo usa1
+proxystack-agent ipinfo usa1
 ```
 
-这些命令依赖 mihomo REST API，失败时不能影响配置生成主流程。
+`ipinfo` 通过该 stack 的 mihomo socks listener 查询出口 IPv4/IPv6 和地域信息，不依赖 mihomo REST API。mihomo REST API 的代理组查询和切换命令尚未实现。

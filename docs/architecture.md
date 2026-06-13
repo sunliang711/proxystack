@@ -13,15 +13,15 @@
 - 配置编译：从 `config.yaml + stacks/*.yaml` 生成 Xray JSON、mihomo YAML、subscription input/index 和 runtime manifest；订阅发布包由 `proxystack-agent sub export` 显式导出。
 - 多实例管理：本地 agent 支持 `proxystack-xray@<name>.service`、`proxystack-clash@<name>.service`；sub 服务本地部署时支持 `proxystack-sub.service`，Docker 部署时由容器运行时管理。
 - 下载和安装：安装/更新 mihomo、xray-core 和 geo 数据；systemd unit 由 `service install|uninstall` 管理。
-- CLI 生命周期：`init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor`，以及高级 `validate`、`render`、`sub export` 和 `service install|uninstall|start|stop|restart|status|log`。
-- 配置生命周期：`add`、`edit`、`list`、`remove`、`clone`、`render`；`clone --allocate-ports` 可基于全局端口池重新分配监听端口。
+- CLI 生命周期：`init`、`setup`、`add`、`config`、`list`、`remove`、`clone`、`export`、`import`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor`、`ipinfo`，以及高级 `validate`、`render`、`sub export`、`sub validate-inputs` 和 `service install|uninstall|start|stop|restart|status|log`。
+- 配置生命周期：`add`、`config`、`list`、`remove`、`clone`、`render`；`clone --allocate-ports` 可基于全局端口池重新分配监听端口。
 - 订阅发布：本地基于 `xrelay.inbounds[].sub == true` 生成订阅 input/发布包；`proxystack-sub serve` 扫描 inputs 目录并在内存中合并，输出 Clash/Premium Clash/Surge 订阅。
 - auto 聚合：支持 mihomo `url-test` 和 `load-balance`，P0 可通过 `--members usa1,usa2` 引用其他 xrelay 暴露的 socks5 inbound。
 - 凭据配置：P0 直接在 YAML 中使用明文凭据字段，订阅 token 也直接写入配置。
 
 ### P1 功能
 
-- mihomo REST API 代理组切换、健康检查和出口 IP 查询。
+- mihomo REST API 代理组切换和健康检查；出口 IP 查询已由顶层 `ipinfo` 命令实现。
 - 显式 rollback 命令，用最近一次生成快照回滚。
 - 配置模板 profile：本地安全模板、远程订阅模板、auto 聚合模板。
 
@@ -33,7 +33,7 @@
 
 ### M5 功能
 
-- 原生配置备份 `export/import` 和发布增强。P0/P1 不实现通用配置备份恢复。
+- 原生配置备份 `export/import` 和部分发布增强已实现；mihomo REST API 代理组能力仍未实现。
 
 ## 3. 系统架构
 
@@ -51,7 +51,7 @@ flowchart LR
   graph --> genc["mihomo 配置生成器"]
   graph --> gens["订阅 input/index 生成器"]
   genx --> xconf["runtime/generated/xray/*.json"]
-  genc --> cconf["runtime/generated/clash/*.yaml"]
+  genc --> cconf["runtime/generated/mihomo/*.yaml"]
   gens --> sinput["runtime/generated/sub/inputs/<source>.yaml"]
   gens --> sidx["runtime/generated/sub/index.json"]
   cli --> export["sub export"]
@@ -99,7 +99,7 @@ flowchart LR
 - `src/proxystack/systemd`：模板安装、enable/disable/start/stop/restart/status/log。
 - `src/proxystack/install`：下载 mihomo/xray/geo 数据，校验文件和安装路径。
 - `src/proxystack/subserver`：FastAPI 订阅服务。
-- `src/proxystack/mihomoapi`：mihomo REST API 查询和代理组切换。
+- `src/proxystack/diagnostics`：出口 IP 和地域诊断。
 
 ## 6. 核心数据模型
 
@@ -124,11 +124,14 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 管理 CLI：
 
 - `proxystack-agent init`
+- `proxystack-agent setup`
 - `proxystack-agent add <name> [--template pair|auto-url-test|load-balance] [--members usa1,usa2] [--keep-template-ports]`
 - `proxystack-agent config [name]`
 - `proxystack-agent list`
 - `proxystack-agent remove <name> [--purge]`
 - `proxystack-agent clone <source> <target> [--allocate-ports]`
+- `proxystack-agent export [-o proxystack-backup.zip]`
+- `proxystack-agent import proxystack-backup.zip`
 - `proxystack-agent check [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent start [name|xrelay/name|clash/name|sub]`
 - `proxystack-agent stop [name|xrelay/name|clash/name|sub]`
@@ -148,10 +151,13 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - `proxystack-agent install mihomo|xray|geo|all`
 - `proxystack-agent update mihomo|xray|geo|all`
 - `proxystack-agent update self`
+- `proxystack-agent ipinfo <stack>`
 
 远端订阅 CLI：
 
+- `proxystack-sub config`
 - `proxystack-sub import sub-bundle.zip`
+- `proxystack-sub clear`
 - `proxystack-sub serve`
 
 订阅 HTTP：
@@ -167,9 +173,9 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 - Fail fast：端口冲突、引用缺失和循环依赖都应在 `validate` 阶段暴露。
 - 可观测性：所有命令使用结构化日志，服务状态通过 systemd 和 manifest 查询。
 - 幂等性：`start` 多次执行结果一致；生成文件带 hash，未变化不写入。配置变化时重启受影响服务，并启动目标范围内未变化的服务。
-- 可恢复：P0 保留最近一次生成的 manifest 和上一版生成文件快照，但不提供显式 rollback 命令；显式 rollback 放到 P1，原生备份 `export/import` 推迟到 M5。
+- 可恢复：P0 保留最近一次生成的 manifest 和上一版生成文件快照，但不提供显式 rollback 命令；显式 rollback 放到 P1。原生备份 `export/import` 已用于 agent 配置迁移，不包含 runtime 派生状态。
 - 远端最小数据：`proxystack-sub` 只保存订阅输入、自身配置和可选本地模板，不保存完整 stack、clash upstream、rules 或 mihomo controller 配置。
-- 同机隔离：agent 和本地 sub 可以共用 `/opt/proxystack` 根目录，但写入目录和锁文件必须分离；agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`，sub 只写 `sub/inputs/` 并读取 `sub/config.yaml`。agent 运行期不写 `config.yaml`，只有 `init` 和 `edit` 这类配置管理命令可以写 `config.yaml`。
+- 同机隔离：agent 和本地 sub 可以共用 `/opt/proxystack` 根目录，但写入目录和锁文件必须分离；agent 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/`，sub 只写 `sub/inputs/` 并读取 `sub/config.yaml`。agent 运行期不写 `config.yaml`，只有 `init` 和 `config` 这类配置管理命令可以写 `config.yaml`。
 - 权限边界：默认使用 `proxystack:proxystack` 用户和用户组，`/opt/proxystack` 为 `0750`；代理核心安装到 `/opt/proxystack/bin`，geo 数据安装到 `/opt/proxystack/geo`，二者默认 owner 为 `proxystack:proxystack`。
 - 锁语义：agent 生成和服务管理使用 agent 锁，sub import 使用 sub 锁；锁文件互不复用，避免同机部署时互相阻塞或覆盖。
 

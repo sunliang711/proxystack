@@ -2,7 +2,7 @@
 
 ## 目标
 
-实现 `init`、`add/edit/list/remove/clone/check/start/stop/restart/status/logs/enable/disable/doctor` 常用命令，以及 `validate`、`render` 和 `sub export` 高级命令。
+实现 `init`、`add/config/list/remove/clone/check/start/stop/restart/status/logs/enable/disable/doctor` 常用命令，以及 `validate`、`render` 和 `sub export` 高级命令。
 
 ## 技术方案
 
@@ -15,7 +15,7 @@
 
 ## 实现状态
 
-- 已实现 `init`、`add`、`edit`、`list`、`remove`、`clone`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor`。
+- 已实现 `init`、`add`、`config`、`list`、`remove`、`clone`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor`。
 - 已实现 `validate [target]`、`render model`、`render xrelay`、`render clash`、`render sub`。
 - `check` 只展示文件变更和依赖顺序，不写运行目录。
 - `start` 写入 `runtime/generated` 下的生成文件和 `manifest.json`，内容未变化时不改写文件，并通过 systemd 启动或重启目标服务。
@@ -30,7 +30,7 @@
 5. 实现 `check` 对比 manifest 和将生成文件。
 6. 实现 `start` 写文件、更新 manifest 并启动或重启服务。
 7. 实现 `add` 使用默认模板或 `--from-file` 创建 `stacks/<name>.yaml`，默认自动分配端口，并支持 auto 模板的 `--members`。
-8. 实现 `edit [name]` 打开 `config.yaml` 或指定 stack 文件，保存后校验并写回。
+8. 实现 `config [name]` 打开 `config.yaml` 或指定 stack 文件，保存后校验并写回。
 9. 实现 `clone <source> <target>` 复制已有 stack 文件为新 stack，支持 `--allocate-ports` 基于端口池重分配监听端口。
 10. 实现 `list`、`remove`、`check`、`start`、`stop`、`restart`、`status`、`logs`、`enable`、`disable`、`doctor` 常用包装命令，以及 `sub export` 订阅发布包导出命令。
 
@@ -43,8 +43,8 @@
 - `add` 不覆盖已有 stack 文件。
 - `clone` 默认不自动修改端口，复制结果必须经 `validate`；传入 `--allocate-ports` 时必须写入新的可用端口。
 - `start/stop/restart/status/logs/enable/disable` 不传目标时操作全部 enabled stack；传 `usa1`、`xrelay/usa1`、`clash/usa1` 或 `sub` 时只操作目标范围。
-- `edit <name>` 编辑 `/opt/proxystack/stacks/<name>.yaml`，不能破坏 YAML 结构；保存后必须先校验再替换原文件。
-- agent 运行期命令不写 `config.yaml`；只有 `init` 和 `edit` 可以写 `config.yaml`。
+- `config <name>` 编辑 `/opt/proxystack/stacks/<name>.yaml`，不能破坏 YAML 结构；保存后必须先校验再替换原文件。
+- agent 运行期命令不写 `config.yaml`；只有 `init` 和 `config` 可以写 `config.yaml`。
 - `doctor` 能报告目录权限、缺失二进制、systemd unit 缺失和端口占用。
 
 ## 依赖

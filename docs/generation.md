@@ -5,7 +5,7 @@
 `proxystack-agent start` 的配置生成输入只有 `/opt/proxystack/config.yaml` 和 `/opt/proxystack/stacks/*.yaml`，输出包括：
 
 - Xray JSON：`/opt/proxystack/runtime/generated/xray/<stack>.json`
-- mihomo YAML：`/opt/proxystack/runtime/generated/clash/<stack>.yaml`
+- mihomo YAML：`/opt/proxystack/runtime/generated/mihomo/<stack>.yaml`
 - 本地订阅输入：`/opt/proxystack/runtime/generated/sub/inputs/<source>.yaml`
 - 本地订阅索引：`/opt/proxystack/runtime/generated/sub/index.json`
 - manifest：`/opt/proxystack/runtime/manifest.json`
@@ -477,4 +477,4 @@ manifest 用于：
 - 判断哪些服务需要重启。
 - `status` 展示当前生成版本。
 - 保留上一版生成文件快照，为 P1 显式 rollback 命令提供数据。
-- 为 M5 原生配置备份设计提供运行状态参考；P0/P1 不实现通用配置备份恢复。
+- runtime 派生状态不进入原生配置备份包；`export/import` 只迁移 `config.yaml` 和 `stacks/*.yaml`。

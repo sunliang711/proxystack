@@ -176,7 +176,7 @@ agent 和 sub 可以部署在同一台机器、共用 `/opt/proxystack` 根目�
 写入边界：
 
 - `proxystack-agent` 可写 `runtime/`、`publish/`、`downloads/` 和 `stacks/*.yaml`。
-- `config.yaml` 运行期只读；只有 `init` 和 `edit` 这类配置管理命令可以写。
+- `config.yaml` 运行期只读；只有 `init` 和 `config` 这类配置管理命令可以写。
 - `proxystack-sub` 只写 `sub/inputs/`，并读取 `sub/config.yaml` 中的监听地址、access token 和可选 `templates_dir`。
 - `proxystack-agent sub export` 只生成 `/opt/proxystack/publish/sub-bundle.zip` 或指定 stack 的 `/opt/proxystack/publish/<stack>-sub-bundle.zip`，不直接改 `sub/inputs/`。
 - `proxystack-sub import` 从发布包复制 inputs 到 `sub/inputs/`，运行中的服务由 watcher 自动 reload。

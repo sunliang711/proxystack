@@ -24,17 +24,20 @@
 - [x] 建立测试矩阵和端到端验证 P0
 - [x] 实现首次安装和订阅服务部署脚本 P0
 - [x] 增强订阅发布预览、导入摘要、serve 启动/reload 日志和 ps-sub 配置示例
+- [x] 实现 agent 原生配置备份 `export/import`
+- [x] 实现 `proxystack-sub config/clear`
+- [x] 实现 `proxystack-agent ipinfo` 出口 IP 诊断
 
 ## 里程碑
 
 | 阶段 | 范围 | 状态 |
 | --- | --- | --- |
 | M0 | 项目文档、配置规范、任务拆分 | 已完成 |
-| M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 进行中 |
-| M2 | Xray/mihomo/sub 生成器、golden tests | 进行中 |
-| M3 | 生成配置写入、manifest、systemd 管理 | 进行中 |
+| M1 | Python 项目骨架、stack schema、validate/render 基础能力 | 已完成 |
+| M2 | Xray/mihomo/sub 生成器、golden tests | 已完成 |
+| M3 | 生成配置写入、manifest、systemd 管理 | 已完成 |
 | M4 | install/update、部署脚本、订阅发布包、多输入合并、订阅服务本地/Docker 部署和测试矩阵 | 已完成 |
-| M5 | mihomo API、原生备份导入导出和发布增强 | 未开始 |
+| M5 | mihomo API、原生备份导入导出和发布增强 | 部分完成 |
 
 ## 交付记录
 

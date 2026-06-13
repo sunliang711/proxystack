@@ -218,7 +218,9 @@ ps-agent render clash usa1
 ps-agent render sub
 ps-agent sub export
 ps-agent sub export usa1
+ps-sub config --data-dir /opt/proxystack/sub
 ps-sub import /opt/proxystack/publish/sub-bundle.zip --data-dir /opt/proxystack/sub
+ps-sub clear --data-dir /opt/proxystack/sub
 ps-sub serve --config /opt/proxystack/sub/config.yaml
 ```
 

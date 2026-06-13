@@ -23,9 +23,9 @@ src/proxystack/
     mihomo/
     sub/
   install/
+  diagnostics/
   systemd/
   subserver/
-  mihomoapi/
   templates/
 tests/
   golden/
@@ -41,7 +41,7 @@ tests/
 - console scripts 只负责命令入口和依赖装配，不放业务逻辑。
 - CLI 层只做参数接收、校验入口和响应展示。
 - Service 层承载业务流程、文件写入、外部调用编排。
-- Adapter 层封装 systemd、下载器、文件系统和 mihomo API。
+- Adapter 层封装 systemd、下载器、文件系统和诊断 HTTP/命令调用。
 - Pydantic Schema 与运行时生成模型分离，避免把外部输入模型直接传到所有内部模块。
 - 配置加载统一在 `src/proxystack/config`，业务代码不散落调用 `os.getenv()` 读取核心配置。
 - 本地运行目录默认统一在 `/opt/proxystack`，代码中不得硬编码其他配置或运行目录。
