@@ -125,6 +125,7 @@ class PortRanges(ProxystackModel):
 
     xrelay_inbound: PortRange
     clash_socks: PortRange
+    xray_api_range: PortRange
     clash_controller: PortRange
 
 

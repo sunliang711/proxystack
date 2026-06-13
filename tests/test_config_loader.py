@@ -771,6 +771,18 @@ def test_port_range_allocates_stably() -> None:
     assert port_range.allocate({24000, 24002}, count=2) == [24001, 24003]
 
 
+def test_config_requires_xray_api_range(tmp_path: Path) -> None:
+    """验证全局端口池必须显式配置 Xray API 端口范围。"""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        valid_config_yaml(tmp_path).replace("  xray_api_range: 10001-10999\n", ""),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="xray_api_range"):
+        load_config(config_path)
+
+
 def write_project(tmp_path: Path, stack_yaml: str) -> Path:
     """写入一个最小配置项目，供加载流程测试使用。"""
     return write_project_stacks(tmp_path, {"edge": stack_yaml})
@@ -797,7 +809,8 @@ subscription:
   source: local
 port_ranges:
   xrelay_inbound: 24000-24999
-  clash_socks: 17000-17999
+  clash_socks: 7001-7101
+  xray_api_range: 10001-10999
   clash_controller: 19000-19999
 """
 

@@ -210,7 +210,8 @@ subscription:
 
 port_ranges:
   xrelay_inbound: 24000-24999
-  clash_socks: 17000-17999
+  clash_socks: 7001-7101
+  xray_api_range: 10001-10999
   clash_controller: 19000-19999
 
 defaults:
@@ -483,7 +484,7 @@ def rewrite_ref_string(value: str, source: str, target: str) -> str:
 
 
 def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> None:
-    """按全局端口池为 stack 内 xrelay inbound/API、clash socks 和 controller 分配端口。"""
+    """按全局端口池为 stack 内 xrelay inbound、Xray API、clash socks 和 controller 分配端口。"""
     used_ports = collect_used_ports(config)
     xrelay_data = stack_data.setdefault("xrelay", {})
     inbounds = xrelay_data.get("inbounds", [])
@@ -506,8 +507,8 @@ def allocate_stack_ports(config: GlobalConfig, stack_data: dict[str, Any]) -> No
         if "listen" in api_data:
             api_host, _ = parse_listen(str(api_data["listen"]))
         api_port = allocate_from_range(
-            config.port_ranges.clash_controller.start,
-            config.port_ranges.clash_controller.end,
+            config.port_ranges.xray_api_range.start,
+            config.port_ranges.xray_api_range.end,
             used_ports,
             1,
         )[0]

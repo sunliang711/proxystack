@@ -22,7 +22,8 @@ port_ranges:
   # Only used by add/clone --allocate-ports.
   # Manually configured ports may be outside these ranges if they are valid and unique.
   xrelay_inbound: 4300-4399
-  clash_socks: 7090-7999
+  clash_socks: 7001-7101
+  xray_api_range: 10001-10999
   clash_controller: 19000-19999
 
 defaults:

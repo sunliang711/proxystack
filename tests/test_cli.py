@@ -400,6 +400,7 @@ def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: P
     assert config_data["external_host"] == "proxy.test"
     assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["port_ranges"]["xrelay_inbound"] == "24000-24999"
+    assert config_data["port_ranges"]["xray_api_range"] == "10001-10999"
 
 
 def test_agent_add_uses_template_and_refuses_overwrite(tmp_path: Path) -> None:
@@ -486,12 +487,12 @@ def test_agent_add_allocates_ports_by_default_for_multiple_stacks(tmp_path: Path
     usa2 = YAML(typ="safe").load((config.parent / "stacks" / "usa2.yaml").read_text(encoding="utf-8"))
     assert [inbound["port"] for inbound in usa1["xrelay"]["inbounds"]] == [4300, 4301]
     assert [inbound["port"] for inbound in usa2["xrelay"]["inbounds"]] == [4302, 4303]
-    assert usa1["clash"]["listeners"]["socks"][0]["port"] == 7090
-    assert usa2["clash"]["listeners"]["socks"][0]["port"] == 7091
-    assert usa1["xrelay"]["api"]["listen"] == "127.0.0.1:19000"
-    assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:19001"
-    assert usa2["xrelay"]["api"]["listen"] == "127.0.0.1:19002"
-    assert usa2["clash"]["controller"]["listen"] == "127.0.0.1:19003"
+    assert usa1["clash"]["listeners"]["socks"][0]["port"] == 7001
+    assert usa2["clash"]["listeners"]["socks"][0]["port"] == 7002
+    assert usa1["xrelay"]["api"]["listen"] == "127.0.0.1:10001"
+    assert usa1["clash"]["controller"]["listen"] == "127.0.0.1:11001"
+    assert usa2["xrelay"]["api"]["listen"] == "127.0.0.1:10002"
+    assert usa2["clash"]["controller"]["listen"] == "127.0.0.1:11002"
     usa1_uuid = usa1["xrelay"]["inbounds"][1]["users"][0]["uuid"]
     usa2_uuid = usa2["xrelay"]["inbounds"][1]["users"][0]["uuid"]
     UUID(usa1_uuid)
@@ -513,7 +514,9 @@ def test_agent_clone_allocates_new_ports(tmp_path: Path) -> None:
     assert cloned_stack["name"] == "usa3"
     assert cloned_stack["xrelay"]["outbound"]["ref"] == "usa3.clash.socks"
     assert cloned_stack["xrelay"]["inbounds"][0]["port"] != source_stack["xrelay"]["inbounds"][0]["port"]
+    assert cloned_stack["xrelay"]["api"]["listen"] == "127.0.0.1:10001"
     assert cloned_stack["clash"]["listeners"]["socks"][0]["port"] != source_stack["clash"]["listeners"]["socks"][0]["port"]
+    assert cloned_stack["clash"]["controller"]["listen"] == "127.0.0.1:19000"
 
 
 def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -527,9 +530,9 @@ def test_agent_add_allocates_ports_from_config_ranges(tmp_path: Path, monkeypatc
     stack_data = YAML(typ="safe").load((config.parent / "stacks" / "edge.yaml").read_text(encoding="utf-8"))
     inbound_ports = [inbound["port"] for inbound in stack_data["xrelay"]["inbounds"]]
     assert inbound_ports == [4300, 4301]
-    assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 7090
-    assert stack_data["xrelay"]["api"]["listen"] == "127.0.0.1:19000"
-    assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:19001"
+    assert stack_data["clash"]["listeners"]["socks"][0]["port"] == 7001
+    assert stack_data["xrelay"]["api"]["listen"] == "127.0.0.1:10001"
+    assert stack_data["clash"]["controller"]["listen"] == "127.0.0.1:11001"
 
 
 def test_agent_add_auto_template_without_members_creates_disabled_draft(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -1313,7 +1316,8 @@ subscription:
   source: local
 port_ranges:
   xrelay_inbound: 24000-24999
-  clash_socks: 17000-17999
+  clash_socks: 7001-7101
+  xray_api_range: 10001-10999
   clash_controller: 19000-19999
 """
     stack_content = Path("tests/fixtures/example-project/stacks/usa1.yaml").read_bytes()
@@ -2007,7 +2011,8 @@ subscription:
   source: local
 port_ranges:
   xrelay_inbound: 24000-24999
-  clash_socks: 17000-17999
+  clash_socks: 7001-7101
+  xray_api_range: 10001-10999
   clash_controller: 19000-19999
 """.lstrip(),
         encoding="utf-8",

@@ -69,7 +69,8 @@ subscription:
 
 port_ranges:
   xrelay_inbound: 24000-24999
-  clash_socks: 17000-17999
+  clash_socks: 7001-7101
+  xray_api_range: 10001-10999
   clash_controller: 19000-19999
 
 defaults:
@@ -122,7 +123,7 @@ install:
 - `sub/config.yaml`：订阅服务自身配置，默认来自 `src/proxystack/templates/sub-config.yaml`；实际 HTTP 服务只读取这里的 `listen`、`access`、`templates_dir`、`watch_*` 和 `managed_config`。
 - `subscription.remark_policy`：订阅节点展示名生成策略，默认 `prefix-source`，会把 stack/source 前缀用横杠加到最终 `remark` 前，避免多个 stack 的同名节点在客户端冲突。
 - `subscription.remark_template`：当 `remark_policy: template` 时必填。支持 `{source}`、`{inbound}`、`{protocol}`、`{port}`、`{user}`、`{remark}`。
-- `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
+- `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池；`xrelay_inbound` 分配入口端口，`xray_api_range` 分配 Xray API，`clash_socks` 分配 mihomo/clash socks listener，`clash_controller` 分配 mihomo/clash REST controller。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。
 - `install`：二进制安装和更新默认版本。
