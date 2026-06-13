@@ -27,11 +27,14 @@ sudo scripts/install-agent.sh
 ```bash
 sudo ps-agent setup
 sudo ps-agent doctor
+sudo ps-agent config
 sudo ps-agent add usa1
 sudo ps-agent config usa1
 sudo ps-agent check usa1
 sudo ps-agent start usa1
 ```
+
+执行 `ps-agent config` 时，先把全局 `external_host` 改成真实对外域名或公网 IP，避免后续订阅节点 server 仍是默认值。
 
 `--install-systemd` 适用于只想在 bootstrap 阶段提前安装 unit、暂不执行 `setup` 下载代理核心的高级场景。普通首次安装优先使用上面的 `ps-agent setup` 主路径。
 

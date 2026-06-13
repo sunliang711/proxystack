@@ -344,6 +344,20 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert sub_config["access"]["token"] == "change-me"
 
 
+def test_agent_init_leaves_external_host_unset_by_default(tmp_path: Path) -> None:
+    """验证 init 默认不写入占位 external_host，避免订阅误用示例域名。"""
+    project_dir = tmp_path / "project"
+    config = project_dir / "config.yaml"
+
+    result = runner.invoke(agent_app, ["init", "-c", str(config), "--base-dir", str(project_dir)])
+
+    assert result.exit_code == 0
+    config_text = config.read_text(encoding="utf-8")
+    config_data = YAML(typ="safe").load(config_text)
+    assert "external_host" not in config_data
+    assert "# external_host: proxy.example.com" in config_text
+
+
 def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """验证包内 agent config 模板缺失时 init 仍使用内置默认配置。"""
     project_dir = tmp_path / "project"
@@ -1032,6 +1046,24 @@ def test_agent_sub_export_rejects_missing_stack(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "stack does not exist: missing" in result.output
+
+
+def test_agent_sub_export_rejects_missing_external_host(tmp_path: Path) -> None:
+    """验证 sub export 在未设置 external_host 时失败，避免发布错误订阅 server。"""
+    config = copy_example_project(tmp_path)
+    output = tmp_path / "sub-bundle.zip"
+    yaml = YAML()
+    config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
+    config_data.pop("external_host")
+    with config.open("w", encoding="utf-8") as config_file:
+        yaml.dump(config_data, config_file)
+
+    result = runner.invoke(agent_app, ["sub", "export", "-o", str(output), "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "external_host is required before exporting subscriptions" in result.output
+    assert "ps-agent config" in result.output
+    assert not output.exists()
 
 
 def test_agent_sub_export_skips_running_service_ports_by_default(tmp_path: Path) -> None:

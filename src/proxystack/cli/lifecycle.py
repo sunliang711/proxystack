@@ -131,7 +131,7 @@ class RuntimePlan:
         return [service_name for service_name in self.scope.service_names if service_name in service_names]
 
 
-def init_project(config_path: Path, base_dir: Optional[Path], external_host: str, force: bool) -> list[Path]:
+def init_project(config_path: Path, base_dir: Optional[Path], external_host: Optional[str], force: bool) -> list[Path]:
     """创建 base_dir、标准目录和默认 config.yaml，适用于首次初始化。"""
     actual_base_dir = base_dir or config_path.parent
     created_paths: list[Path] = []
@@ -151,7 +151,7 @@ def init_project(config_path: Path, base_dir: Optional[Path], external_host: str
     return created_paths
 
 
-def initial_config_yaml(base_dir: Path, external_host: str) -> str:
+def initial_config_yaml(base_dir: Path, external_host: Optional[str]) -> str:
     """优先从包内模板生成初始配置，缺失时使用内置默认值。"""
     template_text = read_builtin_agent_config_template()
     if template_text is None:
@@ -168,21 +168,27 @@ def read_builtin_agent_config_template() -> Optional[str]:
         return None
 
 
-def render_agent_config_template(template_text: str, base_dir: Path, external_host: str) -> str:
+def render_agent_config_template(template_text: str, base_dir: Path, external_host: Optional[str]) -> str:
     """渲染 agent config 模板，并改写和当前部署环境相关的字段。"""
     yaml = YAML()
     template_data = yaml.load(template_text)
     if not isinstance(template_data, dict):
         raise ValueError(f"agent config template must be a mapping: {AGENT_CONFIG_TEMPLATE_NAME}")
     template_data["base_dir"] = str(base_dir)
-    template_data["external_host"] = external_host
+    if external_host is not None:
+        template_data["external_host"] = external_host
     output = StringIO()
     yaml.dump(template_data, output)
     return output.getvalue()
 
 
-def default_config_yaml(base_dir: Path, external_host: str) -> str:
+def default_config_yaml(base_dir: Path, external_host: Optional[str]) -> str:
     """生成保守的默认全局配置 YAML。"""
+    external_host_yaml = (
+        f"external_host: {external_host}"
+        if external_host is not None
+        else "# external_host: proxy.example.com"
+    )
     return f"""version: 1
 base_dir: {base_dir}
 paths:
@@ -195,7 +201,7 @@ paths:
   downloads: downloads
   sub: sub
 
-external_host: {external_host}
+{external_host_yaml}
 
 subscription:
   source: local

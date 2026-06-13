@@ -1,19 +1,31 @@
+# 配置文件版本，当前只支持 1。
 version: 1
-# 初始全局配置模板；init 会改写 base_dir 和 external_host。
+# 项目根目录；init 会按安装位置改写这个值。
 base_dir: /opt/proxystack
 
+# 相对路径都基于 base_dir 解析，也可以改成绝对路径。
 paths:
+  # 代理核心二进制目录，存放 mihomo 和 xray。
   bin: bin
+  # geo 数据目录，存放 geoip、geosite、mmdb 或 metadb。
   geo: geo
+  # stack 配置目录，存放 stacks/<name>.yaml。
   stacks: stacks
+  # 运行状态目录，存放 manifest、锁文件等运行期文件。
   runtime: runtime
+  # 生成配置目录，存放 Xray JSON、mihomo YAML 和订阅 input/index。
   generated: runtime/generated
+  # 订阅发布包输出目录。
   publish: publish
+  # 代理核心和 geo 数据下载缓存目录。
   downloads: downloads
+  # 本地订阅服务数据目录。
   sub: sub
 
-external_host: proxy.example.com
+# 订阅节点默认对外 host；发布订阅前取消注释并改成真实域名或公网 IP。
+# external_host: proxy.example.com
 
+# 订阅 input/index 和发布包的默认生成策略。
 subscription:
   # 订阅输入来源；支持全集：local。
   source: local
@@ -21,53 +33,92 @@ subscription:
   # template 模式可配合 remark_template 自定义节点名称。
   remark_policy: prefix-source
 
+# 自动分配端口池；只影响 add 和 clone --allocate-ports，不限制手写端口。
 port_ranges:
-  # Only used by add/clone --allocate-ports.
-  # Manually configured ports may be outside these ranges if they are valid and unique.
+  # xrelay inbound 自动分配端口范围。
   xrelay_inbound: 4300-4399
+  # mihomo/clash socks listener 自动分配端口范围。
   clash_socks: 7090-7999
+  # mihomo/clash REST controller 自动分配端口范围。
   clash_controller: 19000-19999
 
+# 全局默认值；单个 stack 显式配置时会覆盖这里。
 defaults:
+  # mihomo/clash 默认配置。
   clash:
     # 默认 Clash 运行模式；支持全集：Rule、Global、Direct。
     mode: Rule
     # 默认内置规则 profile；支持全集：default。
     rule_profile: default
+  # Xray/xrelay 默认配置。
   xrelay:
+    # 默认 Xray 日志级别。
     loglevel: warning
+    # Xray API 配置，用于统计等内部能力，只允许监听 loopback。
     api:
+      # 是否生成 Xray API outbound。
       enabled: true
+      # Xray API outbound tag。
       tag: api
+      # Xray API 监听地址，必须是本机回环地址。
       listen: 127.0.0.1:10085
+      # 开启的 Xray API services。
       services: [StatsService]
+    # Xray stats 开关。
     stats:
+      # 是否启用 Xray stats。
       enabled: true
+    # Xray policy 配置，通常配合 stats 统计流量。
     policy:
+      # 是否启用 Xray policy。
       enabled: true
+      # 按 Xray user level 配置统计项。
       levels:
+        # 默认 level 0 的用户统计配置。
         "0":
+          # 统计用户上行流量。
           statsUserUplink: true
+          # 统计用户下行流量。
           statsUserDownlink: true
+      # Xray 系统级入站和出站统计配置。
       system:
+        # 统计入站上行流量。
         statsInboundUplink: true
+        # 统计入站下行流量。
         statsInboundDownlink: true
+        # 统计出站上行流量。
         statsOutboundUplink: true
+        # 统计出站下行流量。
         statsOutboundDownlink: true
 
+# 安全策略，主要保护公网 socks/http 入站。
 security:
+  # 公网 socks/http 入站是否必须配置鉴权。
   require_auth_for_public_socks_http: true
+  # 是否允许公网 socks/http 入站无鉴权；生产环境建议保持 false。
   allow_noauth_public: false
 
+# 代理核心和 geo 数据安装默认策略。
 install:
+  # mihomo 安装配置。
   mihomo:
+    # 可改成 latest 使用最新版本。
     #version: latest
+    # mihomo 默认安装版本。
     version: 1.19.27
+    # mihomo 下载来源；auto 会优先 GitHub Release，失败后回退托管源。
     source: auto
+  # xray-core 安装配置。
   xray:
+    # 可改成 latest 使用最新版本。
     #version: latest
+    # xray-core 默认安装版本。
     version: 26.3.27
+    # xray-core 下载来源；auto 会优先 GitHub Release，失败后回退托管源。
     source: auto
+  # geo 数据安装配置。
   geo:
+    # geo 数据默认安装版本。
     version: latest
+    # geo 数据下载来源；auto 使用托管源策略。
     source: auto

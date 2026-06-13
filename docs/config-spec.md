@@ -35,7 +35,7 @@ proxystack-agent validate -c ./tests/fixtures/example-project/config.yaml
 proxystack-agent check -c ./tests/fixtures/example-project/config.yaml
 ```
 
-仓库内的 `src/proxystack/templates/agent-config.yaml` 是 `init` 初始配置模板；`init` 会通过 package resources 读取它，并按目标环境改写 `base_dir` 和 `external_host`。如果包内模板缺失，`init` 会退回代码内置默认配置。`tests/fixtures/example-project/config.yaml` 只作为开发和测试用完整项目 fixture。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
+仓库内的 `src/proxystack/templates/agent-config.yaml` 是 `init` 初始配置模板；`init` 会通过 package resources 读取它，并按目标环境改写 `base_dir`。`external_host` 默认保留为注释示例，发布订阅前必须在全局配置中显式设置。如果包内模板缺失，`init` 会退回代码内置默认配置。`tests/fixtures/example-project/config.yaml` 只作为开发和测试用完整项目 fixture。生产环境仍使用 `/opt/proxystack` 作为默认 `base_dir`。
 
 关键规则：
 
@@ -61,7 +61,7 @@ paths:
   downloads: downloads
   sub: sub
 
-external_host: proxy.example.com
+# external_host: proxy.example.com
 
 subscription:
   source: local
@@ -117,7 +117,7 @@ install:
 - `install.geo.source` 使用托管源别名时默认下载 `MetaCubeX/meta-rules-dat` 的 `geoip.metadb`；本地 `.dat`、`.mmdb`、`.metadb`、zip/tar 文件或普通 URL 仍可显式指定。
 - `paths.downloads`：mihomo、xray-core 和 geo 数据下载缓存。
 - `paths.sub`：本地非 Docker 订阅服务数据目录，默认 `/opt/proxystack/sub`。
-- `external_host`：订阅节点默认对外 host。
+- `external_host`：订阅节点默认对外 host；发布订阅前必须取消注释并设置为真实域名或公网 IP，`sub export` 会在缺失时失败。
 - `subscription`：agent 生成订阅 input/index 和导出发布包时使用的默认参数。
 - `sub/config.yaml`：订阅服务自身配置，默认来自 `src/proxystack/templates/sub-config.yaml`；实际 HTTP 服务只读取这里的 `listen`、`access`、`templates_dir`、`watch_*` 和 `managed_config`。
 - `subscription.remark_policy`：订阅节点展示名生成策略，默认 `prefix-source`，会把 stack/source 前缀用横杠加到最终 `remark` 前，避免多个 stack 的同名节点在客户端冲突。

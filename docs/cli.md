@@ -102,7 +102,7 @@ proxystack-agent doctor
 
 命令语义：
 
-- `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`；优先以包内 `src/proxystack/templates/agent-config.yaml` 为模板并改写 `base_dir`、`external_host`，模板缺失时使用内置默认值；已存在文件默认不覆盖。
+- `init`：创建 `/opt/proxystack` 目录结构、默认 `config.yaml` 和初始 `sub/config.yaml`；优先以包内 `src/proxystack/templates/agent-config.yaml` 为模板并改写 `base_dir`，`external_host` 默认保留为注释示例，模板缺失时使用内置默认值；已存在文件默认不覆盖。
 - `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
 - `config`：安全编辑 `/opt/proxystack/config.yaml`；等价于 `edit` 不带 stack 名称，但语义更明确。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
@@ -388,7 +388,7 @@ GET /surge_sub/:user
 
 订阅相关命令区别：
 
-- `sub export`：常用入口，默认生成 `/opt/proxystack/publish/sub-bundle.zip`，包内按 stack 写入 `inputs/<stack>.yaml`。
+- `sub export`：常用入口，默认生成 `/opt/proxystack/publish/sub-bundle.zip`，包内按 stack 写入 `inputs/<stack>.yaml`；执行前必须在全局配置中设置 `external_host`。
 - `sub export <stack>`：只导出指定 stack，默认生成 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
 - `sub export --summary` 或 `--dry-run`：只预览发布包将包含的 input、node、user 数量、`external_host` 和最终订阅节点展示名，不写 zip。
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。

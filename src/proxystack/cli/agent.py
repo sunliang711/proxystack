@@ -153,7 +153,7 @@ def echo_command_error(exc: BaseException) -> None:
 def init(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     base_dir: Optional[Path] = typer.Option(None, "--base-dir", help="base_dir；缺省使用 config.yaml 所在目录。"),
-    external_host: str = typer.Option("proxy.example.com", "--external-host", help="默认 external_host。"),
+    external_host: Optional[str] = typer.Option(None, "--external-host", help="订阅默认 external_host；缺省时需要之后在 config.yaml 中填写。"),
     force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.yaml。"),
 ) -> None:
     """初始化 proxystack 目录和默认配置。"""
@@ -171,7 +171,7 @@ def init(
 def setup(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     base_dir: Optional[Path] = typer.Option(None, "--base-dir", help="base_dir；缺省使用 config.yaml 所在目录。"),
-    external_host: str = typer.Option("proxy.example.com", "--external-host", help="默认 external_host。"),
+    external_host: Optional[str] = typer.Option(None, "--external-host", help="订阅默认 external_host；缺省时需要之后在 config.yaml 中填写。"),
     force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.yaml。"),
 ) -> None:
     """初始化项目，幂等安装代理运行依赖和 systemd unit。"""
@@ -1241,6 +1241,7 @@ def export_subscription(
     """生成 ps-sub 可导入的订阅发布包。"""
     try:
         global_config = load_config(config)
+        external_host = require_external_host_for_subscription_export(global_config)
         stack_set = load_stacks(global_config, check_system_ports=False)
         bundle_source, input_files = build_subscription_bundle_inputs(stack_set, stack)
         bundle_summary = summarize_input_files(bundle_source, input_files)
@@ -1249,7 +1250,7 @@ def export_subscription(
             echo_subscription_bundle_summary(
                 bundle_summary,
                 output_path=output_path,
-                external_host=global_config.external_host,
+                external_host=external_host,
                 preview=True,
             )
             return
@@ -1263,9 +1264,19 @@ def export_subscription(
     echo_subscription_bundle_summary(
         bundle_summary,
         output_path=output_path,
-        external_host=global_config.external_host,
+        external_host=external_host,
         preview=False,
     )
+
+
+def require_external_host_for_subscription_export(global_config: GlobalConfig) -> str:
+    """确保导出订阅前已设置对外 host，避免发布不可用的默认 server。"""
+    if not global_config.external_host:
+        raise ValueError(
+            "external_host is required before exporting subscriptions; "
+            "run `ps-agent config` and set external_host to the public domain/IP"
+        )
+    return global_config.external_host
 
 
 @sub_app.command("validate-inputs")

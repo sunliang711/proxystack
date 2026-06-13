@@ -259,7 +259,7 @@ class GlobalConfig(ProxystackModel):
     version: Literal[1] = 1
     base_dir: Path = Path("/opt/proxystack")
     paths: ConfigPaths = Field(default_factory=ConfigPaths)
-    external_host: str
+    external_host: Optional[str] = None
     subscription: SubscriptionConfig = Field(default_factory=SubscriptionConfig)
     port_ranges: PortRanges
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
