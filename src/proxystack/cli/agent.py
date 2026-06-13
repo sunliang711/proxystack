@@ -111,7 +111,7 @@ SYSTEMD_RUNNER: Optional[CommandRunner] = None
 SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
 SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
 INSTALL_SOURCE_HELP = "安装源。mihomo/xray/geo 可用 auto/github/r2、本地文件或 http(s) URL；geo 默认下载 MetaCubeX geoip.metadb，普通远端 URL 需要 --sha256。"
-DOWNLOAD_PROGRESS_PREFIXES = ("download: start ", "download: progress ", "download: complete ")
+DOWNLOAD_PROGRESS_PREFIXES = ("download: start ", "download: progress ", "download: complete ", "download: slow ")
 
 
 @app.callback()

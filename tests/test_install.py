@@ -24,8 +24,12 @@ from proxystack.install import detect_component_version
 from proxystack.install import install_artifact
 from proxystack.install import run_self_update
 from proxystack.install.service import atomic_replace_file
+from proxystack.install.service import DOWNLOAD_CHUNK_SIZE
+from proxystack.install.service import DOWNLOAD_SLOW_THRESHOLD
 from proxystack.install.service import download_url_with_opener
 from proxystack.install.service import file_sha256
+from proxystack.install.service import managed_download_min_speed
+from proxystack.install.service import SlowDownloadError
 from proxystack.install.service import validate_download_url
 from proxystack.logging import StepLogger
 
@@ -214,6 +218,39 @@ def test_install_auto_source_falls_back_to_r2_and_extracts_gzip(tmp_path: Path) 
         "https://github.com/MetaCubeX/mihomo/releases/download/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
         "https://pub-06197a088952412f8ff879716ee84855.r2.dev/mihomo/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
     ]
+
+
+def test_install_auto_source_falls_back_when_first_source_is_slow(tmp_path: Path) -> None:
+    """验证 auto 下载遇到慢速 GitHub 源时会切换到 R2。"""
+    config = write_install_config(tmp_path)
+    global_config = load_config(config)
+    payload = b"mihomo-binary"
+    compressed_payload = gzip.compress(payload)
+    downloaded_sources: list[str] = []
+    progress_messages: list[str] = []
+
+    def fake_downloader(source: str, destination: Path) -> Path:
+        """模拟首个源慢速失败、备用源成功下载。"""
+        downloaded_sources.append(source)
+        if "github.com" in source:
+            raise SlowDownloadError("average speed 12.0 KiB/s below threshold 200.0 KiB/s")
+        destination.write_bytes(compressed_payload)
+        return destination
+
+    result = install_artifact(
+        global_config,
+        InstallRequest(target="mihomo", version="v1.2.3", source="auto"),
+        downloader=fake_downloader,
+        progress=progress_messages.append,
+    )
+
+    assert result.installed_paths == (config.parent / "bin" / "mihomo",)
+    assert result.installed_paths[0].read_bytes() == payload
+    assert downloaded_sources == [
+        "https://github.com/MetaCubeX/mihomo/releases/download/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
+        "https://pub-06197a088952412f8ff879716ee84855.r2.dev/mihomo/v1.2.3/mihomo-linux-amd64-compatible-v1.2.3.gz",
+    ]
+    assert any(message.startswith("download: slow GitHub Release") for message in progress_messages)
 
 
 def test_install_mihomo_skips_existing_binary_without_downloader(tmp_path: Path) -> None:
@@ -424,6 +461,44 @@ def test_download_url_reports_time_based_progress(tmp_path: Path) -> None:
     assert all("/s" in message for message in messages)
     assert any("[#" in message or "[-" in message for message in messages)
     assert messages[-1].startswith("download: complete xray.zip")
+
+
+def test_download_url_raises_slow_download_after_warmup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证下载循环在预热期后平均速度过低时中断。"""
+    payload = b"x" * (2 * DOWNLOAD_CHUNK_SIZE)
+    destination = tmp_path / "downloads" / "xray.zip"
+    destination.parent.mkdir()
+    ticks = [0.0, 0.0, 11.0]
+
+    def fake_monotonic() -> float:
+        """模拟下载进入慢速判定窗口。"""
+        if ticks:
+            return ticks.pop(0)
+        return 11.0
+
+    monkeypatch.setattr("proxystack.install.service.time.monotonic", fake_monotonic)
+
+    with pytest.raises(SlowDownloadError, match="below threshold"):
+        download_url_with_opener(
+            "https://example.com/xray.zip",
+            destination,
+            FakeOpener(payload),
+            min_speed=DOWNLOAD_SLOW_THRESHOLD,
+        )
+
+    assert not destination.exists()
+
+
+def test_managed_download_min_speed_only_applies_to_auto_non_last_core_source() -> None:
+    """验证慢速阈值只用于 auto 模式下 mihomo/xray 的非最后托管源。"""
+    assert managed_download_min_speed("mihomo", "auto", is_last_source=False) == DOWNLOAD_SLOW_THRESHOLD
+    assert managed_download_min_speed("xray", "auto", is_last_source=False) == DOWNLOAD_SLOW_THRESHOLD
+    assert managed_download_min_speed("mihomo", "auto", is_last_source=True) == 0
+    assert managed_download_min_speed("mihomo", "github", is_last_source=False) == 0
+    assert managed_download_min_speed("geo", "auto", is_last_source=False) == 0
 
 
 def test_download_requires_sha256_before_downloader_runs(tmp_path: Path) -> None:

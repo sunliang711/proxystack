@@ -38,6 +38,7 @@ BINARY_NAMES = {
 }
 MANAGED_SOURCE_ALIASES = {"auto", "github", "r2"}
 MANAGED_DOWNLOAD_ROOT = "https://pub-06197a088952412f8ff879716ee84855.r2.dev"
+MANAGED_SLOW_FALLBACK_TARGETS = {"mihomo", "xray"}
 MANAGED_PROJECTS = {
     "mihomo": {
         "repo": "MetaCubeX/mihomo",
@@ -68,6 +69,8 @@ GEO_SUFFIXES = {".dat", ".mmdb", ".metadb"}
 DOWNLOAD_TIMEOUT = 30
 DOWNLOAD_CHUNK_SIZE = 64 * 1024
 DOWNLOAD_PROGRESS_INTERVAL = 0.2
+DOWNLOAD_SLOW_THRESHOLD = 200 * 1024
+DOWNLOAD_SLOW_CHECK_AFTER = 10.0
 
 Downloader = Callable[[str, Path], Path]
 DownloadProgress = Callable[[str], None]
@@ -118,6 +121,10 @@ class ManagedDownloadSource:
     url: str
     filename: str
     version: str
+
+
+class SlowDownloadError(OSError):
+    """表示下载速度低于自动切源阈值。"""
 
 
 @dataclass(frozen=True)
@@ -300,21 +307,42 @@ def fetch_managed_source(
     emit_progress(progress, f"download: resolve {request.target} {request.version} via {request.source}")
     sources = build_managed_sources(request.target, request.version, request.source)
     failures: list[str] = []
-    for source in sources:
+    for source_index, source in enumerate(sources):
+        is_last_source = source_index == len(sources) - 1
         destination = downloads_dir / source.filename
         try:
             emit_progress(progress, f"download: try {source.name} {source.filename}")
             if downloader is not None:
                 downloaded_path = downloader(source.url, destination)
             else:
-                downloaded_path = download_url_with_redirects(source.url, destination, progress=progress)
+                downloaded_path = download_url_with_redirects(
+                    source.url,
+                    destination,
+                    progress=progress,
+                    min_speed=managed_download_min_speed(request.target, request.source, is_last_source),
+                )
             emit_progress(progress, f"download: selected {source.name}")
             return downloaded_path
+        except SlowDownloadError as exc:
+            destination.unlink(missing_ok=True)
+            emit_progress(progress, f"download: slow {source.name}: {exc}")
+            failures.append(f"{source.name}: {exc}")
         except (OSError, TimeoutError, ValueError) as exc:
             destination.unlink(missing_ok=True)
             emit_progress(progress, f"download: failed {source.name}: {exc}")
             failures.append(f"{source.name}: {exc}")
     raise ValueError(f"all managed download sources failed for {request.target}: {'; '.join(failures)}")
+
+
+def managed_download_min_speed(target: str, source_mode: str, is_last_source: bool) -> int:
+    """返回当前托管源下载的最低速度阈值；0 表示不做慢速中断。"""
+    if source_mode != "auto":
+        return 0
+    if is_last_source:
+        return 0
+    if target not in MANAGED_SLOW_FALLBACK_TARGETS:
+        return 0
+    return DOWNLOAD_SLOW_THRESHOLD
 
 
 def build_managed_sources(target: str, version: str, source_mode: str) -> list[ManagedDownloadSource]:
@@ -491,18 +519,29 @@ def download_url(source: str, destination: Path, progress: Optional[DownloadProg
     return download_url_with_opener(source, destination, build_opener(NoRedirectHandler()), progress=progress)
 
 
-def download_url_with_redirects(source: str, destination: Path, progress: Optional[DownloadProgress] = None) -> Path:
+def download_url_with_redirects(
+    source: str,
+    destination: Path,
+    progress: Optional[DownloadProgress] = None,
+    min_speed: int = 0,
+) -> Path:
     """下载内置托管源文件，允许 GitHub Release 资产重定向。"""
-    return download_url_with_opener(source, destination, build_opener(), progress=progress)
+    return download_url_with_opener(source, destination, build_opener(), progress=progress, min_speed=min_speed)
 
 
-def download_url_with_opener(source: str, destination: Path, opener, progress: Optional[DownloadProgress] = None) -> Path:
+def download_url_with_opener(
+    source: str,
+    destination: Path,
+    opener,
+    progress: Optional[DownloadProgress] = None,
+    min_speed: int = 0,
+) -> Path:
     """使用指定 opener 下载远端文件到缓存路径。"""
     with tempfile.NamedTemporaryFile("wb", delete=False, dir=destination.parent) as temp_file:
         temp_path = Path(temp_file.name)
         try:
             with opener.open(source, timeout=DOWNLOAD_TIMEOUT) as response:
-                copy_download_response(response, temp_file, destination.name, progress)
+                copy_download_response(response, temp_file, destination.name, progress, min_speed)
         except BaseException:
             temp_path.unlink(missing_ok=True)
             raise
@@ -510,7 +549,13 @@ def download_url_with_opener(source: str, destination: Path, opener, progress: O
     return destination
 
 
-def copy_download_response(response, destination_file, filename: str, progress: Optional[DownloadProgress]) -> None:  # type: ignore[no-untyped-def]
+def copy_download_response(  # type: ignore[no-untyped-def]
+    response,
+    destination_file,
+    filename: str,
+    progress: Optional[DownloadProgress],
+    min_speed: int = 0,
+) -> None:
     """复制下载响应到目标文件，并按时间间隔刷新下载进度。"""
     total_size = response_content_length(response)
     downloaded_size = 0
@@ -527,7 +572,23 @@ def copy_download_response(response, destination_file, filename: str, progress: 
         if now >= next_progress_time or (total_size is not None and downloaded_size >= total_size):
             emit_progress(progress, format_download_progress("download: progress", filename, downloaded_size, total_size, start_time))
             next_progress_time = now + DOWNLOAD_PROGRESS_INTERVAL
+        raise_for_slow_download(downloaded_size, start_time, min_speed)
     emit_progress(progress, format_download_progress("download: complete", filename, downloaded_size, total_size, start_time))
+
+
+def raise_for_slow_download(downloaded_size: int, start_time: float, min_speed: int) -> None:
+    """预热期后平均下载速度低于阈值时触发自动切源。"""
+    if min_speed <= 0:
+        return
+    elapsed = time.monotonic() - start_time
+    if elapsed < DOWNLOAD_SLOW_CHECK_AFTER:
+        return
+    average_speed = downloaded_size / elapsed if elapsed > 0 else 0.0
+    if average_speed >= min_speed:
+        return
+    raise SlowDownloadError(
+        f"average speed {format_byte_count(average_speed)}/s below threshold {format_byte_count(min_speed)}/s"
+    )
 
 
 def response_content_length(response) -> Optional[int]:  # type: ignore[no-untyped-def]
