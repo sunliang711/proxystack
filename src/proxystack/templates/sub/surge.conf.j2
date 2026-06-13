@@ -4,14 +4,26 @@ socks5-listen = 0.0.0.0:8889
 internet-test-url = {{ test_url }}
 proxy-test-url = {{ test_url }}
 test-timeout = 3
-ipv6 = false
+ipv6 = true
 show-error-page-for-reject = true
-dns-server = 119.29.29.29, system
+dns-server = 223.5.5.5, 119.29.29.29, 2400:3200::1, 2402:4e00::, system
+# DNS
+# doh-server = https://9.9.9.9/dns-query
 loglevel = notify
 skip-proxy = {{ surge_skip_proxy }}
 exclude-simple-hostnames = true
 allow-wifi-access = true
 allow-hotspot-access = true
+external-controller-access = haha71@0.0.0.0:8887
+http-api-web-dashboard = true
+# Others
+http-listen = 0.0.0.0:8000
+# network-framework = true
+socks5-listen = 0.0.0.0:1080
+ipv6-vif = auto
+wifi-access-http-port = 8000
+wifi-access-socks5-port = 1080
+
 
 [Replica]
 hide-apple-request = true

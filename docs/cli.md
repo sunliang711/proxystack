@@ -390,7 +390,7 @@ GET /surge_sub/:user
 
 - `sub export`：常用入口，默认生成 `/opt/proxystack/publish/sub-bundle.zip`，包内按 stack 写入 `inputs/<stack>.yaml`。
 - `sub export <stack>`：只导出指定 stack，默认生成 `/opt/proxystack/publish/<stack>-sub-bundle.zip`。
-- `sub export --summary` 或 `--dry-run`：只预览发布包将包含的 input、node、user 数量和最终订阅节点展示名，不写 zip。
+- `sub export --summary` 或 `--dry-run`：只预览发布包将包含的 input、node、user 数量、`external_host` 和最终订阅节点展示名，不写 zip。
 - `sub validate-inputs`：只校验 `inputs/` 目录，不生成发布包。
 - `render sub`：只输出订阅索引，不写文件；加 `--input-dir` 时输出多 input 合并后的结果。
 

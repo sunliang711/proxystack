@@ -1246,7 +1246,12 @@ def export_subscription(
         bundle_summary = summarize_input_files(bundle_source, input_files)
         output_path = output or default_subscription_bundle_path(global_config, stack)
         if summary:
-            echo_subscription_bundle_summary(bundle_summary, output_path=output_path, preview=True)
+            echo_subscription_bundle_summary(
+                bundle_summary,
+                output_path=output_path,
+                external_host=global_config.external_host,
+                preview=True,
+            )
             return
         write_bundle(output_path, bundle_source, input_files)
         ensure_managed_directory(output_path.parent)
@@ -1255,7 +1260,12 @@ def export_subscription(
         typer.echo(f"订阅发布包导出失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"订阅发布包已导出：{output_path}")
-    echo_subscription_bundle_summary(bundle_summary, output_path=output_path, preview=False)
+    echo_subscription_bundle_summary(
+        bundle_summary,
+        output_path=output_path,
+        external_host=global_config.external_host,
+        preview=False,
+    )
 
 
 @sub_app.command("validate-inputs")
@@ -1306,13 +1316,15 @@ def default_subscription_bundle_path(global_config: GlobalConfig, stack: Optiona
 def echo_subscription_bundle_summary(
     summary: SubscriptionBundleSummary,
     output_path: Path,
+    external_host: str,
     preview: bool,
 ) -> None:
     """输出订阅发布包内容摘要，不包含任何连接凭据。"""
     title = "订阅发布包预览" if preview else "订阅发布包摘要"
     typer.echo(
         f"{title}: output={output_path} source={summary.source} "
-        f"inputs={summary.input_count} nodes={summary.node_count} users={summary.user_count}"
+        f"external_host={external_host} inputs={summary.input_count} "
+        f"nodes={summary.node_count} users={summary.user_count}"
     )
     for input_summary in summary.inputs:
         typer.echo(

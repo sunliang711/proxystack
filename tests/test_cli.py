@@ -999,6 +999,7 @@ def test_agent_sub_export_all_stacks_bundle(tmp_path: Path) -> None:
     assert manifest["access"] == {"type": "none"}
     assert auto_input["source"] == "auto"
     assert auto_input["nodes"][0]["id"] == "auto:relay"
+    assert "external_host=proxy.example.com" in result.output
 
 
 def test_agent_sub_export_stack_bundle(tmp_path: Path) -> None:
@@ -1660,6 +1661,7 @@ def test_agent_sub_export_summary_does_not_write_bundle(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "订阅发布包预览" in result.output
     assert "source=usa1" in result.output
+    assert "external_host=proxy.example.com" in result.output
     assert "inputs=1" in result.output
     assert "nodes=2" in result.output
     assert "usa1.yaml" in result.output
