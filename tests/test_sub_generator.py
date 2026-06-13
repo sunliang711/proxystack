@@ -52,10 +52,10 @@ def test_render_stack_input_filters_sub_true_and_protocol_fields() -> None:
     assert nodes["edge:socks"].auth.username == "sock-user"
     assert nodes["edge:http"].auth is not None
     assert nodes["edge:http"].auth.password == "http-pass"
-    assert nodes["edge:vmess:alice"].remark == "edge-vmess:24001:alice"
-    assert nodes["edge:ss"].remark == "edge-shadowsocks:24002:alice"
-    assert nodes["edge:socks"].remark == "edge-socks5:24003:bob"
-    assert nodes["edge:http"].remark == "edge-http:24004:bob"
+    assert nodes["edge:vmess:alice"].remark == "alice@edge-vmess:24001-vmess"
+    assert nodes["edge:ss"].remark == "alice@edge-shadowsocks:24002-ss"
+    assert nodes["edge:socks"].remark == "bob@edge-socks5:24003-socks"
+    assert nodes["edge:http"].remark == "bob@edge-http:24004-http"
     assert "edge:hidden" not in nodes
 
 
@@ -108,11 +108,11 @@ def test_render_stack_input_expands_vmess_users() -> None:
     assert list(nodes) == ["edge:vmess:alice", "edge:vmess:bob"]
     assert nodes["edge:vmess:alice"].user == "alice"
     assert nodes["edge:vmess:alice"].uuid == "11111111-1111-4111-8111-111111111111"
-    assert nodes["edge:vmess:alice"].remark == "edge-alice vmess"
+    assert nodes["edge:vmess:alice"].remark == "alice@edge-vmess:24001-alice vmess"
     assert nodes["edge:vmess:alice"].tag == "alice-vmess"
     assert nodes["edge:vmess:bob"].user == "bob"
     assert nodes["edge:vmess:bob"].uuid == "22222222-2222-4222-8222-222222222222"
-    assert nodes["edge:vmess:bob"].remark == "edge-bob vmess"
+    assert nodes["edge:vmess:bob"].remark == "bob@edge-vmess:24001-bob vmess"
     assert nodes["edge:vmess:bob"].tag == "shared-vmess:bob"
 
 
@@ -157,10 +157,10 @@ def test_render_stack_input_expands_shadowsocks_users() -> None:
     assert nodes["edge:ss:alice"].user == "alice"
     assert nodes["edge:ss:alice"].method == "aes-128-gcm"
     assert nodes["edge:ss:alice"].password == "alice-pass"
-    assert nodes["edge:ss:alice"].remark == "edge-alice ss"
+    assert nodes["edge:ss:alice"].remark == "alice@edge-shadowsocks:24001-alice ss"
     assert nodes["edge:ss:bob"].method == "aes-256-gcm"
     assert nodes["edge:ss:bob"].password == "bob-pass"
-    assert nodes["edge:ss:bob"].remark == "edge-shadowsocks:24001:bob"
+    assert nodes["edge:ss:bob"].remark == "bob@edge-shadowsocks:24001-ss"
     assert nodes["edge:ss:bob"].tag == "shared-ss:bob"
 
 
@@ -204,31 +204,6 @@ def test_render_stack_input_expands_shadowsocks_2022_users() -> None:
     assert nodes["edge:ss2022:bob"].password == f"{SS2022_SERVER_KEY}:{SS2022_BOB_KEY}"
 
 
-def test_render_stack_input_can_preserve_legacy_remarks() -> None:
-    """验证 preserve 策略保持旧的订阅节点展示名生成方式。"""
-    stack_set = make_stack_set()
-    stack_set.config.subscription.remark_policy = "preserve"
-
-    subscription_input = render_stack_input(stack_set, "local")
-    nodes = {node.id: node for node in subscription_input.nodes}
-
-    assert nodes["edge:vmess:alice"].remark == "edge-vmess-alice"
-    assert nodes["edge:ss"].remark == "edge-ss"
-
-
-def test_render_stack_input_uses_custom_remark_template() -> None:
-    """验证 template 策略可用明确占位符生成订阅节点展示名。"""
-    stack_set = make_stack_set()
-    stack_set.config.subscription.remark_policy = "template"
-    stack_set.config.subscription.remark_template = "{source}/{inbound}/{user}/{remark}"
-
-    subscription_input = render_stack_input(stack_set, "local")
-    nodes = {node.id: node for node in subscription_input.nodes}
-
-    assert nodes["edge:vmess:alice"].remark == "edge/vmess/alice/vmess:24001:alice"
-    assert nodes["edge:ss"].remark == "edge/ss/alice/shadowsocks:24002:alice"
-
-
 def test_subscription_input_preserves_node_region() -> None:
     """验证订阅 input schema 保留节点 region，且只接受两位大写地区码。"""
     subscription_input = SubscriptionInput(
@@ -267,8 +242,8 @@ def test_subscription_input_preserves_node_region() -> None:
         )
 
 
-def test_render_stack_input_uses_user_region_before_inbound_region() -> None:
-    """验证多用户订阅节点优先使用 users[].region，其次继承 inbound.region。"""
+def test_render_stack_input_uses_inbound_region_for_users() -> None:
+    """验证多用户订阅节点统一继承 inbound.region。"""
     stack_set = StackSet(
         config=load_config(Path("tests/fixtures/example-project/config.yaml")),
         stacks=[
@@ -286,7 +261,6 @@ def test_render_stack_input_uses_user_region_before_inbound_region() -> None:
                             {
                                 "user": "alice",
                                 "uuid": "11111111-1111-4111-8111-111111111111",
-                                "region": "QQ",
                             },
                             {
                                 "user": "bob",
@@ -302,9 +276,9 @@ def test_render_stack_input_uses_user_region_before_inbound_region() -> None:
     subscription_input = render_stack_input(stack_set, "local")
     nodes = {node.id: node for node in subscription_input.nodes}
 
-    assert nodes["edge:vmess:alice"].region == "QQ"
+    assert nodes["edge:vmess:alice"].region == "ZZ"
     assert nodes["edge:vmess:bob"].region == "ZZ"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"String should match pattern"):
         make_stack(
             [
                 {
@@ -317,7 +291,7 @@ def test_render_stack_input_uses_user_region_before_inbound_region() -> None:
                 }
             ]
         )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"users\[\]\.region is not supported"):
         make_stack(
             [
                 {

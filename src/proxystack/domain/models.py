@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import binascii
 from pathlib import Path
-from string import Formatter
 from typing import Annotated
 from typing import Any
 from typing import Optional
@@ -22,7 +21,6 @@ Port = Annotated[int, Field(ge=1, le=65535)]
 Name = Annotated[str, Field(min_length=1)]
 Region = Annotated[str, Field(pattern=r"^[A-Z]{2}$")]
 BUILTIN_RULE_TARGETS = {"DIRECT", "REJECT"}
-SUBSCRIPTION_REMARK_TEMPLATE_FIELDS = {"source", "inbound", "protocol", "port", "user", "remark"}
 SHADOWSOCKS_2022_METHODS = {
     "2022-blake3-aes-128-gcm",
     "2022-blake3-aes-256-gcm",
@@ -57,29 +55,9 @@ class ConfigPaths(ProxystackModel):
 class SubscriptionConfig(ProxystackModel):
     """订阅服务和发布包默认配置。"""
 
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     source: Literal["local"] = "local"
-    remark_policy: Literal["preserve", "prefix-source", "template"] = "prefix-source"
-    remark_template: Optional[str] = None
-
-    @field_validator("remark_template")
-    @classmethod
-    def validate_remark_template(cls, value: Optional[str]) -> Optional[str]:
-        """校验订阅节点名模板只使用明确支持的占位符。"""
-        if value is None:
-            return value
-        for _literal_text, field_name, _format_spec, _conversion in Formatter().parse(value):
-            if field_name is None:
-                continue
-            if field_name not in SUBSCRIPTION_REMARK_TEMPLATE_FIELDS:
-                raise ValueError(f"unsupported subscription remark template field: {field_name}")
-        return value
-
-    @model_validator(mode="after")
-    def validate_remark_policy(self) -> "SubscriptionConfig":
-        """校验 template 策略必须提供订阅节点名模板。"""
-        if self.remark_policy == "template" and not self.remark_template:
-            raise ValueError("remark_template is required when remark_policy is template")
-        return self
 
 
 class PortRange(ProxystackModel):
@@ -306,8 +284,15 @@ class InboundUser(ProxystackModel):
     cipher: Optional[str] = None
     email: Optional[str] = None
     remark: Optional[str] = None
-    region: Optional[Region] = None
     tag: Optional[Name] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_user_region(cls, value: Any) -> Any:
+        """拒绝 users[].region，地区统一配置在 inbound.region。"""
+        if isinstance(value, dict) and "region" in value:
+            raise ValueError("users[].region is not supported; configure inbound.region instead")
+        return value
 
     @field_validator("uuid")
     @classmethod

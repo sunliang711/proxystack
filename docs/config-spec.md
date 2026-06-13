@@ -65,7 +65,6 @@ paths:
 
 subscription:
   source: local
-  remark_policy: prefix-source
 
 port_ranges:
   xrelay_inbound: 24000-24999
@@ -121,8 +120,6 @@ install:
 - `external_host`：订阅节点默认对外 host；发布订阅前必须取消注释并设置为真实域名或公网 IP，`sub export` 会在缺失时失败。
 - `subscription`：agent 生成订阅 input/index 和导出发布包时使用的默认参数。
 - `sub/config.yaml`：订阅服务自身配置，默认来自 `src/proxystack/templates/sub-config.yaml`；实际 HTTP 服务只读取这里的 `listen`、`access`、`templates_dir`、`watch_*` 和 `managed_config`。
-- `subscription.remark_policy`：订阅节点展示名生成策略，默认 `prefix-source`，会把 stack/source 前缀用横杠加到最终 `remark` 前，避免多个 stack 的同名节点在客户端冲突。
-- `subscription.remark_template`：当 `remark_policy: template` 时必填。支持 `{source}`、`{inbound}`、`{protocol}`、`{port}`、`{user}`、`{remark}`。
 - `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池；`xrelay_inbound` 分配入口端口，`xray_api_range` 分配 Xray API，`clash_socks` 分配 mihomo/clash socks listener，`clash_controller` 分配 mihomo/clash REST controller。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
 - `defaults`：xrelay 和 clash 的默认值。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。
@@ -260,6 +257,8 @@ xrelay:
 
 ### inbound 字段
 
+订阅节点展示名固定生成为 `{user}@{stack_name}-{protocol}:{port}-{remark}`；`remark` 缺失时使用 inbound 的 `name` 作为备注片段，例如 `alice@usa1-vmess:24101-vmess`。
+
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `name` | 是 | 本 stack 内唯一名称，也是 ref 的最后一段 |
@@ -270,8 +269,8 @@ xrelay:
 | `auth` | 否 | socks5/http 支持 `noauth` 或 `password` |
 | `user` | socks/http/shadowsocks 单用户可选 | 订阅 URL 中的用户过滤字段；vmess 和 shadowsocks 多用户必须写在 `users[].user` |
 | `server` | 否 | 订阅节点 server 覆盖值；不填使用 `external_host` |
-| `remark` | socks/http/shadowsocks 单用户可选 | 订阅节点展示名；vmess 和 shadowsocks 多用户必须写在 `users[].remark` |
-| `region` | 否 | 订阅节点国家/地区简称，只校验两位大写字母格式，不限制固定国家列表，例如 `US`、`HK`、`JP`；多用户可用 `users[].region` 覆盖 |
+| `remark` | socks/http/shadowsocks 单用户可选 | 订阅节点名称中的备注片段；vmess 和 shadowsocks 多用户必须写在 `users[].remark` |
+| `region` | 否 | 订阅节点国家/地区简称，只校验两位大写字母格式，不限制固定国家列表，例如 `US`、`HK`、`JP`；同一个 inbound 下所有 users 共用 |
 | `tag` | 否 | 不填则生成 `protocol:port:name` |
 | `sub` | 是 | 是否进入订阅输出 |
 | `network` | vmess 必填 | vmess 传输网络，例如 `raw` |
@@ -285,7 +284,7 @@ vmess 只支持 `users` 结构；单用户也写成一条 `users` 记录。
 
 - 不支持 inbound 顶层 `uuid`。
 - vmess 的 `user` 和 `remark` 必须写在 `users[]` 中。
-- `users[].region` 可选，只校验两位大写字母格式；未配置时继承 inbound 的 `region`。
+- `users[].region` 不支持；多用户节点统一使用 inbound 的 `region`。
 - `users[].email` 可选，用于 Xray 用户统计；不填时使用 `users[].user`。
 - `users` 只能用于 vmess；同一 inbound 内 `users[].user`、`users[].uuid`、最终 email 和最终订阅 tag 不能重复。
 
@@ -295,13 +294,13 @@ vmess 只支持 `users` 结构；单用户也写成一条 `users` 记录。
   listen: 0.0.0.0
   port: 4301
   network: raw
+  region: HK
   sub: true
   users:
     - user: alice
       uuid: 11111111-1111-4111-8111-111111111111
       email: alice@example.com
       remark: alice vmess
-      region: HK
     - user: bob
       uuid: 22222222-2222-4222-8222-222222222222
       remark: bob vmess
@@ -316,7 +315,7 @@ shadowsocks 可以继续使用顶层 `method/password/user/remark` 表达单用�
 - SS2022 PSK 长度取决于 method：`2022-blake3-aes-128-gcm` 需要 `openssl rand -base64 16`；`2022-blake3-aes-256-gcm` 和 `2022-blake3-chacha20-poly1305` 需要 `openssl rand -base64 32`。
 - SS2022 users 不允许配置 `users[].method` 或 `users[].cipher`。
 - shadowsocks 多用户不使用 inbound 顶层 `user/remark`，必须写在 `users[]` 中。
-- `users[].region` 可选，只校验两位大写字母格式；未配置时继承 inbound 的 `region`。
+- `users[].region` 不支持；多用户节点统一使用 inbound 的 `region`。
 - 同一 inbound 内 `users[].user`、最终 email 和最终订阅 tag 不能重复。
 
 支持的 method 全集：

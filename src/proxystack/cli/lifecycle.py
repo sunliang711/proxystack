@@ -206,7 +206,6 @@ paths:
 
 subscription:
   source: local
-  remark_policy: prefix-source
 
 port_ranges:
   xrelay_inbound: 24000-24999

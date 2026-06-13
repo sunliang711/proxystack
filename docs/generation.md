@@ -285,10 +285,8 @@ stacks/*.yaml xrelay.inbounds[] where sub == true
 - `port`：xrelay inbound 的 `port`。
 - `user`：普通单用户 inbound 使用 inbound 的 `user`；vmess 和 shadowsocks 多用户使用 `users[].user`。
 - `tag`：普通单用户 inbound 优先使用 inbound 显式 `tag`，否则生成 `<protocol>:<port>:<inbound.name>`；多用户优先使用 `users[].tag`，否则生成 `<inbound tag>:<users[].user>`。
-- `remark`：最终订阅节点展示名由 `subscription.remark_policy` 生成。默认 `prefix-source` 会输出 `{source}-{remark}`；显式 `remark` 缺失时 `{remark}` 使用 `<protocol>:<port>:<user>`，例如 `usa1-vmess:24101:alice`。
-- `region`：可选国家/地区简称，只校验两位大写字母格式，不限制固定国家列表，例如 `US`、`HK`、`JP`。普通单用户节点来自 inbound；vmess 和 shadowsocks 多用户节点优先使用 `users[].region`，未配置时继承 inbound 的 `region`。
-- `subscription.remark_policy: preserve` 会保留旧规则：普通单用户 inbound 优先 `remark`，其次 `tag`，最后 `<stack>-<inbound.name>`；多用户优先 `users[].remark`，其次 `users[].tag`，最后 `<stack>-<inbound.name>-<users[].user>`。
-- `subscription.remark_policy: template` 使用 `subscription.remark_template`，支持 `{source}`、`{inbound}`、`{protocol}`、`{port}`、`{user}`、`{remark}`。
+- `remark`：最终订阅节点展示名固定为 `{user}@{stack_name}-{protocol}:{port}-{remark}`；显式 `remark` 缺失时，最后的 `{remark}` 使用 inbound `name`，例如 `alice@usa1-vmess:24101-vmess`。
+- `region`：可选国家/地区简称，只校验两位大写字母格式，不限制固定国家列表，例如 `US`、`HK`、`JP`。普通单用户和多用户节点都来自 inbound；`users[].region` 不支持。
 - 协议参数：来自 inbound 本身。
 
 不会读取：

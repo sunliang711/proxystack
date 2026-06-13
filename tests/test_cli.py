@@ -346,7 +346,6 @@ def test_agent_init_creates_config_and_directories(tmp_path: Path) -> None:
     assert xrelay_defaults["policy"]["system"]["statsInboundUplink"] is True
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
-    assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["install"]["mihomo"]["source"] == "auto"
     assert config_data["install"]["geo"]["source"] == "auto"
     for relative_path in [
@@ -398,7 +397,6 @@ def test_agent_init_falls_back_when_agent_config_template_is_missing(tmp_path: P
     config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
     assert config_data["base_dir"] == str(project_dir)
     assert config_data["external_host"] == "proxy.test"
-    assert config_data["subscription"]["remark_policy"] == "prefix-source"
     assert config_data["port_ranges"]["xrelay_inbound"] == "24000-24999"
     assert config_data["port_ranges"]["xray_api_range"] == "10001-10999"
 
@@ -1762,8 +1760,8 @@ def test_agent_sub_export_summary_does_not_write_bundle(tmp_path: Path) -> None:
     assert "inputs=1" in result.output
     assert "nodes=2" in result.output
     assert "usa1.yaml" in result.output
-    assert "usa1-usa1 relay socks" in result.output
-    assert "usa1-usa1 vmess" in result.output
+    assert "alice@usa1-socks5:24001-usa1 relay socks" in result.output
+    assert "alice@usa1-vmess:24101-usa1 vmess" in result.output
     assert not output.exists()
 
 

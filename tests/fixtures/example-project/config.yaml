@@ -16,7 +16,6 @@ external_host: proxy.example.com
 
 subscription:
   source: local
-  remark_policy: prefix-source
 
 port_ranges:
   # Only used by add/clone --allocate-ports.

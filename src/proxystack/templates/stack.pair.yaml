@@ -63,7 +63,7 @@ xrelay:
       user: user1
       # 【按需改】入站备注，会出现在生成结果或订阅信息中。
       remark: example local socks
-      # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP。
+      # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP；该 inbound 下所有 users 共用。
       # region: US
       # 【按需改】是否导出到订阅；本地 relay 默认不对外发布。
       sub: false
@@ -92,8 +92,6 @@ xrelay:
           email:
           # 【按需改】订阅节点名称。
           remark: example vmess
-          # 【按需改】订阅地区简称，只校验两位大写字母格式；未配置时继承 inbound 的 region。
-          # region: US
 
     # shadowsocks method 支持全集（Xray）：
     # - SS2022：2022-blake3-aes-128-gcm、2022-blake3-aes-256-gcm、2022-blake3-chacha20-poly1305
@@ -116,7 +114,6 @@ xrelay:
     #       password: replace-with-base64-user-psk
     #       email: user1@example.com
     #       remark: example ss2022
-    #       region: US
 
   # 【一般不改】xrelay 出站配置，决定入站流量转发到哪里。
   # 下方方案只保留一种：默认方案 A 走本 stack 的 Clash；改用其他方案时同步删除或注释不适用字段。
