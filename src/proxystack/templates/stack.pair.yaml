@@ -78,6 +78,8 @@ xrelay:
       port: 24100
       # 【按需改】订阅节点 server；不填时使用全局 external_host。
       # server: edge.example.com
+      # 【按需改】订阅地区简称，只校验两位大写字母格式，例如 US/HK/JP；该 inbound 下所有 users 共用。
+      # region: US
       # 传输网络类型；raw 表示普通 TCP，其他值按 Xray 支持的 network 填写。
       network: raw
       # 【按需改】是否导出到订阅；true 表示生成订阅节点。
