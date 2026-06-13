@@ -20,6 +20,7 @@ from pydantic import model_validator
 
 Port = Annotated[int, Field(ge=1, le=65535)]
 Name = Annotated[str, Field(min_length=1)]
+Region = Annotated[str, Field(pattern=r"^[A-Z]{2}$")]
 BUILTIN_RULE_TARGETS = {"DIRECT", "REJECT"}
 SUBSCRIPTION_REMARK_TEMPLATE_FIELDS = {"source", "inbound", "protocol", "port", "user", "remark"}
 SHADOWSOCKS_2022_METHODS = {
@@ -304,6 +305,7 @@ class InboundUser(ProxystackModel):
     cipher: Optional[str] = None
     email: Optional[str] = None
     remark: Optional[str] = None
+    region: Optional[Region] = None
     tag: Optional[Name] = None
 
     @field_validator("uuid")
@@ -327,6 +329,7 @@ class Inbound(ProxystackModel):
     user: Optional[str] = None
     server: Optional[str] = None
     remark: Optional[str] = None
+    region: Optional[Region] = None
     tag: Optional[str] = None
     sub: bool
     uuid: Optional[str] = None

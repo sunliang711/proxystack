@@ -286,6 +286,7 @@ stacks/*.yaml xrelay.inbounds[] where sub == true
 - `user`：普通单用户 inbound 使用 inbound 的 `user`；vmess 和 shadowsocks 多用户使用 `users[].user`。
 - `tag`：普通单用户 inbound 优先使用 inbound 显式 `tag`，否则生成 `<protocol>:<port>:<inbound.name>`；多用户优先使用 `users[].tag`，否则生成 `<inbound tag>:<users[].user>`。
 - `remark`：最终订阅节点展示名由 `subscription.remark_policy` 生成。默认 `prefix-source` 会输出 `{source}-{remark}`；显式 `remark` 缺失时 `{remark}` 使用 `<protocol>:<port>:<user>`，例如 `usa1-vmess:24101:alice`。
+- `region`：可选国家/地区简称，只校验两位大写字母格式，不限制固定国家列表，例如 `US`、`HK`、`JP`。普通单用户节点来自 inbound；vmess 和 shadowsocks 多用户节点优先使用 `users[].region`，未配置时继承 inbound 的 `region`。
 - `subscription.remark_policy: preserve` 会保留旧规则：普通单用户 inbound 优先 `remark`，其次 `tag`，最后 `<stack>-<inbound.name>`；多用户优先 `users[].remark`，其次 `users[].tag`，最后 `<stack>-<inbound.name>-<users[].user>`。
 - `subscription.remark_policy: template` 使用 `subscription.remark_template`，支持 `{source}`、`{inbound}`、`{protocol}`、`{port}`、`{user}`、`{remark}`。
 - 协议参数：来自 inbound 本身。
@@ -304,7 +305,7 @@ HTTP 路由：
 - `/premium_sub/:user`：Premium Clash。P0 与普通 Clash 使用同一 YAML 输出，但渲染入口保持独立。
 - `/surge_sub/:user`：Surge。
 
-Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含基础监听、DNS、tun、`proxies`、默认 `proxy-groups` 和默认 `rules`。Premium Clash 保留独立路由入口，当前默认模板与普通 Clash 一致。Surge 订阅输出 `[General]`、`[Replica]`、`[Proxy]`、`[Proxy Group]` 和 `[Rule]` 段。
+Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含基础监听、DNS、tun、`proxies`、默认 `proxy-groups` 和默认 `rules`。Premium Clash 保留独立路由入口，当前默认模板与普通 Clash 一致。Surge 订阅输出 `[General]`、`[Replica]`、`[Proxy]`、`[Proxy Group]` 和 `[Rule]` 段；HTTP `/surge_sub/:user` 响应会在第一行输出 `#!MANAGED-CONFIG ... interval=86400 strict=true`，让 Surge 自动刷新托管配置。默认 `[Proxy Group]` 会包含带 emoji 和 `icon-url` 的常用地区组、实际出现的其他两位地区组和 `OtherRegion`，地区优先来自 `nodes[].region`，缺失时从 `remark` 前缀解析 `US-xxx`、`[US] xxx` 或 `HK_01` 这类格式。默认模板直接列出节点，不再生成 `MySub`、`policy-path` 或 `include-other-group`。
 
 三类订阅配置均由 Jinja2 模板渲染。模板查找顺序为：
 
@@ -319,7 +320,7 @@ Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含
 - `premium-clash.yaml.j2`
 - `surge.conf.j2`
 
-模板上下文包含 `user`、`generated_at`、`sources`、`nodes`、`proxies`、`proxy_names`、`proxy_groups`、`clash_rules`、`surge_proxy_lines`、`surge_rules`、`test_url` 和 `surge_skip_proxy`。模板可使用 `yaml_block` filter 渲染 YAML 片段。
+模板上下文包含 `user`、`generated_at`、`sources`、`nodes`、`proxies`、`proxy_names`、`proxy_groups`、`clash_rules`、`surge_proxy_lines`、`surge_region_groups`、`surge_rules`、`test_url`、`surge_skip_proxy`、`surge_proxylist_icon_url`、`surge_auto_icon_url`、`managed_config_url`、`managed_config_interval` 和 `managed_config_strict`。模板可使用 `yaml_block` filter 渲染 YAML 片段。
 
 订阅访问控制：
 
@@ -328,6 +329,7 @@ Clash/Premium Clash 订阅输出可直接导入客户端的完整配置，包含
 - `access.type: token` 时，HTTP 路由必须校验 `token` query 参数或等价的反向代理鉴权头。
 - `access.type: none` 只允许本地监听或明确的公网风险确认。
 - token 只用于访问订阅 HTTP 服务，不写入订阅节点。
+- `managed_config.enabled: true` 时，`/surge_sub/:user` 会把当前请求 URL 写入 `#!MANAGED-CONFIG`；如果服务在反向代理后面，建议配置 `managed_config.public_base_url` 为公网前缀，例如 `https://www.rustez.cc/api/sub`。当请求带 `token` query 参数时，托管 URL 会保留该 token，确保 Surge 自动更新不会 401。
 
 用户不存在或没有订阅节点时返回 `404` 和统一 JSON 错误结构。
 
@@ -359,6 +361,7 @@ nodes:
     port: 24001
     tag: socks5:24001:relay
     remark: usa1 relay socks
+    region: US
     auth:
       type: password
       username: usa1

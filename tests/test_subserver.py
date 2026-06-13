@@ -16,6 +16,7 @@ from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionInput
 from proxystack.generator.sub import SubscriptionNode
 from proxystack.generator.sub import input_to_yaml
+from proxystack.subserver import ManagedConfig
 from proxystack.subserver import SubscriptionState
 from proxystack.subserver import create_app
 from proxystack.subserver.watcher import IN_ATTRIB
@@ -63,9 +64,42 @@ def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
     assert "proxies:" in premium_response.text
     assert "rules:" in premium_response.text
     assert surge_response.status_code == 200
+    assert surge_response.text.startswith(
+        "#!MANAGED-CONFIG http://testserver/surge_sub/alice?token=demo-token interval=86400 strict=true\n[General]"
+    )
     assert "[Proxy]" in surge_response.text
     assert "[Proxy Group]" in surge_response.text
     assert "alice socks = socks5" in surge_response.text
+    assert "OtherRegion = url-test, alice socks" in surge_response.text
+
+
+def test_surge_subscription_uses_public_base_url_for_managed_config(tmp_path: Path) -> None:
+    """验证反代公网前缀会用于 Surge 托管配置自引用 URL。"""
+    state = loaded_state(tmp_path)
+    client = TestClient(
+        create_app(
+            state,
+            managed_config=ManagedConfig(public_base_url="https://sub.example.com/api"),
+        )
+    )
+
+    response = client.get("/surge_sub/alice", params={"token": "demo-token"})
+
+    assert response.status_code == 200
+    assert response.text.startswith(
+        "#!MANAGED-CONFIG https://sub.example.com/api/surge_sub/alice?token=demo-token interval=86400 strict=true\n[General]"
+    )
+
+
+def test_surge_subscription_can_disable_managed_config_header(tmp_path: Path) -> None:
+    """验证可关闭 Surge 托管配置头，方便本地模板复用。"""
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state, managed_config=ManagedConfig(enabled=False)))
+
+    response = client.get("/surge_sub/alice", params={"token": "demo-token"})
+
+    assert response.status_code == 200
+    assert response.text.startswith("[General]")
 
 
 def test_subscription_routes_require_token(tmp_path: Path) -> None:

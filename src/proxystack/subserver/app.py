@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
+from urllib.parse import quote
+from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from fastapi import HTTPException
@@ -21,6 +23,7 @@ from proxystack.generator.sub import SubscriptionTemplateError
 from proxystack.generator.sub import render_clash_subscription
 from proxystack.generator.sub import render_premium_clash_subscription
 from proxystack.generator.sub import render_surge_subscription
+from proxystack.subserver.config import ManagedConfig
 from proxystack.subserver.state import SubscriptionState
 from proxystack.subserver.watcher import InputWatcher
 
@@ -30,9 +33,11 @@ def create_app(
     watcher: InputWatcher | None = None,
     templates_dir: Path | None = None,
     data_dir: Path | None = None,
+    managed_config: ManagedConfig | None = None,
 ) -> FastAPI:
     """创建从内存状态读取订阅索引的 FastAPI 应用。"""
     render_data_dir = data_dir or state.data_dir
+    render_managed_config = managed_config or ManagedConfig()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -96,7 +101,7 @@ def create_app(
         )
 
     @app.get("/surge_sub/{user}")
-    def surge_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
+    def surge_sub(request: Request, user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回 Surge 订阅。"""
         return render_subscription_response(
             user,
@@ -107,10 +112,28 @@ def create_app(
                 requested_user,
                 template_dir=templates_dir,
                 data_dir=render_data_dir,
+                managed_config_url=managed_config_url(request, requested_user, token, render_managed_config),
+                managed_config_interval=render_managed_config.interval,
+                managed_config_strict=render_managed_config.strict,
             ),
         )
 
     return app
+
+
+def managed_config_url(
+    request: Request,
+    user: str,
+    token: Optional[str],
+    managed_config: ManagedConfig,
+) -> Optional[str]:
+    """生成 Surge 托管配置自引用 URL；未启用时返回 None。"""
+    if not managed_config.enabled:
+        return None
+    if managed_config.public_base_url:
+        query = f"?{urlencode({'token': token})}" if token is not None else ""
+        return f"{managed_config.public_base_url}/surge_sub/{quote(user, safe='')}{query}"
+    return str(request.url)
 
 
 def render_subscription_response(

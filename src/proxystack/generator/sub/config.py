@@ -30,6 +30,7 @@ from ruamel.yaml import YAML
 
 from proxystack.domain.models import Inbound
 from proxystack.domain.models import InboundUser
+from proxystack.domain.models import Region
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
 from proxystack.domain.models import SubscriptionConfig
@@ -47,6 +48,40 @@ CLASH_TEMPLATE_NAME = "clash.yaml.j2"
 PREMIUM_CLASH_TEMPLATE_NAME = "premium-clash.yaml.j2"
 SURGE_TEMPLATE_NAME = "surge.conf.j2"
 CLASH_TEST_URL = "http://www.gstatic.com/generate_204"
+SURGE_REGION_METADATA = {
+    "HK": {
+        "name": "🇭🇰 香港节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Hong_Kong.png",
+    },
+    "JP": {
+        "name": "🇯🇵 日本节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Japan.png",
+    },
+    "US": {
+        "name": "🇺🇸 美国节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/United_States.png",
+    },
+    "DE": {
+        "name": "🇩🇪 德国节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Germany.png",
+    },
+    "TW": {
+        "name": "🇨🇳 台湾节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/China.png",
+    },
+    "KR": {
+        "name": "🇰🇷 韩国节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/South_Korea.png",
+    },
+    "SG": {
+        "name": "🇸🇬 新加坡节点",
+        "icon_url": "https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/Singapore.png",
+    },
+}
+SURGE_COMMON_REGION_CODES = ("HK", "JP", "US", "DE", "TW", "KR", "SG", "GB", "CA", "AU", "FR", "NL", "TR", "IN")
+OTHER_REGION_CODE = "OTHER"
+SURGE_PROXYLIST_ICON_URL = "https://raw.githubusercontent.com/sunliang711/icons/main/surge.webp"
+SURGE_AUTO_ICON_URL = "https://raw.githubusercontent.com/sunliang711/icons/main/auto.png"
 DEFAULT_CLASH_RULES = [
     "DOMAIN-SUFFIX,local,DIRECT",
     "DOMAIN,localhost,DIRECT",
@@ -71,7 +106,7 @@ DEFAULT_SURGE_RULES = [
     "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
     "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve",
     "GEOIP,CN,DIRECT",
-    "FINAL,FinalGroup",
+    "FINAL,FinalList",
 ]
 
 
@@ -166,6 +201,7 @@ class SubscriptionNode(BaseModel):
     password: Optional[str] = None
     udp: Optional[bool] = None
     auth: Optional[SubscriptionAuth] = None
+    region: Optional[Region] = None
 
     @model_validator(mode="after")
     def validate_protocol_fields(self) -> "SubscriptionNode":
@@ -334,6 +370,7 @@ def render_inbound_node(stack_set: StackSet, stack: Stack, inbound: Inbound) -> 
         "server": inbound.server or stack_set.config.external_host,
         "port": inbound.port,
         "tag": inbound_tag(inbound),
+        "region": inbound.region,
         "remark": render_subscription_remark(
             stack_set.config.subscription,
             stack.name,
@@ -372,6 +409,7 @@ def render_vmess_user_node(
         "server": inbound.server or stack_set.config.external_host,
         "port": inbound.port,
         "tag": vmess_user.tag or f"{inbound_tag(inbound)}:{vmess_user.user}",
+        "region": vmess_user.region or inbound.region,
         "remark": render_subscription_remark(
             stack_set.config.subscription,
             stack.name,
@@ -403,6 +441,7 @@ def render_shadowsocks_user_node(
         "server": inbound.server or stack_set.config.external_host,
         "port": inbound.port,
         "tag": shadowsocks_user.tag or f"{inbound_tag(inbound)}:{shadowsocks_user.user}",
+        "region": shadowsocks_user.region or inbound.region,
         "remark": render_subscription_remark(
             stack_set.config.subscription,
             stack.name,
@@ -672,9 +711,12 @@ def build_subscription_template_context(index: SubscriptionIndex, user: str) -> 
         "proxy_groups": render_clash_proxy_groups(proxy_names),
         "clash_rules": [*DEFAULT_CLASH_RULES],
         "surge_proxy_lines": [render_surge_proxy(node) for node in nodes],
+        "surge_region_groups": render_surge_region_groups(nodes),
         "surge_rules": [*DEFAULT_SURGE_RULES],
         "test_url": CLASH_TEST_URL,
         "surge_skip_proxy": SURGE_SKIP_PROXY,
+        "surge_proxylist_icon_url": SURGE_PROXYLIST_ICON_URL,
+        "surge_auto_icon_url": SURGE_AUTO_ICON_URL,
     }
 
 
@@ -886,11 +928,18 @@ def render_surge_subscription(
     user: str,
     template_dir: Optional[Path] = None,
     data_dir: Optional[Path] = None,
+    managed_config_url: Optional[str] = None,
+    managed_config_interval: int = 86400,
+    managed_config_strict: bool = True,
 ) -> str:
     """渲染 Surge 订阅文本。"""
+    context = build_subscription_template_context(index, user)
+    context["managed_config_url"] = managed_config_url
+    context["managed_config_interval"] = managed_config_interval
+    context["managed_config_strict"] = "true" if managed_config_strict else "false"
     return render_subscription_template(
         SURGE_TEMPLATE_NAME,
-        build_subscription_template_context(index, user),
+        context,
         template_dir=template_dir,
         data_dir=data_dir,
     )
@@ -902,6 +951,67 @@ def render_surge_group_line(name: str, group_type: str, proxies: list[str], suff
     if suffix:
         return f"{name} = {group_type}, {proxy_part}, {suffix}"
     return f"{name} = {group_type}, {proxy_part}"
+
+
+def render_surge_region_groups(nodes: list[SubscriptionNode]) -> list[dict[str, Any]]:
+    """按 region 或 remark 前缀生成 Surge 地区代理组数据。"""
+    grouped_proxy_names: dict[str, list[str]] = {region: [] for region in SURGE_COMMON_REGION_CODES}
+    grouped_proxy_names[OTHER_REGION_CODE] = []
+    extra_regions: set[str] = set()
+    for node in nodes:
+        region = resolve_surge_node_region(node)
+        if region not in grouped_proxy_names:
+            grouped_proxy_names[region] = []
+            extra_regions.add(region)
+        grouped_proxy_names[region].append(node.remark)
+    return [
+        {
+            "region": region,
+            "name": surge_region_group_name(region),
+            "icon_url": surge_region_icon_url(region),
+            "proxy_names": grouped_proxy_names[region],
+        }
+        for region in [*SURGE_COMMON_REGION_CODES, *sorted(extra_regions), OTHER_REGION_CODE]
+    ]
+
+
+def resolve_surge_node_region(node: SubscriptionNode) -> str:
+    """优先使用节点 region，缺失时从 remark 前缀兜底解析。"""
+    if node.region:
+        return node.region
+    return parse_region_from_remark(node.remark) or OTHER_REGION_CODE
+
+
+def parse_region_from_remark(remark: str) -> Optional[str]:
+    """从 `US-xxx`、`[US] xxx` 或 `HK_01` 这类 remark 前缀解析地区码。"""
+    if len(remark) >= 4 and remark[0] == "[" and remark[3] == "]" and is_region_code(remark[1:3]):
+        return remark[1:3]
+    if len(remark) >= 3 and remark[2] in {"-", "_"} and is_region_code(remark[:2]):
+        return remark[:2]
+    return None
+
+
+def is_region_code(value: str) -> bool:
+    """判断字符串是否是两个 ASCII 大写字母。"""
+    return len(value) == 2 and all("A" <= character <= "Z" for character in value)
+
+
+def surge_region_group_name(region: str) -> str:
+    """返回 Surge 地区代理组名称。"""
+    if region == OTHER_REGION_CODE:
+        return "OtherRegion"
+    metadata = SURGE_REGION_METADATA.get(region)
+    if metadata is None:
+        return f"{region}Region"
+    return metadata["name"]
+
+
+def surge_region_icon_url(region: str) -> Optional[str]:
+    """返回 Surge 地区代理组图标 URL。"""
+    metadata = SURGE_REGION_METADATA.get(region)
+    if metadata is None:
+        return None
+    return metadata["icon_url"]
 
 
 def render_surge_proxy(node: SubscriptionNode) -> str:

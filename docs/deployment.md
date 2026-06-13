@@ -240,7 +240,7 @@ mkdir -p /opt/proxystack/sub
 vi /opt/proxystack/sub/config.yaml
 ```
 
-`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。完整示例见 [src/proxystack/templates/sub-config.yaml](../src/proxystack/templates/sub-config.yaml)。
+`config.yaml` 至少应包含 `listen` 和 `access`；`data_dir` 可省略，省略时容器内会使用 `/data`。反向代理部署并使用 Surge 托管配置时，建议配置 `managed_config.public_base_url` 为公网前缀，避免 `#!MANAGED-CONFIG` 写入容器内网地址。订阅模板可放在 `/opt/proxystack/sub/templates/sub/`，或在配置中用 `templates_dir` 指向自定义模板根目录。完整示例见 [src/proxystack/templates/sub-config.yaml](../src/proxystack/templates/sub-config.yaml)。
 
 ```bash
 docker run -d \

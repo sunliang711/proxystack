@@ -162,6 +162,7 @@ def serve(
                     watcher,
                     templates_dir=sub_config.templates_dir,
                     data_dir=sub_config.data_dir,
+                    managed_config=sub_config.managed_config,
                 ),
                 host=sub_config.host,
                 port=sub_config.port,
@@ -239,6 +240,13 @@ def log_subscription_server_configuration(sub_config: SubServerConfig) -> None:
     LOGGER.info(
         "Subscription server template sources: %s",
         format_template_sources(sub_config.templates_dir, sub_config.data_dir),
+    )
+    LOGGER.info(
+        "Subscription server managed config: enabled=%s public_base_url=%s interval=%s strict=%s",
+        str(sub_config.managed_config.enabled).lower(),
+        sub_config.managed_config.public_base_url or "request-url",
+        sub_config.managed_config.interval,
+        str(sub_config.managed_config.strict).lower(),
     )
 
 

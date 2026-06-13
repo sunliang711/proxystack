@@ -228,6 +228,116 @@ def test_render_stack_input_uses_custom_remark_template() -> None:
     assert nodes["edge:ss"].remark == "edge/ss/alice/shadowsocks:24002:alice"
 
 
+def test_subscription_input_preserves_node_region() -> None:
+    """验证订阅 input schema 保留节点 region，且只接受两位大写地区码。"""
+    subscription_input = SubscriptionInput(
+        input_version=1,
+        source="manual",
+        generated_at="2026-06-13T12:00:00+08:00",
+        nodes=[
+            SubscriptionNode(
+                id="manual:socks",
+                user="alice",
+                protocol="socks5",
+                server="proxy.example.com",
+                port=24001,
+                tag="socks5:24001:manual",
+                remark="Manual Socks",
+                region="ZZ",
+            )
+        ],
+    )
+
+    rendered_input = YAML(typ="safe").load(input_to_yaml(subscription_input))
+    loaded_input = SubscriptionInput.model_validate(rendered_input)
+
+    assert rendered_input["nodes"][0]["region"] == "ZZ"
+    assert loaded_input.nodes[0].region == "ZZ"
+    with pytest.raises(ValueError):
+        SubscriptionNode(
+            id="manual:bad-region",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24001,
+            tag="socks5:24001:manual",
+            remark="Manual Socks",
+            region="usa",
+        )
+
+
+def test_render_stack_input_uses_user_region_before_inbound_region() -> None:
+    """验证多用户订阅节点优先使用 users[].region，其次继承 inbound.region。"""
+    stack_set = StackSet(
+        config=load_config(Path("tests/fixtures/example-project/config.yaml")),
+        stacks=[
+            make_stack(
+                [
+                    {
+                        "name": "vmess",
+                        "protocol": "vmess",
+                        "listen": "0.0.0.0",
+                        "port": 24001,
+                        "network": "raw",
+                        "region": "ZZ",
+                        "sub": True,
+                        "users": [
+                            {
+                                "user": "alice",
+                                "uuid": "11111111-1111-4111-8111-111111111111",
+                                "region": "QQ",
+                            },
+                            {
+                                "user": "bob",
+                                "uuid": "22222222-2222-4222-8222-222222222222",
+                            },
+                        ],
+                    }
+                ]
+            )
+        ],
+    )
+
+    subscription_input = render_stack_input(stack_set, "local")
+    nodes = {node.id: node for node in subscription_input.nodes}
+
+    assert nodes["edge:vmess:alice"].region == "QQ"
+    assert nodes["edge:vmess:bob"].region == "ZZ"
+    with pytest.raises(ValueError):
+        make_stack(
+            [
+                {
+                    "name": "socks",
+                    "protocol": "socks5",
+                    "listen": "0.0.0.0",
+                    "port": 24001,
+                    "region": "usa",
+                    "sub": False,
+                }
+            ]
+        )
+    with pytest.raises(ValueError):
+        make_stack(
+            [
+                {
+                    "name": "vmess",
+                    "protocol": "vmess",
+                    "listen": "0.0.0.0",
+                    "port": 24001,
+                    "network": "raw",
+                    "sub": True,
+                    "users": [
+                        {
+                            "user": "alice",
+                            "uuid": "11111111-1111-4111-8111-111111111111",
+                            "region": "usa",
+                        }
+                    ],
+                }
+            ]
+        )
+
+
 def test_render_stack_input_does_not_include_clash_config() -> None:
     """验证订阅 input 不包含 clash upstream/group/rules/mode/controller 信息。"""
     rendered_input = input_to_yaml(render_stack_input(make_stack_set(), "local"))
@@ -306,6 +416,72 @@ def test_subscription_renderers_emit_full_configs_and_surge_auth_syntax() -> Non
     assert "Alice Socks = socks5, proxy.example.com, 24003, sock-user, sock-pass, udp-relay=true" in surge
     assert "Alice HTTP = http, proxy.example.com, 24004, http-user, http-pass" in surge
     assert "Alice Socks = socks5, proxy.example.com, 24003, username=" not in surge
+
+
+def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None:
+    """验证 Surge 输出按 region 和 remark 前缀生成地区代理组。"""
+    nodes = [
+        SubscriptionNode(
+            id="manual:us",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24001,
+            tag="socks5:24001:manual",
+            remark="Node US",
+            region="US",
+        ),
+        SubscriptionNode(
+            id="manual:jp",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24002,
+            tag="socks5:24002:manual",
+            remark="[JP] Tokyo",
+        ),
+        SubscriptionNode(
+            id="manual:hk",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24003,
+            tag="socks5:24003:manual",
+            remark="HK_01",
+        ),
+        SubscriptionNode(
+            id="manual:other",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24004,
+            tag="socks5:24004:manual",
+            remark="Manual Relay",
+        ),
+        SubscriptionNode(
+            id="manual:aus",
+            user="alice",
+            protocol="socks5",
+            server="proxy.example.com",
+            port=24005,
+            tag="socks5:24005:manual",
+            remark="AUS-Relay",
+        ),
+    ]
+    index = build_index(nodes, ["manual"])
+
+    surge = render_surge_subscription(index, "alice")
+
+    assert "🇺🇸 美国节点 = url-test, Node US" in surge
+    assert "🇯🇵 日本节点 = url-test, [JP] Tokyo" in surge
+    assert "🇭🇰 香港节点 = url-test, HK_01" in surge
+    assert "icon-url=https://raw.githubusercontent.com/Semporia/Hand-Painted-icon/master/Rounded_Rectangle/United_States.png" in surge
+    assert "AURegion = select, DIRECT" in surge
+    assert "CARegion = select, DIRECT" in surge
+    assert "OtherRegion = url-test, Manual Relay, AUS-Relay" in surge
+    assert "ProxyList = select, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点" in surge
+    assert "AutoGroup = url-test, Node US, [JP] Tokyo, HK_01, Manual Relay, AUS-Relay" in surge
+    assert "FinalList = select, ProxyList, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点" in surge
 
 
 def test_subscription_renderer_uses_data_dir_template_override(tmp_path: Path) -> None:

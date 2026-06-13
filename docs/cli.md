@@ -405,9 +405,15 @@ access:
 templates_dir: /opt/proxystack/sub/templates
 watch_interval: 2.0
 watch_debounce: 0.3
+managed_config:
+  enabled: true
+  public_base_url: https://www.rustez.cc/api/sub
+  interval: 86400
+  strict: true
 ```
 
 完整示例见 [src/proxystack/templates/sub-config.yaml](../src/proxystack/templates/sub-config.yaml)。`data_dir` 可以写在 ps-sub 配置里；如果省略，默认使用该配置文件所在目录。
+`managed_config.enabled: true` 时，`/surge_sub/:user` 输出第一行 `#!MANAGED-CONFIG`；反代部署建议配置 `public_base_url`，否则 Surge 看到的托管 URL 可能是内网监听地址。启用 token 鉴权时，请求中的 `token` query 参数会保留在托管 URL 中。
 订阅模板可以本地覆盖，默认查找 `<data_dir>/templates/sub/` 下的 `clash.yaml.j2`、`premium-clash.yaml.j2` 和 `surge.conf.j2`。也可以在 ps-sub 配置中显式指定模板根目录：
 
 ```yaml

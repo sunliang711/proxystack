@@ -7,3 +7,10 @@ access:
 templates_dir: /opt/proxystack/sub/templates
 watch_interval: 2.0
 watch_debounce: 0.3
+managed_config:
+  # Surge 托管配置头；enabled=true 时 /surge_sub/:user 第一行会输出 #!MANAGED-CONFIG。
+  enabled: true
+  # 反代部署时建议配置公网前缀，例如 https://www.rustez.cc/api/sub；不填时使用请求 URL。
+  public_base_url:
+  interval: 86400
+  strict: true

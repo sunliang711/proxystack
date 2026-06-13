@@ -1324,6 +1324,9 @@ def test_sub_config_creates_default_config(tmp_path: Path) -> None:
     assert config_data["listen"] == "0.0.0.0:3003"
     assert config_data["access"]["type"] == "token"
     assert config_data["access"]["token"] == "change-me"
+    assert config_data["managed_config"]["enabled"] is True
+    assert config_data["managed_config"]["interval"] == 86400
+    assert config_data["managed_config"]["strict"] is True
 
 
 def test_sub_default_config_falls_back_when_builtin_template_missing(
@@ -1338,6 +1341,31 @@ def test_sub_default_config_falls_back_when_builtin_template_missing(
 
     assert config.listen == "0.0.0.0:3003"
     assert config.data_dir == data_dir
+    assert config.managed_config.enabled is True
+    assert config.managed_config.interval == 86400
+    assert config.managed_config.strict is True
+
+
+def test_sub_config_rejects_invalid_managed_config_public_base_url(tmp_path: Path) -> None:
+    """验证 Surge 托管配置公网前缀不能携带 query 或 fragment。"""
+    data_dir = tmp_path / "sub"
+    config_path = data_dir / "config.yaml"
+    data_dir.mkdir()
+    config_path.write_text(
+        f"""data_dir: {data_dir}
+listen: 127.0.0.1:3003
+access:
+  type: none
+managed_config:
+  public_base_url: https://sub.example.com/api?token=leaked
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(sub_app, ["config", "--config", str(config_path), "--check-only"])
+
+    assert result.exit_code == 1
+    assert "配置编辑失败" in result.output
 
 
 def test_sub_config_rejects_invalid_edit_before_replacing(tmp_path: Path) -> None:
@@ -1490,6 +1518,8 @@ access:
   token: demo-token
 watch_interval: 0.1
 watch_debounce: 0
+managed_config:
+  public_base_url: https://sub.example.com/api
 """,
         encoding="utf-8",
     )
@@ -1510,6 +1540,8 @@ watch_debounce: 0
     assert result.exit_code == 0
     assert "Subscription server configuration" in caplog.text
     assert "access=token" in caplog.text
+    assert "Subscription server managed config" in caplog.text
+    assert "public_base_url=https://sub.example.com/api" in caplog.text
     assert "demo-token" not in caplog.text
     assert "Subscription server template sources" in caplog.text
     assert "Subscription server loaded inputs" in caplog.text

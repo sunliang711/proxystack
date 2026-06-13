@@ -7,6 +7,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 from typing import Optional
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -25,6 +26,31 @@ DEFAULT_SUB_CONFIG_PATH = DEFAULT_SUB_DATA_DIR / "config.yaml"
 DEFAULT_SUB_LISTEN = "0.0.0.0:3003"
 DEFAULT_SUB_TEMPLATE_NAME = "sub-config.yaml"
 DEFAULT_SUB_TEMPLATES_DIR = DEFAULT_SUB_DATA_DIR / "templates"
+DEFAULT_MANAGED_CONFIG_INTERVAL = 86400
+
+
+class ManagedConfig(BaseModel):
+    """Surge 托管配置头生成参数。"""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    enabled: bool = True
+    public_base_url: Optional[str] = None
+    interval: int = Field(default=DEFAULT_MANAGED_CONFIG_INTERVAL, gt=0)
+    strict: bool = True
+
+    @field_validator("public_base_url")
+    @classmethod
+    def validate_public_base_url(cls, value: Optional[str]) -> Optional[str]:
+        """校验公开 URL 前缀，只允许 http/https 且不携带 query 或 fragment。"""
+        if value is None:
+            return value
+        parsed_url = urlsplit(value)
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            raise ValueError("managed_config.public_base_url must be an http or https URL")
+        if parsed_url.query or parsed_url.fragment:
+            raise ValueError("managed_config.public_base_url must not include query or fragment")
+        return value.rstrip("/")
 
 
 class SubServerConfig(BaseModel):
@@ -38,6 +64,7 @@ class SubServerConfig(BaseModel):
     templates_dir: Optional[Path] = None
     watch_interval: float = Field(default=2.0, gt=0)
     watch_debounce: float = Field(default=0.3, ge=0)
+    managed_config: ManagedConfig = Field(default_factory=ManagedConfig)
 
     @field_validator("listen")
     @classmethod
