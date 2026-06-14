@@ -1021,34 +1021,17 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
     """把 stack 列表格式化为对齐表格，便于终端阅读。"""
     if not rows:
         return ["未找到 stack。"]
-    display_rows = [
-        {
-            "name": row["name"],
-            "enabled": row["enabled"],
-            "role": row["role"],
-            "services": format_stack_services(row),
-            "generated": row["generated"],
-            "running": row["running"],
-            "xrelay_ports": row["xrelay_ports"],
-            "xray_api": row["xrelay_api_port"],
-            "clash_socks": row["clash_socks"],
-            "clash_http": row["clash_http"],
-            "clash_controller": row["clash_controller"],
-        }
-        for row in rows
-    ]
+    display_rows = []
+    for row in rows:
+        display_rows.extend(format_stack_component_rows(row))
     columns = [
         ("name", "Name"),
-        ("running", "Running"),
-        ("enabled", "Enabled"),
         ("role", "Role"),
-        ("services", "Services"),
+        ("enabled", "Enabled"),
+        ("component", "Component"),
+        ("running", "Running"),
         ("generated", "Generated"),
-        ("xrelay_ports", "Xrelay Ports"),
-        ("xray_api", "Xray API"),
-        ("clash_socks", "Clash Socks"),
-        ("clash_http", "Clash HTTP"),
-        ("clash_controller", "Clash Controller"),
+        ("endpoints", "Endpoints"),
     ]
     widths = {
         key: max(len(title), *(len(row[key]) for row in display_rows))
@@ -1063,14 +1046,59 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
     return [header, separator, *body]
 
 
-def format_stack_services(row: dict[str, str]) -> str:
-    """把 xrelay/clash 启用状态压缩成服务列表。"""
-    services = []
-    if row["xrelay"] == "yes":
-        services.append("xrelay")
-    if row["clash"] == "yes":
-        services.append("clash")
-    return ",".join(services) if services else "-"
+def format_stack_component_rows(row: dict[str, str]) -> list[dict[str, str]]:
+    """把单个 stack 展开为 xrelay/clash 两行展示。"""
+    return [
+        {
+            "name": row["name"],
+            "role": row["role"],
+            "enabled": row["enabled"],
+            "component": "xrelay",
+            "running": format_stack_component_status(row, "xrelay", "running"),
+            "generated": format_stack_component_status(row, "xrelay", "generated"),
+            "endpoints": format_stack_xrelay_endpoints(row),
+        },
+        {
+            "name": "",
+            "role": "",
+            "enabled": "",
+            "component": "clash",
+            "running": format_stack_component_status(row, "clash", "running"),
+            "generated": format_stack_component_status(row, "clash", "generated"),
+            "endpoints": format_stack_clash_endpoints(row),
+        },
+    ]
+
+
+def format_stack_component_status(row: dict[str, str], component: str, field: str) -> str:
+    """把 stack 级组件列表拆成单组件状态。"""
+    if row[component] != "yes":
+        return "disabled"
+    components = {
+        item.strip()
+        for item in row[field].split(",")
+        if item.strip() and item.strip() != "-"
+    }
+    return "yes" if component in components else "no"
+
+
+def format_stack_xrelay_endpoints(row: dict[str, str]) -> str:
+    """格式化 xrelay 组件端点摘要。"""
+    inbounds = row["xrelay_ports"] or "-"
+    api = row["xrelay_api_port"] or "-"
+    if inbounds == "-" and api == "-":
+        return "-"
+    return f"inbounds: {inbounds} | api:{api}"
+
+
+def format_stack_clash_endpoints(row: dict[str, str]) -> str:
+    """格式化 clash 组件端点摘要。"""
+    socks = row["clash_socks"] or "-"
+    http = row["clash_http"] or "-"
+    controller = row["clash_controller"] or "-"
+    if socks == "-" and http == "-" and controller == "-":
+        return "-"
+    return f"socks:{socks} | http:{http} | controller:{controller}"
 
 
 def run_artifact_operation(

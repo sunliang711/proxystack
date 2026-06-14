@@ -440,23 +440,102 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     monkeypatch.setattr(lifecycle_module, "is_service_active", lambda service_name: service_name == "proxystack-xray@usa1.service")
 
     result = runner.invoke(agent_app, ["list", "-c", str(config)])
+    lines = result.output.splitlines()
 
     assert result.exit_code == 0
     assert "正在执行 proxystack-agent list" not in result.output
-    assert result.output.splitlines()[0].startswith("Name  Running")
+    assert lines[0].startswith("Name  Role")
     assert "----" in result.output
-    assert "Services" in result.output
-    assert "xrelay,clash" in result.output
+    assert "Component" in result.output
+    assert "Endpoints" in result.output
     assert "Generated" in result.output
     assert "Running" in result.output
-    assert "xrelay,clash  xrelay" in result.output
-    assert "Xrelay Ports" in result.output
-    assert "Xray API" in result.output
-    assert "Clash HTTP" in result.output
+    assert "Services" not in result.output
+    assert "xrelay,clash" not in result.output
+    usa1_xrelay_line = next(line for line in lines if line.startswith("usa1"))
+    usa1_clash_line = lines[lines.index(usa1_xrelay_line) + 1]
+    assert usa1_xrelay_line.split(maxsplit=6) == [
+        "usa1",
+        "edge",
+        "yes",
+        "xrelay",
+        "yes",
+        "yes",
+        "inbounds: socks5:24001,vmess:24101 | api:10091",
+    ]
+    assert usa1_clash_line.strip().split(maxsplit=3) == [
+        "clash",
+        "no",
+        "yes",
+        "socks:17091 | http:18091 | controller:127.0.0.1:19091",
+    ]
     assert "10091" in result.output
     assert "18091" in result.output
     assert "socks5:24001,vmess:24101" in result.output
     assert "alice/socks5:24001" not in result.output
+
+
+def test_format_stack_table_keeps_disabled_component_rows() -> None:
+    """验证禁用组件仍保留组件行和已配置端点。"""
+    lines = agent_module.format_stack_table(
+        [
+            {
+                "name": "draft",
+                "enabled": "yes",
+                "role": "edge",
+                "xrelay": "no",
+                "clash": "yes",
+                "generated": "clash",
+                "running": "clash",
+                "xrelay_ports": "socks5:25001",
+                "xrelay_api_port": "-",
+                "clash_socks": "17001",
+                "clash_http": "18001",
+                "clash_controller": "127.0.0.1:19001",
+            },
+            {
+                "name": "local",
+                "enabled": "yes",
+                "role": "edge",
+                "xrelay": "yes",
+                "clash": "no",
+                "generated": "xrelay",
+                "running": "xrelay",
+                "xrelay_ports": "socks5:25002",
+                "xrelay_api_port": "10002",
+                "clash_socks": "17002",
+                "clash_http": "18002",
+                "clash_controller": "127.0.0.1:19002",
+            },
+        ]
+    )
+
+    assert "Name" in lines[0]
+    assert "Role" in lines[0]
+    assert "Component" in lines[0]
+    assert lines[2].split(maxsplit=6) == [
+        "draft",
+        "edge",
+        "yes",
+        "xrelay",
+        "disabled",
+        "disabled",
+        "inbounds: socks5:25001 | api:-",
+    ]
+    assert lines[3].lstrip().startswith("clash")
+    assert lines[3].strip().split(maxsplit=3) == [
+        "clash",
+        "yes",
+        "yes",
+        "socks:17001 | http:18001 | controller:127.0.0.1:19001",
+    ]
+    assert lines[5].lstrip().startswith("clash")
+    assert lines[5].strip().split(maxsplit=3) == [
+        "clash",
+        "disabled",
+        "disabled",
+        "socks:17002 | http:18002 | controller:127.0.0.1:19002",
+    ]
 
 
 def test_agent_list_skips_system_port_check_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
