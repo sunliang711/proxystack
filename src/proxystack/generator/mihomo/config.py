@@ -17,6 +17,7 @@ from proxystack.domain.models import Inbound
 from proxystack.domain.models import SocksListener
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
+from proxystack.domain.models import resolve_clash_loglevel
 from proxystack.graph import ReferenceGraph
 from proxystack.graph import build_reference_graph
 from proxystack.graph import parse_xrelay_inbound_ref
@@ -46,7 +47,7 @@ def render_mihomo_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]
     graph = build_reference_graph(stack_set)
     config: dict[str, Any] = {
         "mode": stack.clash.mode,
-        "log-level": "info",
+        "log-level": resolve_clash_loglevel(stack_set.config.defaults.clash, stack.clash),
         "ipv6": True,
         "allow-lan": not is_loopback_listen_host(listener.listen),
         "bind-address": listener.listen,

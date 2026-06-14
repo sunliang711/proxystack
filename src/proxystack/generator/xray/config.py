@@ -19,6 +19,7 @@ from proxystack.domain.models import XrelayStatsConfig
 from proxystack.domain.models import inbound_user_email
 from proxystack.domain.models import is_shadowsocks_2022_method
 from proxystack.domain.models import resolve_xrelay_api_config
+from proxystack.domain.models import resolve_xrelay_loglevel
 from proxystack.domain.models import resolve_xrelay_policy_config
 from proxystack.domain.models import resolve_xrelay_stats_config
 from proxystack.graph import ReferenceGraph
@@ -51,7 +52,7 @@ def render_xray_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]:
     graph = build_reference_graph(stack_set)
     config: dict[str, Any] = {
         "log": {
-            "loglevel": defaults.loglevel,
+            "loglevel": resolve_xrelay_loglevel(defaults, stack.xrelay),
         },
     }
     if api_config.enabled:

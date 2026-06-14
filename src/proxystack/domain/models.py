@@ -20,6 +20,8 @@ from pydantic import model_validator
 Port = Annotated[int, Field(ge=1, le=65535)]
 Name = Annotated[str, Field(min_length=1)]
 Region = Annotated[str, Field(pattern=r"^[A-Z]{2}$")]
+XrayLogLevel = Literal["debug", "info", "warning", "error", "none"]
+ClashLogLevel = Literal["debug", "info", "warning", "error", "silent"]
 BUILTIN_RULE_TARGETS = {"DIRECT", "REJECT"}
 SHADOWSOCKS_2022_METHODS = {
     "2022-blake3-aes-128-gcm",
@@ -112,6 +114,7 @@ class DefaultClashConfig(ProxystackModel):
     """clash 默认配置。"""
 
     mode: Literal["Rule", "Global", "Direct"] = "Rule"
+    loglevel: ClashLogLevel = "info"
     rule_profile: Literal["default"] = "default"
 
 
@@ -196,7 +199,7 @@ class XrelayPolicyConfig(ProxystackModel):
 class DefaultXrelayConfig(ProxystackModel):
     """xrelay 默认配置。"""
 
-    loglevel: str = "warning"
+    loglevel: XrayLogLevel = "warning"
     api: XrelayApiConfig = Field(default_factory=XrelayApiConfig)
     stats: XrelayStatsConfig = Field(default_factory=XrelayStatsConfig)
     policy: XrelayPolicyConfig = Field(default_factory=XrelayPolicyConfig)
@@ -472,6 +475,7 @@ class XrelayConfig(ProxystackModel):
     """单个 stack 的 xrelay 配置。"""
 
     enabled: bool = True
+    loglevel: Optional[XrayLogLevel] = None
     outbound: XrelayOutbound
     inbounds: list[Inbound] = Field(min_length=1)
     api: Optional[XrelayApiConfig] = None
@@ -490,6 +494,13 @@ def resolve_xrelay_api_config(defaults: DefaultXrelayConfig, xrelay: XrelayConfi
     if xrelay.api is None:
         return defaults.api
     return merge_xrelay_api_config(defaults.api, xrelay.api)
+
+
+def resolve_xrelay_loglevel(defaults: DefaultXrelayConfig, xrelay: XrelayConfig) -> XrayLogLevel:
+    """读取 stack 级 Xray 日志级别覆盖，未配置时使用全局默认。"""
+    if xrelay.loglevel is None:
+        return defaults.loglevel
+    return xrelay.loglevel
 
 
 def resolve_xrelay_stats_config(defaults: DefaultXrelayConfig, xrelay: XrelayConfig) -> XrelayStatsConfig:
@@ -719,6 +730,7 @@ class ClashConfig(ProxystackModel):
 
     enabled: bool = True
     mode: Literal["Rule", "Global", "Direct"] = "Rule"
+    loglevel: Optional[ClashLogLevel] = None
     controller: ClashController
     listeners: ClashListeners
     upstreams: list[ClashUpstream] = Field(default_factory=list)
@@ -742,6 +754,13 @@ class ClashConfig(ProxystackModel):
             target = extract_rule_target(rule)
             validate_rule_target(target, known_targets, "rules.extra target does not exist")
         return self
+
+
+def resolve_clash_loglevel(defaults: DefaultClashConfig, clash: ClashConfig) -> ClashLogLevel:
+    """读取 stack 级 mihomo/clash 日志级别覆盖，未配置时使用全局默认。"""
+    if clash.loglevel is None:
+        return defaults.loglevel
+    return clash.loglevel
 
 
 class Stack(ProxystackModel):

@@ -395,6 +395,32 @@ def test_render_xray_output_is_json() -> None:
     assert "policy" not in parsed_config
 
 
+def test_render_xray_loglevel_uses_global_default_and_stack_override() -> None:
+    """验证 Xray 日志级别支持全局默认和 stack 覆盖。"""
+    config = load_config(Path("tests/fixtures/example-project/config.yaml")).model_copy(deep=True)
+    config.defaults.xrelay.loglevel = "error"
+    stack_set = StackSet(
+        config=config,
+        stacks=[
+            make_stack("global-log", {"type": "direct"}, [socks_noauth_inbound()]),
+            make_stack(
+                "stack-log",
+                {"type": "direct"},
+                [socks_noauth_inbound()],
+                xrelay_overrides={
+                    "loglevel": "none",
+                },
+            ),
+        ],
+    )
+
+    global_config = json.loads(dumps_xray_config(stack_set, "global-log"))
+    stack_output = dumps_xray_config(stack_set, "stack-log")
+
+    assert global_config["log"]["loglevel"] == "error"
+    assert stack_output == (GOLDEN_DIR / "loglevel-override.json").read_text(encoding="utf-8")
+
+
 def test_render_xray_api_stats_policy_defaults_match_golden() -> None:
     """验证启用 API 和 stats 时生成默认 API、stats 和 policy 配置。"""
     stack_set = make_stack_set(

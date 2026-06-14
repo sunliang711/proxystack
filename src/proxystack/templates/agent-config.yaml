@@ -49,11 +49,13 @@ defaults:
   clash:
     # 默认 Clash 运行模式；支持全集：Rule、Global、Direct。
     mode: Rule
+    # 默认 mihomo/clash 日志级别；支持全集：debug、info、warning、error、silent。
+    loglevel: info
     # 默认内置规则 profile；支持全集：default。
     rule_profile: default
   # Xray/xrelay 默认配置。
   xrelay:
-    # 默认 Xray 日志级别。
+    # 默认 Xray 日志级别；支持全集：debug、info、warning、error、none。
     loglevel: warning
     # Xray API 配置，用于统计等内部能力，只允许监听 loopback。
     api:

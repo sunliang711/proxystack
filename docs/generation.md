@@ -25,6 +25,20 @@
 
 每个 enabled stack 的 `xrelay` 生成一个 Xray JSON。
 
+### log
+
+Xray `log.loglevel` 来自 `stack.xrelay.loglevel`，未配置时使用 `defaults.xrelay.loglevel`。旧配置不写 stack 级字段时保持默认 `warning`：
+
+```json
+{
+  "log": {
+    "loglevel": "warning"
+  }
+}
+```
+
+支持值为 `debug`、`info`、`warning`、`error`、`none`，非法值会在配置加载阶段失败。
+
 ### api、stats 和 policy
 
 默认生成 `api`、`stats`、`policy`。`api.enabled: true` 时生成 Xray 简化 API 配置：
@@ -162,6 +176,8 @@ log-level: info
 ipv6: true
 external-controller: 127.0.0.1:19091
 ```
+
+`log-level` 来自 `stack.clash.loglevel`，未配置时使用 `defaults.clash.loglevel`。旧配置不写新字段时保持默认 `info`。支持值为 `debug`、`info`、`warning`、`error`、`silent`，非法值会在配置加载阶段失败。
 
 P0 支持一个 socks listener 和一个可选 HTTP listener。配置中同类 listener 多于一个时，校验层必须报错，生成器不能静默选择第一个；同时配置 socks 和 HTTP 时，两者必须使用相同 `listen`，因为基础端口共享 `bind-address`：
 

@@ -217,6 +217,7 @@ port_ranges:
 defaults:
   clash:
     mode: Rule
+    loglevel: info
     rule_profile: default
   xrelay:
     loglevel: warning

@@ -38,6 +38,70 @@ def test_load_config_and_stacks_accept_examples() -> None:
     assert stack_set.by_name()["usa1"].clash.mode == "Rule"
 
 
+def test_load_config_log_levels_keep_legacy_defaults(tmp_path: Path) -> None:
+    """验证旧配置不写日志级别时沿用 Xray warning 和 mihomo info。"""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(valid_config_yaml(tmp_path), encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.defaults.xrelay.loglevel == "warning"
+    assert config.defaults.clash.loglevel == "info"
+
+
+def test_load_project_accepts_custom_log_levels_from_yaml(tmp_path: Path) -> None:
+    """验证 YAML 中的全局默认和 stack 级日志级别覆盖都能加载。"""
+    stacks_dir = tmp_path / "stacks"
+    stacks_dir.mkdir()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        valid_config_yaml(tmp_path)
+        + "defaults:\n"
+        + "  xrelay:\n"
+        + "    loglevel: error\n"
+        + "  clash:\n"
+        + "    loglevel: warning\n",
+        encoding="utf-8",
+    )
+    stack_yaml = valid_stack_yaml("edge").replace(
+        "xrelay:\n  enabled: true",
+        "xrelay:\n  enabled: true\n  loglevel: none",
+    ).replace(
+        "clash:\n  enabled: true",
+        "clash:\n  enabled: true\n  loglevel: silent",
+    )
+    (stacks_dir / "edge.yaml").write_text(stack_yaml, encoding="utf-8")
+
+    config = load_config(config_path)
+    stack_set = load_stacks(config, check_system_ports=False)
+    stack = stack_set.by_name()["edge"]
+
+    assert config.defaults.xrelay.loglevel == "error"
+    assert config.defaults.clash.loglevel == "warning"
+    assert stack.xrelay.loglevel == "none"
+    assert stack.clash.loglevel == "silent"
+
+
+@pytest.mark.parametrize(
+    ("defaults_yaml", "message"),
+    [
+        ("defaults:\n  xrelay:\n    loglevel: verbose\n", "loglevel"),
+        ("defaults:\n  clash:\n    loglevel: notice\n", "loglevel"),
+    ],
+)
+def test_load_config_rejects_invalid_default_log_level(
+    tmp_path: Path,
+    defaults_yaml: str,
+    message: str,
+) -> None:
+    """验证全局默认日志级别只接受各生成器支持的枚举值。"""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(valid_config_yaml(tmp_path) + defaults_yaml, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match=message):
+        load_config(config_path)
+
+
 def test_reference_graph_indexes_examples() -> None:
     """验证测试项目 fixture 能建立 xrelay inbound 和 clash listener 索引。"""
     config = load_config(Path("tests/fixtures/example-project/config.yaml"))
@@ -138,6 +202,22 @@ def test_load_stack_rejects_invalid_mode(tmp_path: Path) -> None:
     stack_path.write_text(valid_stack_yaml("edge").replace("mode: Rule", "mode: Bad"), encoding="utf-8")
 
     with pytest.raises(ValidationError, match="mode"):
+        load_stack(stack_path)
+
+
+@pytest.mark.parametrize(
+    ("target", "replacement"),
+    [
+        ("xrelay:\n  enabled: true", "xrelay:\n  enabled: true\n  loglevel: verbose"),
+        ("clash:\n  enabled: true", "clash:\n  enabled: true\n  loglevel: notice"),
+    ],
+)
+def test_load_stack_rejects_invalid_stack_log_level(tmp_path: Path, target: str, replacement: str) -> None:
+    """验证 stack 级日志级别只接受对应生成器支持的枚举值。"""
+    stack_path = tmp_path / "edge.yaml"
+    stack_path.write_text(valid_stack_yaml("edge").replace(target, replacement), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="loglevel"):
         load_stack(stack_path)
 
 

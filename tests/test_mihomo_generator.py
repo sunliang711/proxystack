@@ -50,6 +50,30 @@ def test_render_mihomo_output_is_yaml() -> None:
     assert [proxy["name"] for proxy in parsed_config["proxies"]] == ["usa1-local", "usa2-local"]
 
 
+def test_render_mihomo_loglevel_uses_global_default_and_stack_override() -> None:
+    """验证 mihomo 日志级别支持全局默认和 stack 覆盖。"""
+    config = load_config(Path("tests/fixtures/example-project/config.yaml")).model_copy(deep=True)
+    config.defaults.clash.loglevel = "warning"
+    stack_set = StackSet(
+        config=config,
+        stacks=[
+            make_stack("global-log"),
+            make_stack(
+                "stack-log",
+                clash_overrides={
+                    "loglevel": "silent",
+                },
+            ),
+        ],
+    )
+
+    global_config = render_mihomo_config(stack_set, "global-log")
+    stack_output = dumps_mihomo_config(stack_set, "stack-log")
+
+    assert global_config["log-level"] == "warning"
+    assert stack_output == (GOLDEN_DIR / "loglevel-override.yaml").read_text(encoding="utf-8")
+
+
 def test_render_mihomo_raw_proxy_overrides_name() -> None:
     """验证 raw upstream 原样复制配置，但 name 始终使用 upstream.name。"""
     stack_set = make_stack_set(
@@ -283,12 +307,37 @@ def make_stack(
     upstreams: Optional[list[dict[str, Any]]] = None,
     groups: Optional[list[dict[str, Any]]] = None,
     rules: Optional[dict[str, Any]] = None,
+    clash_overrides: Optional[dict[str, Any]] = None,
 ) -> Stack:
     """生成测试用 stack 模型，聚焦 mihomo 生成所需字段。"""
     if listeners is None:
         listeners = {
             "socks": [socks_listener()] if listener_socks is None else listener_socks,
         }
+    clash_config: dict[str, Any] = {
+        "enabled": clash_enabled,
+        "mode": "Rule",
+        "controller": {
+            "listen": "127.0.0.1:19001",
+            "secret": "demo-secret",
+        },
+        "listeners": listeners,
+        "upstreams": upstreams or [],
+        "groups": groups
+        or [
+            {
+                "name": "AllProxy",
+                "type": "select",
+                "proxies": ["DIRECT"],
+            }
+        ],
+        "rules": rules
+        or {
+            "profile": "default",
+        },
+    }
+    if clash_overrides:
+        clash_config.update(clash_overrides)
     return Stack.model_validate(
         {
             "name": name,
@@ -302,28 +351,7 @@ def make_stack(
                 },
                 "inbounds": xrelay_inbounds or [socks_inbound()],
             },
-            "clash": {
-                "enabled": clash_enabled,
-                "mode": "Rule",
-                "controller": {
-                    "listen": "127.0.0.1:19001",
-                    "secret": "demo-secret",
-                },
-                "listeners": listeners,
-                "upstreams": upstreams or [],
-                "groups": groups
-                or [
-                    {
-                        "name": "AllProxy",
-                        "type": "select",
-                        "proxies": ["DIRECT"],
-                    }
-                ],
-                "rules": rules
-                or {
-                    "profile": "default",
-                },
-            },
+            "clash": clash_config,
         }
     )
 

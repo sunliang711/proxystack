@@ -20,6 +20,8 @@ labels: []
 xrelay:
   # 【一般不改】是否为该 stack 启用 xrelay 服务。
   enabled: true
+  # 【按需改】stack 级 Xray 日志级别；不填继承 defaults.xrelay.loglevel。支持全集：debug、info、warning、error、none。
+  # loglevel: warning
 
   # 【一般不改】Xray API 配置；默认开启并只监听本机，供 stats 查询使用。
   api:
@@ -145,6 +147,8 @@ clash:
   enabled: true
   # 【按需改】Clash 运行模式；支持全集：Rule、Global、Direct；Rule 表示按规则分流。
   mode: Rule
+  # 【按需改】stack 级 mihomo/clash 日志级别；不填继承 defaults.clash.loglevel。支持全集：debug、info、warning、error、silent。
+  # loglevel: info
 
   # Clash external-controller API 配置。
   controller:

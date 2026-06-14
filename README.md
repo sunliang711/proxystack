@@ -240,6 +240,10 @@ ps-agent import /opt/proxystack/publish/proxystack-backup.zip
 
 `install/update all` 只处理 mihomo、xray-core 和 geo 数据，不安装 systemd unit，也不会自动重启服务。systemd unit 使用 `ps-agent service install [target]`、`ps-agent service uninstall [target]` 管理。
 
+## TODO
+
+- 支持 mihomo 高级 `listeners` 配置，使同一 stack 内的 socks 和 http listener 可以使用不同监听地址。
+
 ## 建议技术栈
 
 首期建议使用 Python 实现同一项目内的两个运行组件：

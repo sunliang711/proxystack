@@ -76,6 +76,7 @@ port_ranges:
 defaults:
   clash:
     mode: Rule
+    loglevel: info
     rule_profile: default
   xrelay:
     loglevel: warning
@@ -122,7 +123,7 @@ install:
 - `subscription`：agent 生成订阅 input/index 和导出发布包时使用的默认参数。
 - `sub/config.yaml`：订阅服务自身配置，默认来自 `src/proxystack/templates/sub-config.yaml`；实际 HTTP 服务只读取这里的 `listen`、`access`、`templates_dir`、`watch_*` 和 `managed_config`。
 - `port_ranges`：`add` 默认自动分配端口、`clone --allocate-ports` 重分配端口时使用的端口池；`xrelay_inbound` 分配入口端口，`xray_api_range` 分配 Xray API，`clash_socks` 分配 mihomo/clash socks listener，`clash_http` 分配 mihomo/clash HTTP listener，`clash_controller` 分配 mihomo/clash REST controller。手写端口不受端口池范围限制，只要端口在 `1-65535` 内、全局唯一且当前系统未占用即可；需要保留模板端口时使用 `add --keep-template-ports`。
-- `defaults`：xrelay 和 clash 的默认值。
+- `defaults`：xrelay 和 clash 的默认值；`defaults.xrelay.loglevel` 默认 `warning`，支持 `debug`、`info`、`warning`、`error`、`none`；`defaults.clash.loglevel` 默认 `info`，支持 `debug`、`info`、`warning`、`error`、`silent`。
 - `security`：socks/http 公开监听、安全确认和鉴权策略。
 - `install`：二进制安装和更新默认版本。
 
@@ -164,6 +165,7 @@ labels: [usa]
 
 xrelay:
   enabled: true
+  # loglevel: warning
   outbound:
     type: clash
     ref: usa1.clash.socks
@@ -185,6 +187,7 @@ xrelay:
 clash:
   enabled: true
   mode: Rule
+  # loglevel: info
   controller:
     listen: 127.0.0.1:19091
     secret: demo-clash-api-secret
@@ -259,6 +262,7 @@ xrelay:
 - API listen 只能使用 `127.0.0.1`、`::1` 或 `localhost`，不能配置公网监听地址。
 - `stats.enabled` 默认 `true`；开启时生成 `stats: {}`。
 - `policy.enabled` 默认 `true`；两个 `policy.levels."0"` 用户统计开关和四个 `policy.system` 流量统计开关默认生成 `true`，显式配置值可以覆盖。
+- `xrelay.loglevel` 可覆盖 `defaults.xrelay.loglevel`；不配置时继承全局默认，旧配置未写全局默认时使用 `warning`。支持值为 `debug`、`info`、`warning`、`error`、`none`。
 
 ### inbound 字段
 
@@ -419,6 +423,10 @@ mode: Rule
 - `Rule`：默认值，按规则分流，适合长期运行。
 - `Global`：所有流量交给 `GLOBAL` 代理组，适合临时测试。
 - `Direct`：全部直连，适合排障。
+
+### loglevel
+
+`defaults.clash.loglevel` 默认 `info`。单个 stack 可通过 `clash.loglevel` 覆盖；不配置时继承全局默认。支持值为 `debug`、`info`、`warning`、`error`、`silent`。
 
 P0 中生成 `listeners.socks` 和可选的 `listeners.http`，两者都最多允许一个条目；同时配置时必须使用相同 `listen`，因为 mihomo 基础端口共享 `bind-address`。`listeners.socks` 生成 `socks-port`，`listeners.http` 生成 HTTP 代理 `port`。`listeners.mixed` 作为 P1 预留字段，P0 校验层如果遇到该字段应报错并提示暂不支持，不能静默忽略或生成 `mixed-port`。
 
