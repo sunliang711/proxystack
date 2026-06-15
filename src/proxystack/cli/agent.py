@@ -236,6 +236,7 @@ def clone_command(
 def list_command(
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     check_system_ports: bool = typer.Option(False, "--check-system-ports/--skip-system-ports", help="额外检查系统端口占用；默认跳过，避免运行中的服务阻断列表展示。"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="展示 API、controller 等管理端点。"),
 ) -> None:
     """列出 stack 名称、启用状态、角色和主要监听端口。"""
     try:
@@ -243,7 +244,7 @@ def list_command(
     except (ValidationError, ConfigValidationError, ValueError) as exc:
         typer.echo(f"读取 stack 列表失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
-    for line in format_stack_table(rows):
+    for line in format_stack_table(rows, verbose=verbose):
         typer.echo(line)
 
 
@@ -1017,13 +1018,14 @@ def echo_service_lines(lines: list[str]) -> None:
         typer.echo(line)
 
 
-def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
+def format_stack_table(rows: list[dict[str, str]], verbose: bool = False) -> list[str]:
     """把 stack 列表格式化为对齐表格，便于终端阅读。"""
     if not rows:
         return ["未找到 stack。"]
-    display_rows = []
+    display_groups = []
     for row in rows:
-        display_rows.extend(format_stack_component_rows(row))
+        display_groups.append(format_stack_component_rows(row, verbose=verbose))
+    display_rows = [component_row for group in display_groups for component_row in group]
     columns = [
         ("name", "Name"),
         ("role", "Role"),
@@ -1031,7 +1033,7 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
         ("component", "Component"),
         ("running", "Running"),
         ("generated", "Generated"),
-        ("endpoints", "Endpoints"),
+        ("endpoints", "Endpoints" if verbose else "Ports"),
     ]
     widths = {
         key: max(len(title), *(len(row[key]) for row in display_rows))
@@ -1039,14 +1041,18 @@ def format_stack_table(rows: list[dict[str, str]]) -> list[str]:
     }
     header = "  ".join(title.ljust(widths[key]) for key, title in columns).rstrip()
     separator = "  ".join("-" * widths[key] for key, _title in columns).rstrip()
-    body = [
-        "  ".join(row[key].ljust(widths[key]) for key, _title in columns).rstrip()
-        for row in display_rows
-    ]
+    body = []
+    for group_index, group in enumerate(display_groups):
+        body.extend(
+            "  ".join(row[key].ljust(widths[key]) for key, _title in columns).rstrip()
+            for row in group
+        )
+        if group_index < len(display_groups) - 1:
+            body.append("")
     return [header, separator, *body]
 
 
-def format_stack_component_rows(row: dict[str, str]) -> list[dict[str, str]]:
+def format_stack_component_rows(row: dict[str, str], verbose: bool = False) -> list[dict[str, str]]:
     """把单个 stack 展开为 xrelay/clash 两行展示。"""
     return [
         {
@@ -1056,7 +1062,7 @@ def format_stack_component_rows(row: dict[str, str]) -> list[dict[str, str]]:
             "component": "xrelay",
             "running": format_stack_component_status(row, "xrelay", "running"),
             "generated": format_stack_component_status(row, "xrelay", "generated"),
-            "endpoints": format_stack_xrelay_endpoints(row),
+            "endpoints": format_stack_xrelay_endpoints(row, verbose=verbose),
         },
         {
             "name": "",
@@ -1065,7 +1071,7 @@ def format_stack_component_rows(row: dict[str, str]) -> list[dict[str, str]]:
             "component": "clash",
             "running": format_stack_component_status(row, "clash", "running"),
             "generated": format_stack_component_status(row, "clash", "generated"),
-            "endpoints": format_stack_clash_endpoints(row),
+            "endpoints": format_stack_clash_endpoints(row, verbose=verbose),
         },
     ]
 
@@ -1082,20 +1088,26 @@ def format_stack_component_status(row: dict[str, str], component: str, field: st
     return "yes" if component in components else "no"
 
 
-def format_stack_xrelay_endpoints(row: dict[str, str]) -> str:
+def format_stack_xrelay_endpoints(row: dict[str, str], verbose: bool = False) -> str:
     """格式化 xrelay 组件端点摘要。"""
     inbounds = row["xrelay_ports"] or "-"
     api = row["xrelay_api_port"] or "-"
+    if not verbose:
+        return inbounds
     if inbounds == "-" and api == "-":
         return "-"
     return f"inbounds: {inbounds} | api:{api}"
 
 
-def format_stack_clash_endpoints(row: dict[str, str]) -> str:
+def format_stack_clash_endpoints(row: dict[str, str], verbose: bool = False) -> str:
     """格式化 clash 组件端点摘要。"""
     socks = row["clash_socks"] or "-"
     http = row["clash_http"] or "-"
     controller = row["clash_controller"] or "-"
+    if not verbose:
+        if socks == "-" and http == "-":
+            return "-"
+        return f"socks:{socks} | http:{http}"
     if socks == "-" and http == "-" and controller == "-":
         return "-"
     return f"socks:{socks} | http:{http} | controller:{controller}"
