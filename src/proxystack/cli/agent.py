@@ -15,8 +15,10 @@ import typer
 from proxystack.cli.common import get_distribution_version
 from proxystack.cli.lifecycle import RuntimePlan
 from proxystack.cli.lifecycle import SUB_SERVICE_NAME
+from proxystack.cli.lifecycle import StackMember
 from proxystack.cli.lifecycle import TargetScope
 from proxystack.cli.lifecycle import add_stack
+from proxystack.cli.lifecycle import add_stack_member
 from proxystack.cli.lifecycle import apply_runtime_plan
 from proxystack.cli.lifecycle import build_runtime_plan
 from proxystack.cli.lifecycle import clone_stack
@@ -27,8 +29,10 @@ from proxystack.cli.lifecycle import ensure_managed_file_metadata
 from proxystack.cli.lifecycle import ensure_project_dirs
 from proxystack.cli.lifecycle import file_sha256
 from proxystack.cli.lifecycle import init_project
+from proxystack.cli.lifecycle import list_stack_members
 from proxystack.cli.lifecycle import list_stacks
 from proxystack.cli.lifecycle import normalize_target
+from proxystack.cli.lifecycle import remove_stack_member
 from proxystack.cli.lifecycle import remove_stack
 from proxystack.cli.lifecycle import render_model_json
 from proxystack.cli.lifecycle import resolve_service_scope
@@ -95,6 +99,10 @@ render_app = typer.Typer(
     help="渲染生成配置，不写入运行目录。",
     no_args_is_help=True,
 )
+member_app = typer.Typer(
+    help="管理 auto/load-balance stack 的 xrelay-socks5 成员。",
+    no_args_is_help=True,
+)
 sub_app = typer.Typer(
     help="订阅 input 校验和导出命令。",
     no_args_is_help=True,
@@ -104,6 +112,7 @@ service_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(render_app, name="render", rich_help_panel=VALIDATE_HELP_PANEL)
+app.add_typer(member_app, name="member", rich_help_panel=CONFIG_HELP_PANEL)
 app.add_typer(sub_app, name="sub", rich_help_panel=SUBSCRIPTION_HELP_PANEL)
 app.add_typer(service_app, name="service", rich_help_panel=SERVICE_HELP_PANEL)
 
@@ -128,6 +137,12 @@ def main(
 def sub_main(ctx: typer.Context) -> None:
     """输出 agent sub 命令组的执行提示。"""
     echo_command_progress("proxystack-agent sub", ctx.invoked_subcommand)
+
+
+@member_app.callback()
+def member_main(ctx: typer.Context) -> None:
+    """输出 agent member 命令组的执行提示。"""
+    echo_command_progress("proxystack-agent member", ctx.invoked_subcommand)
 
 
 @service_app.callback()
@@ -246,6 +261,53 @@ def list_command(
         raise typer.Exit(code=1) from exc
     for line in format_stack_table(rows, verbose=verbose):
         typer.echo(line)
+
+
+@member_app.command("list")
+def member_list(
+    stack: str = typer.Argument(..., help="要查看成员的 auto/load-balance stack 名称。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """列出 stack 中的 xrelay-socks5 成员。"""
+    try:
+        members = list_stack_members(config, stack)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"读取成员列表失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    for line in format_member_table(members):
+        typer.echo(line)
+
+
+@member_app.command("add")
+def member_add(
+    stack: str = typer.Argument(..., help="要修改的 auto/load-balance stack 名称。"),
+    member: str = typer.Argument(..., help="要添加的成员 stack 名称，默认引用 <member>.relay。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """为 auto/load-balance stack 添加 xrelay-socks5 成员。"""
+    try:
+        path = add_stack_member(config, stack, member)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"添加成员失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"成员已添加：{stack} <- {member}")
+    typer.echo(f"stack 已更新：{path}")
+
+
+@member_app.command("remove")
+def member_remove(
+    stack: str = typer.Argument(..., help="要修改的 auto/load-balance stack 名称。"),
+    member: str = typer.Argument(..., help="要删除的成员 stack 名称。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """从 auto/load-balance stack 删除 xrelay-socks5 成员。"""
+    try:
+        path = remove_stack_member(config, stack, member)
+    except (ValidationError, ConfigValidationError, ValueError, OSError) as exc:
+        typer.echo(f"删除成员失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"成员已删除：{stack} <- {member}")
+    typer.echo(f"stack 已更新：{path}")
 
 
 @app.command(rich_help_panel=CONFIG_HELP_PANEL)
@@ -1016,6 +1078,36 @@ def echo_service_lines(lines: list[str]) -> None:
     """逐行输出 service adapter 或 doctor 报告。"""
     for line in lines:
         typer.echo(line)
+
+
+def format_member_table(members: list[StackMember]) -> list[str]:
+    """把 xrelay-socks5 成员列表格式化为对齐表格。"""
+    if not members:
+        return ["未找到 xrelay-socks5 成员。"]
+    rows = [
+        {
+            "member": member.member,
+            "upstream": member.upstream,
+            "ref": member.ref,
+        }
+        for member in members
+    ]
+    columns = [
+        ("member", "Member"),
+        ("upstream", "Upstream"),
+        ("ref", "Ref"),
+    ]
+    widths = {
+        key: max(len(title), *(len(row[key]) for row in rows))
+        for key, title in columns
+    }
+    header = "  ".join(title.ljust(widths[key]) for key, title in columns).rstrip()
+    separator = "  ".join("-" * widths[key] for key, _title in columns).rstrip()
+    body = [
+        "  ".join(row[key].ljust(widths[key]) for key, _title in columns).rstrip()
+        for row in rows
+    ]
+    return [header, separator, *body]
 
 
 def format_stack_table(rows: list[dict[str, str]], verbose: bool = False) -> list[str]:

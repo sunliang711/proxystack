@@ -14,6 +14,10 @@ runner = CliRunner()
 def test_agent_and_sub_p0_subcommand_help_matrix() -> None:
     """验证 Task11 补充的 P0 子命令都有 help 输出。"""
     commands = [
+        (agent_app, ["member"]),
+        (agent_app, ["member", "list"]),
+        (agent_app, ["member", "add"]),
+        (agent_app, ["member", "remove"]),
         (agent_app, ["sub"]),
         (agent_app, ["sub", "export"]),
         (agent_app, ["sub", "validate-inputs"]),

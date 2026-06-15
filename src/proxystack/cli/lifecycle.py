@@ -97,6 +97,15 @@ class FileChange:
 
 
 @dataclass(frozen=True)
+class StackMember:
+    """表示 auto/load-balance stack 中一个 xrelay-socks5 成员。"""
+
+    member: str
+    upstream: str
+    ref: str
+
+
+@dataclass(frozen=True)
 class TargetScope:
     """表示 CLI target 解析后的组件选择范围。"""
 
@@ -436,6 +445,211 @@ def apply_auto_members(stack_data: dict[str, Any], members: list[str]) -> None:
     for group_data in clash_data.get("groups", []):
         if group_data.get("type") == "select":
             group_data["proxies"] = [auto_group_name, *upstream_names, "DIRECT"]
+
+
+def list_stack_members(config_path: Path, stack_name: str) -> list[StackMember]:
+    """列出 stack 中由 xrelay-socks5 upstream 声明的成员节点。"""
+    validate_identifier(stack_name, "stack name")
+    config = load_config(config_path)
+    stack_path = config.stacks_dir / f"{stack_name}.yaml"
+    if not stack_path.exists():
+        raise ValueError(f"stack does not exist: {stack_name}")
+    stack_data = load_yaml_roundtrip_mapping(stack_path)
+    clash_data = ensure_stack_supports_members(stack_data, stack_name)
+    upstreams = require_list(clash_data.get("upstreams", []), "clash.upstreams")
+    members = []
+    for upstream_data in upstreams:
+        if not isinstance(upstream_data, dict) or upstream_data.get("type") != "xrelay-socks5":
+            continue
+        upstream_name = str(upstream_data.get("name", ""))
+        ref = str(upstream_data.get("ref", ""))
+        members.append(StackMember(member=member_name_from_ref(ref), upstream=upstream_name, ref=ref))
+    return members
+
+
+def add_stack_member(config_path: Path, stack_name: str, member_name: str) -> Path:
+    """向 stack 追加一个 xrelay-socks5 成员，并同步相关代理组引用。"""
+    validate_identifier(stack_name, "stack name")
+    validate_identifier(member_name, "member stack name")
+    config = load_config(config_path)
+    stack_path, stack_data = load_stack_edit_document(config, stack_name)
+    clash_data = ensure_stack_supports_members(stack_data, stack_name)
+    stack_set = load_stacks(config, check_system_ports=False)
+    ensure_member_ref_exists(stack_set, member_name, "relay")
+    upstreams = require_list(clash_data.setdefault("upstreams", []), "clash.upstreams")
+    upstream_name = member_upstream_name(member_name)
+    ref = f"{member_name}.relay"
+    if any(isinstance(item, dict) and item.get("name") == upstream_name for item in upstreams):
+        raise ValueError(f"upstream already exists: {upstream_name}")
+    if any(isinstance(item, dict) and item.get("type") == "xrelay-socks5" and item.get("ref") == ref for item in upstreams):
+        raise ValueError(f"member already exists: {member_name}")
+    upstreams.append(
+        {
+            "name": upstream_name,
+            "type": "xrelay-socks5",
+            "ref": ref,
+        }
+    )
+    sync_member_proxy_add(clash_data, upstream_name)
+    write_validated_stack_edit(config, stack_name, stack_path, stack_data)
+    return stack_path
+
+
+def remove_stack_member(config_path: Path, stack_name: str, member_name: str) -> Path:
+    """从 stack 删除一个 xrelay-socks5 成员，并清理相关代理组引用。"""
+    validate_identifier(stack_name, "stack name")
+    validate_identifier(member_name, "member stack name")
+    config = load_config(config_path)
+    stack_path, stack_data = load_stack_edit_document(config, stack_name)
+    clash_data = ensure_stack_supports_members(stack_data, stack_name)
+    upstreams = require_list(clash_data.get("upstreams", []), "clash.upstreams")
+    upstream_name = member_upstream_name(member_name)
+    ref = f"{member_name}.relay"
+    removed_upstream_names = [
+        str(upstream_data.get("name"))
+        for upstream_data in upstreams
+        if isinstance(upstream_data, dict)
+        and upstream_data.get("type") == "xrelay-socks5"
+        and (upstream_data.get("name") == upstream_name or upstream_data.get("ref") == ref)
+    ]
+    if not removed_upstream_names:
+        raise ValueError(f"member does not exist: {member_name}")
+    upstreams[:] = [
+        upstream_data
+        for upstream_data in upstreams
+        if not (
+            isinstance(upstream_data, dict)
+            and upstream_data.get("type") == "xrelay-socks5"
+            and (upstream_data.get("name") == upstream_name or upstream_data.get("ref") == ref)
+        )
+    ]
+    sync_member_proxy_remove(clash_data, set(removed_upstream_names))
+    write_validated_stack_edit(config, stack_name, stack_path, stack_data)
+    return stack_path
+
+
+def load_stack_edit_document(config: GlobalConfig, stack_name: str) -> tuple[Path, dict[str, Any]]:
+    """读取准备被成员命令修改的 stack YAML，并保留原有 YAML 注释和样式。"""
+    stack_path = config.stacks_dir / f"{stack_name}.yaml"
+    if not stack_path.exists():
+        raise ValueError(f"stack does not exist: {stack_name}")
+    return stack_path, load_yaml_roundtrip_mapping(stack_path)
+
+
+def write_validated_stack_edit(config: GlobalConfig, stack_name: str, stack_path: Path, stack_data: dict[str, Any]) -> None:
+    """校验并写回成员命令修改后的 stack YAML。"""
+    stack = validate_stack_document(stack_data, stack_name, stack_path)
+    validate_stack_in_project(config, stack, replace_existing=True)
+    write_yaml_if_changed(stack_path, stack_data)
+
+
+def ensure_stack_supports_members(stack_data: dict[str, Any], stack_name: str) -> dict[str, Any]:
+    """校验 stack 是否支持 member 命令，并返回 clash 配置段。"""
+    if stack_data.get("role") != "auto":
+        raise ValueError(f"stack does not support member commands: {stack_name}")
+    clash_data = require_mapping(stack_data.get("clash"), "clash")
+    groups = require_list(clash_data.get("groups", []), "clash.groups")
+    if not auto_proxy_group_names(groups):
+        raise ValueError(f"stack does not support member commands: {stack_name}")
+    return clash_data
+
+
+def ensure_member_ref_exists(stack_set: StackSet, member_name: str, inbound_name: str) -> None:
+    """校验成员 stack 存在指定 socks5 inbound，避免写入悬空 ref。"""
+    member_stack = stack_set.by_name().get(member_name)
+    if member_stack is None:
+        raise ValueError(f"member stack does not exist: {member_name}")
+    for inbound in member_stack.xrelay.inbounds:
+        if inbound.name == inbound_name and inbound.protocol == "socks5":
+            return
+    raise ValueError(f"xrelay socks5 inbound ref does not exist: {member_name}.{inbound_name}")
+
+
+def sync_member_proxy_add(clash_data: dict[str, Any], upstream_name: str) -> None:
+    """把新增 upstream 名称追加到自动组和总选择组中。"""
+    groups = require_list(clash_data.get("groups", []), "clash.groups")
+    auto_group_names = auto_proxy_group_names(groups)
+    if not auto_group_names:
+        raise ValueError("member commands require a url-test or load-balance group")
+    for group_data in groups:
+        if not isinstance(group_data, dict):
+            raise ValueError("clash.groups items must be mappings")
+        proxies = require_list(group_data.get("proxies", []), "clash.groups.proxies")
+        if group_data.get("type") in {"url-test", "load-balance"}:
+            append_proxy_name(proxies, upstream_name)
+        elif group_data.get("type") == "select" and should_sync_select_group(proxies, auto_group_names):
+            insert_proxy_name_before_direct(proxies, upstream_name)
+
+
+def sync_member_proxy_remove(clash_data: dict[str, Any], upstream_names: set[str]) -> None:
+    """从所有代理组中删除指定 upstream 名称。"""
+    groups = require_list(clash_data.get("groups", []), "clash.groups")
+    for group_data in groups:
+        if not isinstance(group_data, dict):
+            raise ValueError("clash.groups items must be mappings")
+        proxies = require_list(group_data.get("proxies", []), "clash.groups.proxies")
+        proxies[:] = [proxy_name for proxy_name in proxies if proxy_name not in upstream_names]
+
+
+def auto_proxy_group_names(groups: list[Any]) -> set[str]:
+    """返回 url-test/load-balance 代理组名称集合，供 select 组同步判断。"""
+    names = set()
+    for group_data in groups:
+        if isinstance(group_data, dict) and group_data.get("type") in {"url-test", "load-balance"}:
+            group_name = group_data.get("name")
+            if isinstance(group_name, str) and group_name:
+                names.add(group_name)
+    return names
+
+
+def should_sync_select_group(proxies: list[Any], auto_group_names: set[str]) -> bool:
+    """判断 select 组是否属于 auto stack 总选择组。"""
+    return any(proxy_name in auto_group_names for proxy_name in proxies)
+
+
+def append_proxy_name(proxies: list[Any], upstream_name: str) -> None:
+    """在代理组 proxies 中追加成员名称，已存在时保持幂等。"""
+    if upstream_name not in proxies:
+        proxies.append(upstream_name)
+
+
+def insert_proxy_name_before_direct(proxies: list[Any], upstream_name: str) -> None:
+    """把成员名称插入到 DIRECT 前，避免总选择组顺序变得奇怪。"""
+    if upstream_name in proxies:
+        return
+    try:
+        direct_index = proxies.index("DIRECT")
+    except ValueError:
+        proxies.append(upstream_name)
+        return
+    proxies.insert(direct_index, upstream_name)
+
+
+def require_mapping(value: Any, path: str) -> dict[str, Any]:
+    """校验 YAML 节点是 mapping，并返回该 mapping。"""
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must be a mapping")
+    return value
+
+
+def require_list(value: Any, path: str) -> list[Any]:
+    """校验 YAML 节点是 list，并返回该 list。"""
+    if not isinstance(value, list):
+        raise ValueError(f"{path} must be a list")
+    return value
+
+
+def member_upstream_name(member_name: str) -> str:
+    """按现有 auto 模板规则生成成员 upstream 名称。"""
+    return f"{member_name}-local"
+
+
+def member_name_from_ref(ref: str) -> str:
+    """从两段 xrelay inbound ref 中提取成员 stack 名称。"""
+    parts = ref.split(".")
+    if len(parts) == 2 and all(parts):
+        return parts[0]
+    return "-"
 
 
 def clone_stack(config_path: Path, source: str, target: str, allocate_ports: bool) -> Path:
@@ -1141,6 +1355,18 @@ def run_editor(editor: Optional[str], path: Path) -> None:
 def load_yaml_mapping(path: Path) -> dict[str, Any]:
     """读取 YAML 文件并要求顶层是 mapping。"""
     yaml = YAML(typ="safe")
+    with path.open("r", encoding="utf-8") as yaml_file:
+        loaded = yaml.load(yaml_file)
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise ValueError(f"YAML file must be a mapping: {path}")
+    return loaded
+
+
+def load_yaml_roundtrip_mapping(path: Path) -> dict[str, Any]:
+    """读取 YAML 文件并保留注释和样式，供原地修改配置文件使用。"""
+    yaml = YAML()
     with path.open("r", encoding="utf-8") as yaml_file:
         loaded = yaml.load(yaml_file)
     if loaded is None:

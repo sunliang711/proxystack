@@ -670,6 +670,63 @@ def test_agent_add_members_requires_existing_refs(tmp_path: Path) -> None:
     assert not (config.parent / "stacks" / "auto.yaml").exists()
 
 
+def test_agent_member_commands_update_auto_stack(tmp_path: Path) -> None:
+    """验证 member list/add/remove 会同步 xrelay-socks5 upstream 和代理组引用。"""
+    config = copy_example_project(tmp_path)
+    auto_path = config.parent / "stacks" / "auto.yaml"
+
+    list_result = runner.invoke(agent_app, ["member", "list", "auto", "-c", str(config)])
+    remove_result = runner.invoke(agent_app, ["member", "remove", "auto", "usa2", "-c", str(config)])
+    removed_stack = YAML(typ="safe").load(auto_path.read_text(encoding="utf-8"))
+    add_result = runner.invoke(agent_app, ["member", "add", "auto", "usa2", "-c", str(config)])
+    restored_stack = YAML(typ="safe").load(auto_path.read_text(encoding="utf-8"))
+    validate_result = runner.invoke(agent_app, ["validate", "-c", str(config), "--skip-system-ports"])
+
+    assert list_result.exit_code == 0, list_result.output
+    assert "Member" in list_result.output
+    assert "usa1-local" in list_result.output
+    assert "usa2.relay" in list_result.output
+    assert remove_result.exit_code == 0, remove_result.output
+    assert [upstream["ref"] for upstream in removed_stack["clash"]["upstreams"]] == ["usa1.relay"]
+    for group in removed_stack["clash"]["groups"]:
+        assert "usa2-local" not in group["proxies"]
+    assert add_result.exit_code == 0, add_result.output
+    assert [upstream["ref"] for upstream in restored_stack["clash"]["upstreams"]] == ["usa1.relay", "usa2.relay"]
+    for group in restored_stack["clash"]["groups"]:
+        if group["type"] in {"url-test", "load-balance", "select"}:
+            assert "usa2-local" in group["proxies"]
+    assert validate_result.exit_code == 0, validate_result.output
+
+
+def test_agent_member_add_rejects_duplicate_and_missing_member(tmp_path: Path) -> None:
+    """验证 member add 拒绝重复成员和不存在的成员 stack。"""
+    config = copy_example_project(tmp_path)
+
+    duplicate_result = runner.invoke(agent_app, ["member", "add", "auto", "usa1", "-c", str(config)])
+    missing_result = runner.invoke(agent_app, ["member", "add", "auto", "missing", "-c", str(config)])
+
+    assert duplicate_result.exit_code == 1
+    assert "upstream already exists: usa1-local" in duplicate_result.output
+    assert missing_result.exit_code == 1
+    assert "member stack does not exist: missing" in missing_result.output
+
+
+def test_agent_member_commands_reject_unsupported_stack(tmp_path: Path) -> None:
+    """验证非 auto 成员聚合 stack 会被 member 命令明确拒绝。"""
+    config = copy_example_project(tmp_path)
+
+    list_result = runner.invoke(agent_app, ["member", "list", "usa1", "-c", str(config)])
+    add_result = runner.invoke(agent_app, ["member", "add", "usa1", "usa2", "-c", str(config)])
+    remove_result = runner.invoke(agent_app, ["member", "remove", "usa1", "usa2", "-c", str(config)])
+
+    assert list_result.exit_code == 1
+    assert add_result.exit_code == 1
+    assert remove_result.exit_code == 1
+    assert "stack does not support member commands: usa1" in list_result.output
+    assert "stack does not support member commands: usa1" in add_result.output
+    assert "stack does not support member commands: usa1" in remove_result.output
+
+
 def test_agent_check_does_not_write_runtime_files(tmp_path: Path) -> None:
     """验证 check 只展示文件变化，不写入运行目录文件。"""
     config = copy_example_project(tmp_path)
