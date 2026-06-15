@@ -46,7 +46,7 @@ def test_query_ipinfo_uses_stack_clash_socks_listener() -> None:
 
 
 def test_query_ipinfo_uses_default_sources_by_family() -> None:
-    """验证默认来源按 IPv4/IPv6 分组，并为 IPv6 保留通用回退来源。"""
+    """验证默认来源按 IPv4/IPv6 分组，并在成功解析 IP 后停止后续来源。"""
     calls: list[tuple[str, str]] = []
 
     def fake_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResult:
@@ -66,15 +66,44 @@ def test_query_ipinfo_uses_default_sources_by_family() -> None:
     assert [family.family for family in report.families] == ["ipv4", "ipv6"]
     assert calls == [
         ("ipv4", "https://ipinfo.io/json"),
-        ("ipv4", "https://myip.ipip.net"),
         ("ipv6", "https://ipinfo.io/json"),
-        ("ipv6", "https://myip.ipip.net"),
-        ("ipv6", "https://ifconfig.me/all.json"),
-        ("ipv6", "https://ifconfig.co/json"),
-        ("ipv6", "https://api64.ipify.org?format=json"),
     ]
     assert "https://ifconfig.me/all.json" not in sources_for_family("ipv4")
     assert "https://ipinfo.io/json" in sources_for_family("ipv6")
+
+
+def test_query_ipinfo_tries_next_source_until_ip_is_resolved() -> None:
+    """验证来源失败或 family 不匹配时继续查询，解析到匹配 IP 后停止。"""
+    calls: list[str] = []
+
+    def fake_curl(proxy_url: str, url: str, family: str, timeout: float) -> CurlResult:
+        """按来源模拟失败、family 不匹配和成功结果。"""
+        calls.append(url)
+        if url.endswith("/failed"):
+            return CurlResult(returncode=28, stdout="", stderr="timeout")
+        if url.endswith("/wrong-family"):
+            return CurlResult(returncode=0, stdout='{"ip": "203.0.113.8"}', stderr="")
+        return CurlResult(returncode=0, stdout='{"ip": "2001:db8::10"}', stderr="")
+
+    report = query_ipinfo(
+        Path("tests/fixtures/example-project/config.yaml"),
+        "usa1",
+        family="ipv6",
+        sources=(
+            "https://ipinfo.example/failed",
+            "https://ipinfo.example/wrong-family",
+            "https://ipinfo.example/ok",
+            "https://ipinfo.example/skipped",
+        ),
+        curl_runner=fake_curl,
+    )
+
+    assert report.families[0].ip == "2001:db8::10"
+    assert calls == [
+        "https://ipinfo.example/failed",
+        "https://ipinfo.example/wrong-family",
+        "https://ipinfo.example/ok",
+    ]
 
 
 def test_query_ipinfo_emits_progress_lines_per_source() -> None:
@@ -95,7 +124,7 @@ def test_query_ipinfo_emits_progress_lines_per_source() -> None:
         Path("tests/fixtures/example-project/config.yaml"),
         "usa1",
         family="ipv4",
-        sources=("https://ipinfo.example/ok", "https://ipinfo.example/failed"),
+        sources=("https://ipinfo.example/failed", "https://ipinfo.example/ok"),
         curl_runner=fake_curl,
         line_callback=progress_lines.append,
     )
@@ -106,11 +135,11 @@ def test_query_ipinfo_emits_progress_lines_per_source() -> None:
         "Proxy: socks5://127.0.0.1:17091",
         "",
         "IPv4:",
-        "  - https://ipinfo.example/ok [ok]",
-        "    IP: 198.51.100.10",
+        "  - https://ipinfo.example/failed [failed]",
+        "    Error: timeout",
     ]
-    assert "  - https://ipinfo.example/failed [failed]" in progress_lines
-    assert "    Error: timeout" in progress_lines
+    assert "  - https://ipinfo.example/ok [ok]" in progress_lines
+    assert "    IP: 198.51.100.10" in progress_lines
     assert progress_lines[-3:] == [
         "  IPv4:",
         "    IP: 198.51.100.10",

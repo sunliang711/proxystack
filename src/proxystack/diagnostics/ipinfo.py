@@ -183,7 +183,7 @@ def query_family(
     curl_runner: CurlRunner,
     line_callback: Optional[LineCallback] = None,
 ) -> FamilyResult:
-    """按 IP family 逐个查询来源，并保留首个可解析 IP 和地域。"""
+    """按 IP family 逐个查询来源，拿到匹配 IP 后停止后续来源。"""
     best_ip: Optional[str] = None
     best_region: Optional[str] = None
     source_results: list[SourceResult] = []
@@ -226,6 +226,8 @@ def query_family(
             ),
             line_callback,
         )
+        if ip_value:
+            break
 
     return FamilyResult(
         family=family,
