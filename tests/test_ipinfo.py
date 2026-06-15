@@ -66,10 +66,11 @@ def test_query_ipinfo_uses_default_sources_by_family() -> None:
     assert [family.family for family in report.families] == ["ipv4", "ipv6"]
     assert calls == [
         ("ipv4", "https://ipinfo.io/json"),
-        ("ipv6", "https://ipinfo.io/json"),
+        ("ipv6", "https://ifconfig.me/all.json"),
     ]
     assert "https://ifconfig.me/all.json" not in sources_for_family("ipv4")
-    assert "https://ipinfo.io/json" in sources_for_family("ipv6")
+    assert "https://ipinfo.io/json" not in sources_for_family("ipv6")
+    assert "https://myip.ipip.net" not in sources_for_family("ipv6")
 
 
 def test_query_ipinfo_tries_next_source_until_ip_is_resolved() -> None:

@@ -20,8 +20,6 @@ DEFAULT_IPV4_SOURCES = (
     "https://myip.ipip.net",
 )
 DEFAULT_IPV6_SOURCES = (
-    "https://ipinfo.io/json",
-    "https://myip.ipip.net",
     "https://ifconfig.me/all.json",
     "https://ifconfig.co/json",
     "https://api64.ipify.org?format=json",
