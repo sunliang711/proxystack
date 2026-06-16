@@ -1745,11 +1745,12 @@ managed_config:
         encoding="utf-8",
     )
 
-    def fake_run(app: object, host: str, port: int) -> None:
+    def fake_run(app: object, host: str, port: int, log_config: dict[str, object]) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
         captured["app"] = app
         captured["host"] = host
         captured["port"] = port
+        captured["log_config"] = log_config
 
     monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
 
@@ -1768,6 +1769,13 @@ managed_config:
     assert "Subscription server loaded inputs" in caplog.text
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 3004
+    log_config = captured["log_config"]
+    assert isinstance(log_config, dict)
+    formatters = log_config["formatters"]
+    assert "%(asctime)s" in formatters["default"]["fmt"]
+    assert "%(asctime)s" in formatters["access"]["fmt"]
+    assert formatters["default"]["datefmt"] == "%Y-%m-%d %H:%M:%S"
+    assert formatters["access"]["datefmt"] == "%Y-%m-%d %H:%M:%S"
     client = TestClient(captured["app"])
     assert client.get("/sub/alice").status_code == 401
     assert client.get("/sub/alice", params={"token": "demo-token"}).status_code == 200
@@ -1799,7 +1807,7 @@ access:
         encoding="utf-8",
     )
 
-    def fail_run(app: object, host: str, port: int) -> None:
+    def fail_run(app: object, host: str, port: int, log_config: dict[str, object]) -> None:
         """serve 输入校验失败时不应启动真实 HTTP 服务。"""
         raise AssertionError("uvicorn.run should not be called")
 
@@ -1826,11 +1834,12 @@ access:
         encoding="utf-8",
     )
 
-    def fake_run(app: object, host: str, port: int) -> None:
+    def fake_run(app: object, host: str, port: int, log_config: dict[str, object]) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
         captured["app"] = app
         captured["host"] = host
         captured["port"] = port
+        captured["log_config"] = log_config
 
     monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
 
@@ -1865,11 +1874,12 @@ access:
         encoding="utf-8",
     )
 
-    def fake_run(app: object, host: str, port: int) -> None:
+    def fake_run(app: object, host: str, port: int, log_config: dict[str, object]) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
         captured["app"] = app
         captured["host"] = host
         captured["port"] = port
+        captured["log_config"] = log_config
 
     monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
 

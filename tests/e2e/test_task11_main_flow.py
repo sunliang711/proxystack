@@ -40,11 +40,12 @@ def test_init_add_validate_start_sub_export_import_serve_main_flow(tmp_path: Pat
     monkeypatch.setattr(agent_module, "SYSTEMD_UNIT_DIR_OVERRIDE", tmp_path / "systemd")
     monkeypatch.setattr(lifecycle_module, "is_port_available", lambda _host, _port: True)
 
-    def fake_uvicorn_run(app: object, host: str, port: int) -> None:
+    def fake_uvicorn_run(app: object, host: str, port: int, log_config: dict[str, object]) -> None:
         """记录 serve 参数，避免启动真实 HTTP 服务。"""
         served["app"] = app
         served["host"] = host
         served["port"] = port
+        served["log_config"] = log_config
 
     monkeypatch.setattr(sub_module.uvicorn, "run", fake_uvicorn_run)
 

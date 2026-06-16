@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 from pathlib import Path
 import tempfile
@@ -34,6 +35,9 @@ from proxystack.subserver.watcher import create_input_watcher
 
 LOGGER = logging.getLogger(__name__)
 SUBSCRIPTION_TEMPLATE_NAMES = ("clash.yaml.j2", "premium-clash.yaml.j2", "surge.conf.j2")
+UVICORN_LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+UVICORN_DEFAULT_LOG_FORMAT = "%(asctime)s %(levelprefix)s %(message)s"
+UVICORN_ACCESS_LOG_FORMAT = '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
 
 app = typer.Typer(
     help="订阅服务管理命令。",
@@ -166,6 +170,7 @@ def serve(
                 ),
                 host=sub_config.host,
                 port=sub_config.port,
+                log_config=build_uvicorn_log_config(),
             )
     except (OSError, ValueError) as exc:
         if step_logger.step_index == 0:
@@ -274,6 +279,16 @@ def format_template_sources(templates_dir: Optional[Path], data_dir: Path) -> st
             source = f"unavailable:{exc.__class__.__name__}"
         sources.append(f"{template_name}={source}")
     return " ".join(sources)
+
+
+def build_uvicorn_log_config() -> dict[str, object]:
+    """生成带日期时间的 Uvicorn 日志配置，供 ps-sub serve 使用。"""
+    log_config = deepcopy(uvicorn.config.LOGGING_CONFIG)
+    log_config["formatters"]["default"]["fmt"] = UVICORN_DEFAULT_LOG_FORMAT
+    log_config["formatters"]["default"]["datefmt"] = UVICORN_LOG_DATE_FORMAT
+    log_config["formatters"]["access"]["fmt"] = UVICORN_ACCESS_LOG_FORMAT
+    log_config["formatters"]["access"]["datefmt"] = UVICORN_LOG_DATE_FORMAT
+    return log_config
 
 
 def run() -> None:
