@@ -45,8 +45,10 @@ def test_render_mihomo_output_is_yaml() -> None:
     parsed_config = YAML(typ="safe").load(dumps_mihomo_config(stack_set, "auto"))
 
     assert parsed_config["ipv6"] is True
-    assert parsed_config["socks-port"] == 17093
-    assert parsed_config["port"] == 18093
+    assert parsed_config["listeners"][0]["type"] == "socks"
+    assert parsed_config["listeners"][0]["port"] == 17093
+    assert parsed_config["listeners"][1]["type"] == "http"
+    assert parsed_config["listeners"][1]["port"] == 18093
     assert [proxy["name"] for proxy in parsed_config["proxies"]] == ["usa1-local", "usa2-local"]
 
 
@@ -242,8 +244,8 @@ def test_render_mihomo_requires_one_socks_listener() -> None:
         dumps_mihomo_config(stack_set, "nolisten")
 
 
-def test_render_mihomo_http_listener_uses_port_field() -> None:
-    """验证 HTTP listener 会生成 mihomo 的 HTTP 代理 port 字段。"""
+def test_render_mihomo_http_listener_uses_advanced_listener() -> None:
+    """验证 HTTP listener 会生成 mihomo 高级 listener 字段。"""
     stack_set = make_stack_set(
         make_stack(
             "http",
@@ -256,20 +258,85 @@ def test_render_mihomo_http_listener_uses_port_field() -> None:
 
     rendered_config = render_mihomo_config(stack_set, "http")
 
-    assert rendered_config["socks-port"] == 17001
-    assert rendered_config["port"] == 18001
+    assert rendered_config["listeners"] == [
+        {
+            "name": "local",
+            "type": "socks",
+            "listen": "127.0.0.1",
+            "port": 17001,
+        },
+        {
+            "name": "local",
+            "type": "http",
+            "listen": "127.0.0.1",
+            "port": 18001,
+        },
+    ]
 
 
-def test_clash_http_listener_requires_same_listen_as_socks() -> None:
-    """验证 P0 的 HTTP listener 必须和 socks listener 使用同一监听地址。"""
-    with pytest.raises(ValueError, match="same listen address"):
+def test_render_mihomo_listeners_allow_independent_listen_and_users() -> None:
+    """验证 socks/http listener 支持独立 listen 和 mihomo users 三态。"""
+    stack_set = make_stack_set(
         make_stack(
             "http",
             listeners={
-                "socks": [socks_listener()],
-                "http": [http_listener(listen="0.0.0.0")],
+                "socks": [
+                    {
+                        "name": "local-socks",
+                        "listen": "127.0.0.1",
+                        "port": 17001,
+                        "users": [
+                            {
+                                "username": "alice",
+                                "password": "alice-pass",
+                            },
+                            {
+                                "username": "bob",
+                                "password": "bob-pass",
+                            },
+                        ],
+                    }
+                ],
+                "http": [
+                    {
+                        "name": "local-http",
+                        "listen": "0.0.0.0",
+                        "port": 18001,
+                        "users": [],
+                    }
+                ],
             },
         )
+    )
+
+    rendered_config = render_mihomo_config(stack_set, "http")
+
+    assert rendered_config["allow-lan"] is True
+    assert rendered_config["listeners"] == [
+        {
+            "name": "local-socks",
+            "type": "socks",
+            "listen": "127.0.0.1",
+            "port": 17001,
+            "users": [
+                {
+                    "username": "alice",
+                    "password": "alice-pass",
+                },
+                {
+                    "username": "bob",
+                    "password": "bob-pass",
+                },
+            ],
+        },
+        {
+            "name": "local-http",
+            "type": "http",
+            "listen": "0.0.0.0",
+            "port": 18001,
+            "users": [],
+        },
+    ]
 
 
 def test_clash_mixed_listener_rejected_by_model() -> None:

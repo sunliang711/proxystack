@@ -119,6 +119,38 @@ def test_reference_graph_indexes_examples() -> None:
     assert listener.port == 17091
 
 
+def test_reference_graph_indexes_clash_listener_users(tmp_path: Path) -> None:
+    """验证 clash listener users 会随 ref endpoint 一起建立索引。"""
+    project_dir = tmp_path / "project"
+    stacks_dir = project_dir / "stacks"
+    stacks_dir.mkdir(parents=True)
+    config_path = project_dir / "config.yaml"
+    config_path.write_text(valid_config_yaml(project_dir), encoding="utf-8")
+    stack_path = stacks_dir / "edge.yaml"
+    stack_path.write_text(
+        valid_stack_yaml("edge").replace(
+            "        port: 17091\n  upstreams:\n",
+            "        port: 17091\n"
+            "        users:\n"
+            "          - username: alice\n"
+            "            password: alice-pass\n"
+            "          - username: bob\n"
+            "            password: bob-pass\n"
+            "  upstreams:\n",
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+    stack_set = load_stacks(config, check_system_ports=False)
+    graph = build_reference_graph(stack_set)
+    listener = graph.index.resolve_clash_listener("edge.clash.socks")
+
+    assert listener is not None
+    assert listener.users is not None
+    assert [user.username for user in listener.users] == ["alice", "bob"]
+
+
 def test_reference_graph_orders_dependencies_before_consumers() -> None:
     """验证 auto clash 排在被引用的边缘 xrelay 之后启动。"""
     config = load_config(Path("tests/fixtures/example-project/config.yaml"))

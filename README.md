@@ -188,6 +188,8 @@ ps-agent ipinfo usa1
 ps-agent doctor
 ```
 
+`ps-agent list` 的端口后缀中，`(L)` 表示监听在 localhost/回环地址，`(*)` 表示监听在非回环地址。
+
 目标作用域可以是全部 enabled stack、单个 stack、单个组件或订阅服务：
 
 ```bash

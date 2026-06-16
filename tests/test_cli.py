@@ -465,23 +465,26 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
         "xrelay",
         "yes",
         "yes",
-        "socks5:24001,vmess:24101",
+        "socks5:24001(*),vmess:24101(*)",
     ]
     assert usa1_clash_line.strip().split(maxsplit=3) == [
         "clash",
         "no",
         "yes",
-        "socks:17091 | http:18091",
+        "socks:17091(L) | http:18091(L)",
     ]
     assert lines[lines.index(usa1_clash_line) + 1] == ""
     assert "10091" not in result.output
     assert "127.0.0.1:19091" not in result.output
     assert "18091" in result.output
-    assert "socks5:24001,vmess:24101" in result.output
+    assert "socks5:24001(*),vmess:24101(*)" in result.output
     assert "alice/socks5:24001" not in result.output
     assert "Endpoints" in verbose_result.output
-    assert "inbounds: socks5:24001,vmess:24101 | api:10091" in verbose_result.output
-    assert "socks:17091 | http:18091 | controller:127.0.0.1:19091" in verbose_result.output
+    assert "127.0.0.1:19091" not in verbose_result.output
+    assert "inbounds: socks5:24001(*),vmess:24101(*) | api:10091(L)" in verbose_result.output
+    assert "socks:17091(L) | http:18091(L) | controller:19091(L)" in verbose_result.output
+    assert lines[-1] == agent_module.LIST_PORT_SCOPE_NOTE
+    assert verbose_result.output.splitlines()[-1] == agent_module.LIST_PORT_SCOPE_NOTE
 
 
 def test_format_stack_table_keeps_disabled_component_rows() -> None:
@@ -495,11 +498,11 @@ def test_format_stack_table_keeps_disabled_component_rows() -> None:
             "clash": "yes",
             "generated": "clash",
             "running": "clash",
-            "xrelay_ports": "socks5:25001",
+            "xrelay_ports": "socks5:25001(*)",
             "xrelay_api_port": "-",
-            "clash_socks": "17001",
-            "clash_http": "18001",
-            "clash_controller": "127.0.0.1:19001",
+            "clash_socks": "17001(L)",
+            "clash_http": "18001(*)",
+            "clash_controller": "19001(L)",
         },
         {
             "name": "local",
@@ -509,11 +512,11 @@ def test_format_stack_table_keeps_disabled_component_rows() -> None:
             "clash": "no",
             "generated": "xrelay",
             "running": "xrelay",
-            "xrelay_ports": "socks5:25002",
-            "xrelay_api_port": "10002",
-            "clash_socks": "17002",
-            "clash_http": "18002",
-            "clash_controller": "127.0.0.1:19002",
+            "xrelay_ports": "socks5:25002(L)",
+            "xrelay_api_port": "10002(L)",
+            "clash_socks": "17002(L)",
+            "clash_http": "18002(L)",
+            "clash_controller": "19002(L)",
         },
     ]
     lines = agent_module.format_stack_table(rows)
@@ -530,14 +533,14 @@ def test_format_stack_table_keeps_disabled_component_rows() -> None:
         "xrelay",
         "disabled",
         "disabled",
-        "socks5:25001",
+        "socks5:25001(*)",
     ]
     assert lines[3].lstrip().startswith("clash")
     assert lines[3].strip().split(maxsplit=3) == [
         "clash",
         "yes",
         "yes",
-        "socks:17001 | http:18001",
+        "socks:17001(L) | http:18001(*)",
     ]
     assert lines[4] == ""
     assert lines[6].lstrip().startswith("clash")
@@ -545,11 +548,13 @@ def test_format_stack_table_keeps_disabled_component_rows() -> None:
         "clash",
         "disabled",
         "disabled",
-        "socks:17002 | http:18002",
+        "socks:17002(L) | http:18002(L)",
     ]
     assert "Endpoints" in verbose_lines[0]
-    assert "inbounds: socks5:25001 | api:-" in verbose_lines[2]
-    assert "socks:17001 | http:18001 | controller:127.0.0.1:19001" in verbose_lines[3]
+    assert "inbounds: socks5:25001(*) | api:-" in verbose_lines[2]
+    assert "socks:17001(L) | http:18001(*) | controller:19001(L)" in verbose_lines[3]
+    assert lines[-1] == agent_module.LIST_PORT_SCOPE_NOTE
+    assert verbose_lines[-1] == agent_module.LIST_PORT_SCOPE_NOTE
 
 
 def test_agent_list_skips_system_port_check_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

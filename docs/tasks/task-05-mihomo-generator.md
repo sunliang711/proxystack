@@ -10,17 +10,18 @@
 
 - 新建 `src/proxystack/generator/mihomo`。
 - 生成 map/struct 后通过 YAML encoder 输出。
-- P0 支持一个 socks listener 和一个可选 HTTP listener；mixed listener 预留到 P1。
+- P0 支持一个 socks listener 和一个可选 HTTP listener；使用 mihomo 高级 listeners，支持独立 listen 和 listener users；mixed listener 预留到 P1。
 
 ## 实现步骤
 
-1. 已生成基础字段：`mode`、`allow-lan`、`bind-address`、`external-controller`、`secret`、`socks-port` 和可选 HTTP 代理 `port`。
+1. 已生成基础字段：`mode`、`allow-lan`、`listeners`、`external-controller` 和 `secret`。
 2. 已通过结构化 dict/list 和 YAML encoder 输出 mihomo YAML。
 3. 已生成 raw upstream 到 `proxies`，并强制使用 upstream 名称作为 proxy `name`。
 4. 已生成 `xrelay-socks5` upstream 到本机 socks5 proxy，支持 wildcard listen 归一和 password auth。
-5. 已生成 `proxy-groups`，支持 select/url-test/load-balance/fallback。
-6. 已生成 default rules profile、`rules.extra` 和最终 `MATCH,<final>`。
-7. 已新增 `proxystack-agent render clash <stack>`，只读输出配置，不写 runtime/systemd。
+5. 已支持 clash socks/http listener 的独立 listen 和 users；xrelay clash outbound 引用带 users 的 socks listener 时使用第一个用户。
+6. 已生成 `proxy-groups`，支持 select/url-test/load-balance/fallback。
+7. 已生成 default rules profile、`rules.extra` 和最终 `MATCH,<final>`。
+8. 已新增 `proxystack-agent render clash <stack>`，只读输出配置，不写 runtime/systemd。
 
 ## 验收标准
 

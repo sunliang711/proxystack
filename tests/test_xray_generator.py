@@ -315,6 +315,42 @@ def test_render_xray_clash_wildcard_listener_matches_golden() -> None:
     )
 
 
+def test_render_xray_clash_outbound_uses_first_listener_user() -> None:
+    """验证 xrelay 连接带认证的 clash socks listener 时使用第一个用户。"""
+    stack_set = make_stack_set(
+        make_stack(
+            "authclash",
+            {"type": "clash", "ref": "authclash.clash.socks"},
+            [socks_noauth_inbound()],
+            clash_enabled=True,
+            clash_listeners={
+                "socks": [
+                    {
+                        "name": "local",
+                        "listen": "127.0.0.1",
+                        "port": 17001,
+                        "users": [
+                            {
+                                "username": "alice",
+                                "password": "alice-pass",
+                            },
+                            {
+                                "username": "bob",
+                                "password": "bob-pass",
+                            },
+                        ],
+                    }
+                ],
+            },
+        )
+    )
+
+    rendered_config = json.loads(dumps_xray_config(stack_set, "authclash"))
+
+    outbound_server = rendered_config["outbounds"][0]["settings"]["servers"][0]
+    assert outbound_server["users"] == [{"user": "alice", "pass": "alice-pass"}]
+
+
 def test_render_xray_clash_http_listener_rejected() -> None:
     """验证 xray 的 clash outbound 不能引用 HTTP listener。"""
     stack_set = make_stack_set(

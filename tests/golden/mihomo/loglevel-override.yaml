@@ -2,8 +2,11 @@ mode: Rule
 log-level: silent
 ipv6: true
 allow-lan: false
-bind-address: 127.0.0.1
-socks-port: 17001
+listeners:
+  - name: local
+    type: socks
+    listen: 127.0.0.1
+    port: 17001
 external-controller: 127.0.0.1:19001
 secret: demo-secret
 proxies: []

@@ -24,6 +24,7 @@ from proxystack.domain.models import resolve_xrelay_policy_config
 from proxystack.domain.models import resolve_xrelay_stats_config
 from proxystack.graph import ReferenceGraph
 from proxystack.graph import build_reference_graph
+from proxystack.graph.references import Endpoint
 
 XRAY_OUTBOUND_TAG_PREFIX = "egress"
 XRAY_POLICY_STATS_FIELDS = {
@@ -304,14 +305,23 @@ def render_clash_outbound(outbound: XrelayOutbound, graph: ReferenceGraph, outbo
         raise XrayGeneratorError(f"clash listener ref does not exist: {outbound.ref}")
     if endpoint.kind != "socks":
         raise XrayGeneratorError(f"clash listener ref must target socks listener: {outbound.ref}")
+    username, password = clash_listener_first_user(endpoint)
     return render_proxy_outbound(
         "socks",
         normalize_internal_endpoint_address(endpoint.listen),
         endpoint.port,
-        None,
-        None,
+        username,
+        password,
         outbound_tag,
     )
+
+
+def clash_listener_first_user(endpoint: Endpoint) -> tuple[Optional[str], Optional[str]]:
+    """读取 clash socks listener 第一个认证用户，供 xrelay 内部连接 mihomo。"""
+    if not endpoint.users:
+        return None, None
+    user = endpoint.users[0]
+    return user.username, user.password
 
 
 def render_proxy_outbound(

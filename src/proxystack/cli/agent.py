@@ -125,6 +125,7 @@ SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
 INSTALL_SOURCE_HELP = "安装源。mihomo/xray/geo 可用 auto/github/r2、本地文件或 http(s) URL；geo 默认下载 MetaCubeX geoip.metadb，普通远端 URL 需要 --sha256。"
 DOWNLOAD_PROGRESS_PREFIXES = ("download: start ", "download: progress ", "download: complete ", "download: slow ")
 SUBSCRIPTION_CONFIG_TYPES = ("sub", "premium_sub", "surge_sub")
+LIST_PORT_SCOPE_NOTE = "Note: (L)=localhost/loopback, (*)=non-loopback"
 
 
 @app.callback()
@@ -1145,7 +1146,7 @@ def format_stack_table(rows: list[dict[str, str]], verbose: bool = False) -> lis
         )
         if group_index < len(display_groups) - 1:
             body.append("")
-    return [header, separator, *body]
+    return [header, separator, *body, "", LIST_PORT_SCOPE_NOTE]
 
 
 def format_stack_component_rows(row: dict[str, str], verbose: bool = False) -> list[dict[str, str]]:

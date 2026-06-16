@@ -28,6 +28,7 @@ from proxystack.domain.models import GlobalConfig
 from proxystack.domain.models import Inbound
 from proxystack.domain.models import Stack
 from proxystack.domain.models import StackSet
+from proxystack.domain.models import is_loopback_listen_host
 from proxystack.domain.models import parse_listen
 from proxystack.domain.models import resolve_xrelay_api_config
 from proxystack.domain.models import validate_identifier
@@ -807,8 +808,8 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
     generated_dir = config.resolve_path(config.paths.generated)
     rows: list[dict[str, str]] = []
     for stack in stack_set.stacks:
-        clash_ports = ",".join(str(listener.port) for listener in stack.clash.listeners.socks)
-        clash_http_ports = ",".join(str(listener.port) for listener in stack.clash.listeners.http)
+        clash_ports = ",".join(format_listener_port(listener.listen, listener.port) for listener in stack.clash.listeners.socks)
+        clash_http_ports = ",".join(format_listener_port(listener.listen, listener.port) for listener in stack.clash.listeners.http)
         generated_components = generated_stack_components(generated_dir, stack)
         running_components = running_stack_components(stack)
         rows.append(
@@ -824,7 +825,7 @@ def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, s
                 "xrelay_api_port": format_xrelay_api_port(config, stack),
                 "clash_socks": clash_ports or "-",
                 "clash_http": clash_http_ports or "-",
-                "clash_controller": stack.clash.controller.listen,
+                "clash_controller": format_listen_port(stack.clash.controller.listen),
             }
         )
     return rows
@@ -837,8 +838,28 @@ def format_xrelay_api_port(config: GlobalConfig, stack: Stack) -> str:
     api_config = resolve_xrelay_api_config(config.defaults.xrelay, stack.xrelay)
     if not api_config.enabled:
         return "-"
-    _host, port = parse_listen(api_config.listen)
-    return str(port)
+    return format_listen_port(api_config.listen)
+
+
+def format_listen_port(listen: str) -> str:
+    """格式化 host:port 监听地址，只展示端口和监听范围标记。"""
+    host, port = parse_listen(listen)
+    return format_endpoint_port(host, port)
+
+
+def format_listener_port(listen: str, port: int) -> str:
+    """格式化独立 listen 和 port 字段，只展示端口和监听范围标记。"""
+    return format_endpoint_port(listen, port)
+
+
+def format_endpoint_port(host: str, port: int) -> str:
+    """格式化端口，并用 (L)/(*) 标注本机或非本机监听。"""
+    return f"{port}{listen_scope_marker(host)}"
+
+
+def listen_scope_marker(host: str) -> str:
+    """返回 list 命令监听范围标记，回环为 (L)，其它为 (*)。"""
+    return "(L)" if is_loopback_listen_host(host) else "(*)"
 
 
 def generated_stack_components(generated_dir: Path, stack: Stack) -> list[str]:
@@ -881,10 +902,10 @@ def format_component_list(components: list[str]) -> str:
 
 
 def format_xrelay_inbounds(inbounds: list[Inbound]) -> str:
-    """把 xrelay inbound 展示为 protocol:port，方便 list 紧凑查看入口。"""
+    """把 xrelay inbound 展示为 protocol:port(scope)，方便 list 紧凑查看入口。"""
     items = []
     for inbound in inbounds:
-        items.append(f"{inbound.protocol}:{inbound.port}")
+        items.append(f"{inbound.protocol}:{format_listener_port(inbound.listen, inbound.port)}")
     return ",".join(items) if items else "-"
 
 

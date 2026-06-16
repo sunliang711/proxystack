@@ -193,13 +193,17 @@ clash:
     secret: demo-clash-api-secret
   listeners:
     socks:
-      - name: local
+      - name: local-socks
         listen: 127.0.0.1
         port: 17091
+        users:
+          - username: local-user
+            password: local-pass
     http:
-      - name: local
-        listen: 127.0.0.1
+      - name: local-http
+        listen: 0.0.0.0
         port: 18091
+        users: []
   upstreams:
     - name: server-a
       type: raw
@@ -406,7 +410,7 @@ ref 三段含义：
 - 第二段 `clash`：目标组件类型。
 - 第三段 `socks`：目标 listener 类型；xrelay outbound 只支持引用唯一 socks listener。
 
-这样 xrelay 不需要重复填写 clash 的 socks 端口；端口只在目标 stack 的 `clash.listeners` 中声明一次。
+这样 xrelay 不需要重复填写 clash 的 socks 端口；端口只在目标 stack 的 `clash.listeners` 中声明一次。如果目标 socks listener 配置了多个 `users`，生成 Xray outbound 时使用第一个用户连接 mihomo；未配置 `users` 或配置 `users: []` 时不写 Xray outbound 账号。
 
 ## 5. clash 配置
 
@@ -428,7 +432,7 @@ mode: Rule
 
 `defaults.clash.loglevel` 默认 `info`。单个 stack 可通过 `clash.loglevel` 覆盖；不配置时继承全局默认。支持值为 `debug`、`info`、`warning`、`error`、`silent`。
 
-P0 中生成 `listeners.socks` 和可选的 `listeners.http`，两者都最多允许一个条目；同时配置时必须使用相同 `listen`，因为 mihomo 基础端口共享 `bind-address`。`listeners.socks` 生成 `socks-port`，`listeners.http` 生成 HTTP 代理 `port`。`listeners.mixed` 作为 P1 预留字段，P0 校验层如果遇到该字段应报错并提示暂不支持，不能静默忽略或生成 `mixed-port`。
+P0 中生成 `listeners.socks` 和可选的 `listeners.http`，两者都最多允许一个条目。生成器使用 mihomo 高级 `listeners`，因此 socks 和 HTTP 可以分别配置 `listen`、`port` 和 `users`。`users` 不写表示跟随 mihomo 全局 `authentication`；`users: []` 表示该 listener 跳过认证；非空数组表示使用该 listener 自己的认证用户。`listeners.mixed` 作为 P1 预留字段，P0 校验层如果遇到该字段应报错并提示暂不支持，不能静默忽略或生成 `mixed-port`。
 
 ### rules
 

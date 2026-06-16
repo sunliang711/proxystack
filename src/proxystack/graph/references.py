@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from proxystack.domain.models import ClashListenerUser
 from proxystack.domain.models import Stack
 
 
@@ -55,6 +56,15 @@ class Endpoint:
     listen: str
     port: int
     path: str
+    users: Optional[tuple["EndpointUser", ...]] = None
+
+
+@dataclass(frozen=True)
+class EndpointUser:
+    """可被内部 ref 连接复用的 listener 认证用户。"""
+
+    username: str
+    password: str
 
 
 @dataclass(frozen=True)
@@ -141,6 +151,7 @@ def index_clash_listeners(stack: Stack) -> dict[str, Endpoint]:
             listen=listener.listen,
             port=listener.port,
             path=f"stacks.{stack.name}.clash.listeners.socks[{listener_index}]",
+            users=endpoint_users(listener.users),
         )
     for listener_index, listener in enumerate(stack.clash.listeners.http):
         ref = f"{stack.name}.clash.http"
@@ -153,5 +164,13 @@ def index_clash_listeners(stack: Stack) -> dict[str, Endpoint]:
             listen=listener.listen,
             port=listener.port,
             path=f"stacks.{stack.name}.clash.listeners.http[{listener_index}]",
+            users=endpoint_users(listener.users),
         )
     return endpoints
+
+
+def endpoint_users(users: Optional[list[ClashListenerUser]]) -> Optional[tuple[EndpointUser, ...]]:
+    """把 listener users 转为 ref endpoint 可携带的不可变认证信息。"""
+    if users is None:
+        return None
+    return tuple(EndpointUser(username=user.username, password=user.password) for user in users)

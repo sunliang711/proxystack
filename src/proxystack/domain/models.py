@@ -611,12 +611,22 @@ class ClashController(ProxystackModel):
         return value
 
 
+class ClashListenerUser(ProxystackModel):
+    """mihomo 高级 listener 的认证用户配置。"""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    username: Name
+    password: Name
+
+
 class SocksListener(ProxystackModel):
     """mihomo socks listener 配置。"""
 
     name: Name
     listen: str = "127.0.0.1"
     port: Port
+    users: Optional[list[ClashListenerUser]] = None
 
     @field_validator("name")
     @classmethod
@@ -632,6 +642,7 @@ class HttpListener(ProxystackModel):
     name: Name
     listen: str = "127.0.0.1"
     port: Port
+    users: Optional[list[ClashListenerUser]] = None
 
     @field_validator("name")
     @classmethod
@@ -659,8 +670,6 @@ class ClashListeners(ProxystackModel):
             raise ValueError("only one http listener is supported in P0")
         ensure_unique([listener.name for listener in self.socks], "duplicate socks listener name")
         ensure_unique([listener.name for listener in self.http], "duplicate http listener name")
-        if self.socks and self.http and self.socks[0].listen != self.http[0].listen:
-            raise ValueError("socks and http listeners must use the same listen address in P0")
         return self
 
 

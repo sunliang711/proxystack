@@ -170,23 +170,40 @@ xrelay:
 
 ```yaml
 allow-lan: false
-bind-address: 127.0.0.1
 mode: Rule
 log-level: info
 ipv6: true
+listeners:
+  - name: local
+    type: socks
+    listen: 127.0.0.1
+    port: 17091
 external-controller: 127.0.0.1:19091
 ```
 
 `log-level` 来自 `stack.clash.loglevel`，未配置时使用 `defaults.clash.loglevel`。旧配置不写新字段时保持默认 `info`。支持值为 `debug`、`info`、`warning`、`error`、`silent`，非法值会在配置加载阶段失败。
 
-P0 支持一个 socks listener 和一个可选 HTTP listener。配置中同类 listener 多于一个时，校验层必须报错，生成器不能静默选择第一个；同时配置 socks 和 HTTP 时，两者必须使用相同 `listen`，因为基础端口共享 `bind-address`：
+P0 支持一个 socks listener 和一个可选 HTTP listener。配置中同类 listener 多于一个时，校验层必须报错，生成器不能静默选择第一个。生成器使用 mihomo 高级 `listeners`，socks 和 HTTP 可分别配置 `listen`、`port` 和 `users`：
 
 ```yaml
-socks-port: 17091
-port: 18091
+listeners:
+  - name: local-socks
+    type: socks
+    listen: 127.0.0.1
+    port: 17091
+    users:
+      - username: local-user
+        password: local-pass
+  - name: local-http
+    type: http
+    listen: 0.0.0.0
+    port: 18091
+    users: []
 ```
 
-`listeners.mixed` 和 `mixed-port` 预留到 P1。P0 如果遇到 mixed listener，应在校验阶段报错并提示暂不支持，不用 `mixed-port` 替换 `socks-port`。如未来需要多个 mihomo listener，再扩展到 mihomo 的高级 listeners 配置。
+`users` 不写表示跟随 mihomo 全局 `authentication`；`users: []` 表示该 listener 跳过认证；`users` 非空时使用该 listener 自己的认证用户并忽略全局认证。`xrelay.outbound.type: clash` 引用带认证的 clash socks listener 时，会使用 `users` 中第一个用户生成 Xray socks outbound 的账号。
+
+`listeners.mixed` 和 `mixed-port` 预留到 P1。P0 如果遇到 mixed listener，应在校验阶段报错并提示暂不支持，不用 `mixed-port` 替换 socks/http listener。
 
 ### upstreams -> proxies
 

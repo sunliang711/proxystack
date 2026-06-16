@@ -110,7 +110,7 @@ proxystack-agent doctor
 - `setup`：按顺序执行幂等初始化、`install all` 和 `service install`，适合首次安装后补齐运行依赖和 systemd unit。
 - `config`：安全编辑 `/opt/proxystack/config.yaml` 或 `/opt/proxystack/stacks/<name>.yaml`。
 - `add <name>`：创建 `/opt/proxystack/stacks/<name>.yaml`，默认使用 `pair` 模板，不覆盖已有 stack。
-- `list`：列出 stack 文件、enabled 状态、角色、生成文件状态、运行状态、xrelay `user/protocol:port` 和 clash 主要端口；默认不做系统端口占用检查，需要严格检查时使用 `--check-system-ports`。
+- `list`：列出 stack 文件、enabled 状态、角色、生成文件状态、运行状态、xrelay `protocol:port` 和 clash 主要端口；端口后缀 `(L)` 表示 localhost/回环地址，`(*)` 表示非回环地址；默认不做系统端口占用检查，需要严格检查时使用 `--check-system-ports`。
 - `remove <name>`：删除 `stacks/<name>.yaml`；`--purge` 会同时清理 manifest 中该 stack 对应的生成文件。
 - `clone <source> <target>`：复制已有 stack 文件为新 stack，并改写顶层 `name` 和自身 ref。
 - `export`：导出 agent 原生配置备份包，默认输出到 `/opt/proxystack/publish/proxystack-backup.zip`。

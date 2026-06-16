@@ -8,11 +8,13 @@
 
 - 默认 `ps-agent list` 将 `Endpoints` 列改为 `Ports`，只展示 xrelay inbound 和 clash socks/http 端口。
 - 新增 `ps-agent list --verbose` / `-v`，用于展示 xrelay API 和 clash controller 等完整端点。
+- 端口后缀 `(L)` 表示 localhost/回环地址，`(*)` 表示非回环地址；list 输出不再展示原始 listen address。
 - 每个 stack 的组件行之间保持紧凑，不同 stack 之间增加空行分隔。
 
 ## 影响范围
 
 - `src/proxystack/cli/agent.py`
+- `src/proxystack/cli/lifecycle.py`
 - `tests/test_cli.py`
 
 ## 验证

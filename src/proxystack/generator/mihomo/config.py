@@ -49,12 +49,9 @@ def render_mihomo_config(stack_set: StackSet, stack_name: str) -> dict[str, Any]
         "mode": stack.clash.mode,
         "log-level": resolve_clash_loglevel(stack_set.config.defaults.clash, stack.clash),
         "ipv6": True,
-        "allow-lan": not is_loopback_listen_host(listener.listen),
-        "bind-address": listener.listen,
-        "socks-port": listener.port,
+        "allow-lan": clash_listeners_allow_lan(listener, http_listener),
+        "listeners": render_clash_listeners(listener, http_listener),
     }
-    if http_listener is not None:
-        config["port"] = http_listener.port
     config.update(
         {
             "external-controller": stack.clash.controller.listen,
@@ -110,8 +107,43 @@ def get_optional_http_listener(stack: Stack) -> Optional[HttpListener]:
     return stack.clash.listeners.http[0]
 
 
+def clash_listeners_allow_lan(listener: SocksListener, http_listener: Optional[HttpListener]) -> bool:
+    """根据所有 mihomo listener 监听地址决定是否允许局域网访问。"""
+    listeners = [listener]
+    if http_listener is not None:
+        listeners.append(http_listener)
+    return any(not is_loopback_listen_host(candidate.listen) for candidate in listeners)
+
+
+def render_clash_listeners(listener: SocksListener, http_listener: Optional[HttpListener]) -> list[dict[str, Any]]:
+    """把 stack 中的 socks/http listener 转为 mihomo 高级 listeners 配置。"""
+    listeners = [render_clash_listener("socks", listener)]
+    if http_listener is not None:
+        listeners.append(render_clash_listener("http", http_listener))
+    return listeners
+
+
+def render_clash_listener(listener_type: str, listener: Any) -> dict[str, Any]:
+    """生成单个 mihomo 高级 listener，并保留 users 未配置和空数组的差异。"""
+    listener_config: dict[str, Any] = {
+        "name": listener.name,
+        "type": listener_type,
+        "listen": listener.listen,
+        "port": listener.port,
+    }
+    if listener.users is not None:
+        listener_config["users"] = [
+            {
+                "username": user.username,
+                "password": user.password,
+            }
+            for user in listener.users
+        ]
+    return listener_config
+
+
 def is_loopback_listen_host(host: str) -> bool:
-    """判断 socks listener 是否只监听本机回环地址。"""
+    """判断 listener 是否只监听本机回环地址。"""
     return host in LOOPBACK_LISTEN_HOSTS
 
 
