@@ -38,9 +38,6 @@ keyword-filter-type = false
 {% for proxy_line in surge_proxy_lines %}{{ proxy_line }}
 {% endfor %}
 
-[Proxy]
-wgHome = DIRECT
-
 [Proxy Group]
 AutoGroup = url-test{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, url={{ test_url }}, interval=120, tolerance=100, timeout=15, icon-url={{ surge_auto_icon_url }}
 {% for region_group in surge_region_groups %}{{ region_group.name }} = url-test{% for proxy_name in region_group.proxy_names %}, {{ proxy_name }}{% endfor %}, url={{ test_url }}, interval=120, tolerance=100, timeout=15{% if region_group.icon_url %}, icon-url={{ region_group.icon_url }}{% endif %}
