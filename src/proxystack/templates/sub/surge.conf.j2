@@ -38,8 +38,22 @@ keyword-filter-type = false
 {% for proxy_line in surge_proxy_lines %}{{ proxy_line }}
 {% endfor %}
 # wireguard 占位符，在module中覆盖
-wgHome = DIRECT
-wgChiefOffice = DIRECT
+wgHome = wireguard, section-name=wgHome
+wgChiefOffice = wireguard, section-name=wgChiefOffice
+
+[WireGuard wgHome]
+private-key = MGfzEmfwtvxUL/m0Hqou1nU/smad3as4nZDKiQUCr2U=
+self-ip = 10.10.10.9
+dns-server = 10.1.1.1
+mtu = 1420
+peer = (public-key = 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=, allowed-ips = "0.0.0.0/0, ::0/0", endpoint = sh.example.cc:51820, keepalive = 30)
+
+[WireGuard wgChiefOffice]
+private-key = MGfzEmfwtvxUL/m0Hqou1nU/smad3as4nZDKiQUCr2U=
+self-ip = 10.10.10.9
+dns-server = 10.1.1.1
+mtu = 1420
+peer = (public-key = 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=, allowed-ips = "0.0.0.0/0, ::0/0", endpoint = sh.example.cc:51820, keepalive = 30)
 
 [Proxy Group]
 AutoGroup = url-test{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, url={{ test_url }}, interval=120, tolerance=100, timeout=15, icon-url={{ surge_auto_icon_url }}
