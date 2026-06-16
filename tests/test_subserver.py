@@ -51,7 +51,7 @@ def test_health_reads_loaded_memory_index(tmp_path: Path) -> None:
 
 
 def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
-    """验证三种订阅路由按 user 输出文本。"""
+    """验证旧 query token 路由仍按 user 输出三种订阅文本。"""
     state = loaded_state(tmp_path)
     client = TestClient(create_app(state))
 
@@ -76,6 +76,25 @@ def test_subscription_routes_render_three_formats(tmp_path: Path) -> None:
     assert "🌐 其他地区 = url-test, alice socks" in surge_response.text
 
 
+def test_subscription_routes_accept_path_token_before_user(tmp_path: Path) -> None:
+    """验证新 path token 路由支持把 user 保留为最后路径段。"""
+    state = loaded_state(tmp_path)
+    client = TestClient(create_app(state))
+
+    clash_response = client.get("/sub/demo-token/alice")
+    premium_response = client.get("/premium_sub/demo-token/alice")
+    surge_response = client.get("/surge_sub/demo-token/alice")
+
+    assert clash_response.status_code == 200
+    assert "alice socks" in clash_response.text
+    assert premium_response.status_code == 200
+    assert "alice socks" in premium_response.text
+    assert surge_response.status_code == 200
+    assert surge_response.text.startswith(
+        "#!MANAGED-CONFIG http://testserver/surge_sub/demo-token/alice interval=86400 strict=true\n[General]"
+    )
+
+
 def test_surge_subscription_uses_public_base_url_for_managed_config(tmp_path: Path) -> None:
     """验证反代公网前缀会用于 Surge 托管配置自引用 URL。"""
     state = loaded_state(tmp_path)
@@ -90,7 +109,7 @@ def test_surge_subscription_uses_public_base_url_for_managed_config(tmp_path: Pa
 
     assert response.status_code == 200
     assert response.text.startswith(
-        "#!MANAGED-CONFIG https://sub.example.com/api/surge_sub/alice?token=demo-token interval=86400 strict=true\n[General]"
+        "#!MANAGED-CONFIG https://sub.example.com/api/surge_sub/demo-token/alice interval=86400 strict=true\n[General]"
     )
 
 
@@ -122,9 +141,12 @@ def test_subscription_routes_reject_wrong_token(tmp_path: Path) -> None:
     client = TestClient(create_app(state))
 
     response = client.get("/sub/alice", params={"token": "bad-token"})
+    path_response = client.get("/sub/bad-token/alice")
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "forbidden"
+    assert path_response.status_code == 403
+    assert path_response.json()["error"]["code"] == "forbidden"
 
 
 def test_subscription_routes_return_404_for_missing_user(tmp_path: Path) -> None:

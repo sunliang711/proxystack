@@ -179,7 +179,7 @@ def apply_sub_config_comments(config_data: CommentedMap) -> None:
         ("templates_dir",): "订阅模板覆盖目录；不需要自定义模板时可保持默认。",
         ("watch_interval",): "inputs 目录轮询间隔，单位秒；inotify 不可用时生效。",
         ("watch_debounce",): "inputs 变更防抖时间，单位秒；避免保存过程触发重复加载。",
-        ("managed_config",): "Surge 托管配置头参数；用于 /surge_sub/:user 输出 #!MANAGED-CONFIG。",
+        ("managed_config",): "Surge 托管配置头参数；用于 /surge_sub/:token/:user 输出 #!MANAGED-CONFIG。",
         ("managed_config", "enabled"): "是否输出 Surge 托管配置头。",
         ("managed_config", "public_base_url"): "公网访问前缀；反代部署时填写，例如 https://example.com/api/sub；留空时使用请求 URL。",
         ("managed_config", "interval"): "Surge 托管配置刷新间隔，单位秒。",

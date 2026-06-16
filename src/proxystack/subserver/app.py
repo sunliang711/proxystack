@@ -8,7 +8,6 @@ from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
 from urllib.parse import quote
-from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from fastapi import HTTPException
@@ -85,6 +84,11 @@ def create_app(
             ),
         )
 
+    @app.get("/sub/{token}/{user}")
+    def clash_sub_with_path_token(token: str, user: str) -> PlainTextResponse:
+        """返回 path token 形式的普通 Clash 订阅，避免 query 字符影响客户端文件名。"""
+        return clash_sub(user, token)
+
     @app.get("/premium_sub/{user}")
     def premium_clash_sub(user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
         """返回 Premium Clash 订阅。"""
@@ -99,6 +103,11 @@ def create_app(
                 data_dir=render_data_dir,
             ),
         )
+
+    @app.get("/premium_sub/{token}/{user}")
+    def premium_clash_sub_with_path_token(token: str, user: str) -> PlainTextResponse:
+        """返回 path token 形式的 Premium Clash 订阅，保留 user 作为最后路径段。"""
+        return premium_clash_sub(user, token)
 
     @app.get("/surge_sub/{user}")
     def surge_sub(request: Request, user: str, token: Optional[str] = Query(None)) -> PlainTextResponse:
@@ -118,6 +127,11 @@ def create_app(
             ),
         )
 
+    @app.get("/surge_sub/{token}/{user}")
+    def surge_sub_with_path_token(request: Request, token: str, user: str) -> PlainTextResponse:
+        """返回 path token 形式的 Surge 订阅，并保留托管配置自引用 URL。"""
+        return surge_sub(request, user, token)
+
     return app
 
 
@@ -131,8 +145,9 @@ def managed_config_url(
     if not managed_config.enabled:
         return None
     if managed_config.public_base_url:
-        query = f"?{urlencode({'token': token})}" if token is not None else ""
-        return f"{managed_config.public_base_url}/surge_sub/{quote(user, safe='')}{query}"
+        if token is not None:
+            return f"{managed_config.public_base_url}/surge_sub/{quote(token, safe='')}/{quote(user, safe='')}"
+        return f"{managed_config.public_base_url}/surge_sub/{quote(user, safe='')}"
     return str(request.url)
 
 
@@ -163,7 +178,7 @@ def read_request_index(state: SubscriptionState) -> SubscriptionIndex:
 
 
 def verify_token(index: SubscriptionIndex, token: Optional[str]) -> None:
-    """根据 index.access 校验 token query 参数。"""
+    """根据 index.access 校验 token 参数。"""
     if index.access.type != "token":
         return
     if token is None:

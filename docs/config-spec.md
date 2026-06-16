@@ -494,7 +494,7 @@ ref 两段含义：
 订阅生成只使用 xrelay inbound：
 
 ```text
-compiled xrelay inbounds -> sub index -> /sub/:user
+compiled xrelay inbounds -> sub index -> /sub/:token/:user
 ```
 
 不会读取 clash 的：

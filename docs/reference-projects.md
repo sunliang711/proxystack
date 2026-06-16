@@ -43,7 +43,7 @@
 
 参考内容：
 
-- 订阅 HTTP 路由：`/sub/:user`、`/premium_sub/:user`、`/surge_sub/:user`。
+- 订阅 HTTP 路由：`/sub/:token/:user`、`/premium_sub/:token/:user`、`/surge_sub/:token/:user`，并兼容旧的 `?token=` 链接。
 - 订阅节点按 `user` 过滤、按 `sub: true` 输出。
 - Clash/Premium Clash/Surge 模板字段。
 - 健康检查和请求日志格式。

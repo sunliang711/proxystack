@@ -165,6 +165,9 @@ CLI 是首期主要接口，HTTP 仅用于远端订阅服务。
 订阅 HTTP：
 
 - `GET /health`
+- `GET /sub/:token/:user`
+- `GET /premium_sub/:token/:user`
+- `GET /surge_sub/:token/:user`
 - `GET /sub/:user`
 - `GET /premium_sub/:user`
 - `GET /surge_sub/:user`
