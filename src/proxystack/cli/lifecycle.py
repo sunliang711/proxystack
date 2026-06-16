@@ -107,6 +107,39 @@ class StackMember:
 
 
 @dataclass(frozen=True)
+class StackListPort:
+    """表示 list 命令中单个端口条目的紧凑和详细展示值。"""
+
+    label: str
+    compact: str
+    verbose: str
+
+
+@dataclass(frozen=True)
+class StackListComponentSummary:
+    """表示 list 命令中单个组件的展示摘要。"""
+
+    enabled: bool
+    running: bool
+    generated: bool
+    management_label: Optional[str]
+    management_verbose: Optional[str]
+    ports: tuple[StackListPort, ...]
+
+
+@dataclass(frozen=True)
+class StackListSummary:
+    """表示 list 命令中单个 stack 的展示摘要。"""
+
+    name: str
+    role: str
+    enabled: bool
+    overall_status: str
+    xrelay: StackListComponentSummary
+    clash: StackListComponentSummary
+
+
+@dataclass(frozen=True)
 class TargetScope:
     """表示 CLI target 解析后的组件选择范围。"""
 
@@ -801,44 +834,111 @@ def validate_stack_in_project(config: GlobalConfig, stack: Stack, replace_existi
     validate_stack_set(StackSet(config=config, stacks=stacks), check_system_ports=False)
 
 
-def list_stacks(config_path: Path, check_system_ports: bool) -> list[dict[str, str]]:
-    """读取 stack 列表并提取 CLI 展示所需字段。"""
+def list_stacks(
+    config_path: Path,
+    check_system_ports: bool,
+    stack_name: Optional[str] = None,
+) -> list[StackListSummary]:
+    """读取 stack 列表并提取树形输出所需的结构化摘要。"""
     config = load_config(config_path)
     stack_set = load_stacks(config, check_system_ports=check_system_ports)
     generated_dir = config.resolve_path(config.paths.generated)
-    rows: list[dict[str, str]] = []
-    for stack in stack_set.stacks:
-        clash_ports = ",".join(format_listener_port(listener.listen, listener.port) for listener in stack.clash.listeners.socks)
-        clash_http_ports = ",".join(format_listener_port(listener.listen, listener.port) for listener in stack.clash.listeners.http)
-        generated_components = generated_stack_components(generated_dir, stack)
-        running_components = running_stack_components(stack)
+    stacks = stack_set.stacks
+    if stack_name is not None:
+        stack = stack_set.by_name().get(stack_name)
+        if stack is None:
+            raise ValueError(f"stack does not exist: {stack_name}")
+        stacks = [stack]
+    rows: list[StackListSummary] = []
+    for stack in stacks:
+        xrelay_summary = build_xrelay_list_summary(config, generated_dir, stack)
+        clash_summary = build_clash_list_summary(generated_dir, stack)
         rows.append(
-            {
-                "name": stack.name,
-                "enabled": "yes" if stack.enabled else "no",
-                "role": stack.role,
-                "xrelay": "yes" if stack.xrelay.enabled else "no",
-                "clash": "yes" if stack.clash.enabled else "no",
-                "generated": format_component_list(generated_components),
-                "running": format_component_list(running_components),
-                "xrelay_ports": format_xrelay_inbounds(stack.xrelay.inbounds),
-                "xrelay_api_port": format_xrelay_api_port(config, stack),
-                "clash_socks": clash_ports or "-",
-                "clash_http": clash_http_ports or "-",
-                "clash_controller": format_listen_port(stack.clash.controller.listen),
-            }
+            StackListSummary(
+                name=stack.name,
+                role=stack.role,
+                enabled=stack.enabled,
+                overall_status=stack_overall_status(stack, xrelay_summary, clash_summary),
+                xrelay=xrelay_summary,
+                clash=clash_summary,
+            )
         )
     return rows
 
 
-def format_xrelay_api_port(config: GlobalConfig, stack: Stack) -> str:
-    """返回 stack 的 Xray API 端口；API 或 xrelay 禁用时显示占位符。"""
-    if not stack.xrelay.enabled:
-        return "-"
-    api_config = resolve_xrelay_api_config(config.defaults.xrelay, stack.xrelay)
-    if not api_config.enabled:
-        return "-"
-    return format_listen_port(api_config.listen)
+def build_xrelay_list_summary(
+    config: GlobalConfig,
+    generated_dir: Path,
+    stack: Stack,
+) -> StackListComponentSummary:
+    """构建单个 stack 的 xrelay list 展示摘要。"""
+    management_verbose: Optional[str] = None
+    if stack.xrelay.enabled:
+        api_config = resolve_xrelay_api_config(config.defaults.xrelay, stack.xrelay)
+        if api_config.enabled:
+            management_verbose = format_listen_address(api_config.listen)
+    return StackListComponentSummary(
+        enabled=stack.xrelay.enabled,
+        running=stack.xrelay.enabled and is_service_active(component_service_name("xrelay", stack.name)),
+        generated=stack.xrelay.enabled and (generated_dir / "xray" / f"{stack.name}.json").exists(),
+        management_label="API",
+        management_verbose=management_verbose,
+        ports=tuple(
+            StackListPort(
+                label=inbound.protocol,
+                compact=format_listener_port(inbound.listen, inbound.port),
+                verbose=format_listener_address(inbound.listen, inbound.port),
+            )
+            for inbound in stack.xrelay.inbounds
+        ),
+    )
+
+
+def build_clash_list_summary(generated_dir: Path, stack: Stack) -> StackListComponentSummary:
+    """构建单个 stack 的 clash list 展示摘要。"""
+    ports = [
+        StackListPort(
+            label="socks",
+            compact=format_listener_port(listener.listen, listener.port),
+            verbose=format_listener_address(listener.listen, listener.port),
+        )
+        for listener in stack.clash.listeners.socks
+    ]
+    ports.extend(
+        StackListPort(
+            label="http",
+            compact=format_listener_port(listener.listen, listener.port),
+            verbose=format_listener_address(listener.listen, listener.port),
+        )
+        for listener in stack.clash.listeners.http
+    )
+    return StackListComponentSummary(
+        enabled=stack.clash.enabled,
+        running=stack.clash.enabled and is_service_active(component_service_name("clash", stack.name)),
+        generated=stack.clash.enabled and (generated_dir / "mihomo" / f"{stack.name}.yaml").exists(),
+        management_label="Controller",
+        management_verbose=format_listen_address(stack.clash.controller.listen) if stack.clash.enabled else None,
+        ports=tuple(ports),
+    )
+
+
+def stack_overall_status(
+    stack: Stack,
+    xrelay: StackListComponentSummary,
+    clash: StackListComponentSummary,
+) -> str:
+    """计算 stack 头部展示的整体运行状态。"""
+    if not stack.enabled:
+        return "disabled"
+    enabled_components = [component for component in (xrelay, clash) if component.enabled]
+    if not enabled_components:
+        return "stopped"
+    running_count = sum(1 for component in enabled_components if component.running)
+    if running_count == 0:
+        return "stopped"
+    if running_count == len(enabled_components):
+        return "running"
+    return "partial"
 
 
 def format_listen_port(listen: str) -> str:
@@ -857,29 +957,20 @@ def format_endpoint_port(host: str, port: int) -> str:
     return f"{port}{listen_scope_marker(host)}"
 
 
+def format_listen_address(listen: str) -> str:
+    """格式化 host:port 监听地址，展示完整地址和监听范围标记。"""
+    host, port = parse_listen(listen)
+    return format_listener_address(host, port)
+
+
+def format_listener_address(listen: str, port: int) -> str:
+    """格式化独立 listen 和 port 字段，展示完整地址和监听范围标记。"""
+    return f"{listen}:{port} {listen_scope_marker(listen)}"
+
+
 def listen_scope_marker(host: str) -> str:
     """返回 list 命令监听范围标记，回环为 (L)，其它为 (*)。"""
     return "(L)" if is_loopback_listen_host(host) else "(*)"
-
-
-def generated_stack_components(generated_dir: Path, stack: Stack) -> list[str]:
-    """根据 runtime/generated 下的配置文件判断 stack 哪些服务已生成配置。"""
-    components: list[str] = []
-    if stack.xrelay.enabled and (generated_dir / "xray" / f"{stack.name}.json").exists():
-        components.append("xrelay")
-    if stack.clash.enabled and (generated_dir / "mihomo" / f"{stack.name}.yaml").exists():
-        components.append("clash")
-    return components
-
-
-def running_stack_components(stack: Stack) -> list[str]:
-    """通过 systemctl is-active 判断 stack 哪些服务正在运行。"""
-    components: list[str] = []
-    if stack.xrelay.enabled and is_service_active(component_service_name("xrelay", stack.name)):
-        components.append("xrelay")
-    if stack.clash.enabled and is_service_active(component_service_name("clash", stack.name)):
-        components.append("clash")
-    return components
 
 
 def is_service_active(service_name: str) -> bool:
@@ -894,19 +985,6 @@ def is_service_active(service_name: str) -> bool:
     except OSError:
         return False
     return result.returncode == 0
-
-
-def format_component_list(components: list[str]) -> str:
-    """把组件列表格式化为 list 表格中的紧凑展示值。"""
-    return ",".join(components) if components else "-"
-
-
-def format_xrelay_inbounds(inbounds: list[Inbound]) -> str:
-    """把 xrelay inbound 展示为 protocol:port(scope)，方便 list 紧凑查看入口。"""
-    items = []
-    for inbound in inbounds:
-        items.append(f"{inbound.protocol}:{format_listener_port(inbound.listen, inbound.port)}")
-    return ",".join(items) if items else "-"
 
 
 def remove_stack(config_path: Path, name: str, purge: bool) -> list[Path]:

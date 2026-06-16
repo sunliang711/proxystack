@@ -15,6 +15,8 @@ import typer
 from proxystack.cli.common import get_distribution_version
 from proxystack.cli.lifecycle import RuntimePlan
 from proxystack.cli.lifecycle import SUB_SERVICE_NAME
+from proxystack.cli.lifecycle import StackListComponentSummary
+from proxystack.cli.lifecycle import StackListSummary
 from proxystack.cli.lifecycle import StackMember
 from proxystack.cli.lifecycle import TargetScope
 from proxystack.cli.lifecycle import add_stack
@@ -254,17 +256,18 @@ def clone_command(
 
 @app.command("list", rich_help_panel=CONFIG_HELP_PANEL)
 def list_command(
+    stack: Optional[str] = typer.Argument(None, help="可选 stack 名称；缺省显示全部 stack。"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
     check_system_ports: bool = typer.Option(False, "--check-system-ports/--skip-system-ports", help="额外检查系统端口占用；默认跳过，避免运行中的服务阻断列表展示。"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="展示 API、controller 等管理端点。"),
 ) -> None:
-    """列出 stack 名称、启用状态、角色和主要监听端口。"""
+    """列出 stack 摘要，支持按名称过滤和管理端点展开。"""
     try:
-        rows = list_stacks(config, check_system_ports=check_system_ports)
+        rows = list_stacks(config, check_system_ports=check_system_ports, stack_name=stack)
     except (ValidationError, ConfigValidationError, ValueError) as exc:
         typer.echo(f"读取 stack 列表失败：\n{exc}", err=True)
         raise typer.Exit(code=1) from exc
-    for line in format_stack_table(rows, verbose=verbose):
+    for line in format_stack_tree(rows, verbose=verbose):
         typer.echo(line)
 
 
@@ -1115,99 +1118,89 @@ def format_member_table(members: list[StackMember]) -> list[str]:
     return [header, separator, *body]
 
 
-def format_stack_table(rows: list[dict[str, str]], verbose: bool = False) -> list[str]:
-    """把 stack 列表格式化为对齐表格，便于终端阅读。"""
+def format_stack_tree(rows: list[StackListSummary], verbose: bool = False) -> list[str]:
+    """把 stack 列表格式化为树形结构，便于终端快速浏览。"""
     if not rows:
         return ["未找到 stack。"]
-    display_groups = []
-    for row in rows:
-        display_groups.append(format_stack_component_rows(row, verbose=verbose))
-    display_rows = [component_row for group in display_groups for component_row in group]
-    columns = [
-        ("name", "Name"),
-        ("role", "Role"),
-        ("enabled", "Enabled"),
-        ("component", "Component"),
-        ("running", "Running"),
-        ("generated", "Generated"),
-        ("endpoints", "Endpoints" if verbose else "Ports"),
-    ]
-    widths = {
-        key: max(len(title), *(len(row[key]) for row in display_rows))
-        for key, title in columns
-    }
-    header = "  ".join(title.ljust(widths[key]) for key, title in columns).rstrip()
-    separator = "  ".join("-" * widths[key] for key, _title in columns).rstrip()
-    body = []
-    for group_index, group in enumerate(display_groups):
-        body.extend(
-            "  ".join(row[key].ljust(widths[key]) for key, _title in columns).rstrip()
-            for row in group
-        )
-        if group_index < len(display_groups) - 1:
-            body.append("")
-    return [header, separator, *body, "", LIST_PORT_SCOPE_NOTE]
+    lines: list[str] = []
+    for index, row in enumerate(rows):
+        lines.extend(format_stack_tree_item(row, verbose=verbose))
+        if index < len(rows) - 1:
+            lines.append("")
+    lines.extend(["", LIST_PORT_SCOPE_NOTE])
+    return lines
 
 
-def format_stack_component_rows(row: dict[str, str], verbose: bool = False) -> list[dict[str, str]]:
-    """把单个 stack 展开为 xrelay/clash 两行展示。"""
+def format_stack_tree_item(row: StackListSummary, verbose: bool = False) -> list[str]:
+    """格式化单个 stack 的树形展示内容。"""
     return [
-        {
-            "name": row["name"],
-            "role": row["role"],
-            "enabled": row["enabled"],
-            "component": "xrelay",
-            "running": format_stack_component_status(row, "xrelay", "running"),
-            "generated": format_stack_component_status(row, "xrelay", "generated"),
-            "endpoints": format_stack_xrelay_endpoints(row, verbose=verbose),
-        },
-        {
-            "name": "",
-            "role": "",
-            "enabled": "",
-            "component": "clash",
-            "running": format_stack_component_status(row, "clash", "running"),
-            "generated": format_stack_component_status(row, "clash", "generated"),
-            "endpoints": format_stack_clash_endpoints(row, verbose=verbose),
-        },
+        format_stack_header(row),
+        *format_stack_component_tree("xrelay", row.xrelay, verbose=verbose, is_last=False),
+        *format_stack_component_tree("clash", row.clash, verbose=verbose, is_last=True),
     ]
 
 
-def format_stack_component_status(row: dict[str, str], component: str, field: str) -> str:
-    """把 stack 级组件列表拆成单组件状态。"""
-    if row[component] != "yes":
+def format_stack_header(row: StackListSummary) -> str:
+    """格式化 stack 头部，展示名称、角色和整体状态标签。"""
+    tags = [f"[{'enabled' if row.enabled else 'disabled'}]"]
+    if row.overall_status != "disabled":
+        tags.append(f"[{row.overall_status}]")
+    return f"{row.name} ({row.role})  {' '.join(tags)}"
+
+
+def format_stack_component_tree(
+    component_name: str,
+    summary: StackListComponentSummary,
+    verbose: bool,
+    is_last: bool,
+) -> list[str]:
+    """格式化单个组件的树形展示内容。"""
+    branch = "└─" if is_last else "├─"
+    child_prefix = "   " if is_last else "│  "
+    lines = [f"{branch} {component_name}"]
+    lines.append(f"{child_prefix}{format_component_field('Status', component_runtime_status(summary))}")
+    lines.append(f"{child_prefix}{format_component_field('Generated', component_generated_status(summary))}")
+    if verbose and summary.management_label and summary.management_verbose:
+        lines.append(f"{child_prefix}{format_component_field(summary.management_label, summary.management_verbose)}")
+    lines.append(f"{child_prefix}Ports")
+    lines.extend(format_component_port_lines(summary, child_prefix, verbose=verbose))
+    return lines
+
+
+def format_component_field(label: str, value: str) -> str:
+    """格式化组件明细字段，保持标签对齐。"""
+    return f"{label.ljust(10)} : {value}"
+
+
+def component_runtime_status(summary: StackListComponentSummary) -> str:
+    """返回组件运行状态文案。"""
+    if not summary.enabled:
         return "disabled"
-    components = {
-        item.strip()
-        for item in row[field].split(",")
-        if item.strip() and item.strip() != "-"
-    }
-    return "yes" if component in components else "no"
+    return "running" if summary.running else "stopped"
 
 
-def format_stack_xrelay_endpoints(row: dict[str, str], verbose: bool = False) -> str:
-    """格式化 xrelay 组件端点摘要。"""
-    inbounds = row["xrelay_ports"] or "-"
-    api = row["xrelay_api_port"] or "-"
-    if not verbose:
-        return inbounds
-    if inbounds == "-" and api == "-":
-        return "-"
-    return f"inbounds: {inbounds} | api:{api}"
+def component_generated_status(summary: StackListComponentSummary) -> str:
+    """返回组件生成文件状态文案。"""
+    if not summary.enabled:
+        return "disabled"
+    return "ok" if summary.generated else "missing"
 
 
-def format_stack_clash_endpoints(row: dict[str, str], verbose: bool = False) -> str:
-    """格式化 clash 组件端点摘要。"""
-    socks = row["clash_socks"] or "-"
-    http = row["clash_http"] or "-"
-    controller = row["clash_controller"] or "-"
-    if not verbose:
-        if socks == "-" and http == "-":
-            return "-"
-        return f"socks:{socks} | http:{http}"
-    if socks == "-" and http == "-" and controller == "-":
-        return "-"
-    return f"socks:{socks} | http:{http} | controller:{controller}"
+def format_component_port_lines(
+    summary: StackListComponentSummary,
+    child_prefix: str,
+    verbose: bool,
+) -> list[str]:
+    """格式化组件端口条目列表。"""
+    if not summary.ports:
+        return [f"{child_prefix}└─ -"]
+    label_width = max(len(port.label) for port in summary.ports)
+    lines: list[str] = []
+    for index, port in enumerate(summary.ports):
+        branch = "└─" if index == len(summary.ports) - 1 else "├─"
+        display_value = port.verbose if verbose else port.compact
+        lines.append(f"{child_prefix}{branch} {port.label.ljust(label_width)}  {display_value}")
+    return lines
 
 
 def run_artifact_operation(

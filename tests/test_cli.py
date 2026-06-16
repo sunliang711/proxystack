@@ -430,8 +430,8 @@ def test_agent_add_auto_edits_created_stack(tmp_path: Path, monkeypatch: MonkeyP
     assert (config.parent / "stacks" / "new1.yaml").exists()
 
 
-def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """验证 list 使用对齐表格展示 stack 摘要。"""
+def test_agent_list_outputs_tree_summary(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 list 使用树形结构展示 stack 摘要。"""
     config = copy_example_project(tmp_path)
     generated_dir = config.parent / "runtime" / "generated"
     (generated_dir / "xray").mkdir(parents=True)
@@ -447,114 +447,155 @@ def test_agent_list_outputs_aligned_table(tmp_path: Path, monkeypatch: MonkeyPat
     assert result.exit_code == 0
     assert verbose_result.exit_code == 0
     assert "正在执行 proxystack-agent list" not in result.output
-    assert lines[0].startswith("Name  Role")
-    assert "----" in result.output
-    assert "Component" in result.output
-    assert "Ports" in result.output
-    assert "Endpoints" not in result.output
-    assert "Generated" in result.output
-    assert "Running" in result.output
-    assert "Services" not in result.output
-    assert "xrelay,clash" not in result.output
-    usa1_xrelay_line = next(line for line in lines if line.startswith("usa1"))
-    usa1_clash_line = lines[lines.index(usa1_xrelay_line) + 1]
-    assert usa1_xrelay_line.split(maxsplit=6) == [
-        "usa1",
-        "edge",
-        "yes",
-        "xrelay",
-        "yes",
-        "yes",
-        "socks5:24001(*),vmess:24101(*)",
-    ]
-    assert usa1_clash_line.strip().split(maxsplit=3) == [
-        "clash",
-        "no",
-        "yes",
-        "socks:17091(L) | http:18091(L)",
-    ]
-    assert lines[lines.index(usa1_clash_line) + 1] == ""
-    assert "10091" not in result.output
+    assert "Name  Role" not in result.output
+    assert "----" not in result.output
+    assert "usa1 (edge)  [enabled] [partial]" in result.output
+    assert "├─ xrelay" in result.output
+    assert "│  Status     : running" in result.output
+    assert "│  Generated  : ok" in result.output
+    assert "│  ├─ socks5  24001(*)" in result.output
+    assert "│  └─ vmess   24101(*)" in result.output
+    assert "└─ clash" in result.output
+    assert "   Status     : stopped" in result.output
+    assert "   Generated  : ok" in result.output
+    assert "   ├─ socks  17091(L)" in result.output
+    assert "   └─ http   18091(L)" in result.output
+    assert "127.0.0.1:10091" not in result.output
     assert "127.0.0.1:19091" not in result.output
-    assert "18091" in result.output
-    assert "socks5:24001(*),vmess:24101(*)" in result.output
-    assert "alice/socks5:24001" not in result.output
-    assert "Endpoints" in verbose_result.output
-    assert "127.0.0.1:19091" not in verbose_result.output
-    assert "inbounds: socks5:24001(*),vmess:24101(*) | api:10091(L)" in verbose_result.output
-    assert "socks:17091(L) | http:18091(L) | controller:19091(L)" in verbose_result.output
+    assert "API        : 127.0.0.1:10091 (L)" in verbose_result.output
+    assert "Controller : 127.0.0.1:19091 (L)" in verbose_result.output
+    assert "│  ├─ socks5  0.0.0.0:24001 (*)" in verbose_result.output
+    assert "│  └─ vmess   0.0.0.0:24101 (*)" in verbose_result.output
+    assert "   ├─ socks  127.0.0.1:17091 (L)" in verbose_result.output
+    assert "   └─ http   127.0.0.1:18091 (L)" in verbose_result.output
     assert lines[-1] == agent_module.LIST_PORT_SCOPE_NOTE
     assert verbose_result.output.splitlines()[-1] == agent_module.LIST_PORT_SCOPE_NOTE
 
 
-def test_format_stack_table_keeps_disabled_component_rows() -> None:
-    """验证禁用组件仍保留组件行和已配置端点。"""
+def test_format_stack_tree_keeps_disabled_component_details() -> None:
+    """验证禁用组件在树形输出中仍保留状态和已配置端点。"""
     rows = [
-        {
-            "name": "draft",
-            "enabled": "yes",
-            "role": "edge",
-            "xrelay": "no",
-            "clash": "yes",
-            "generated": "clash",
-            "running": "clash",
-            "xrelay_ports": "socks5:25001(*)",
-            "xrelay_api_port": "-",
-            "clash_socks": "17001(L)",
-            "clash_http": "18001(*)",
-            "clash_controller": "19001(L)",
-        },
-        {
-            "name": "local",
-            "enabled": "yes",
-            "role": "edge",
-            "xrelay": "yes",
-            "clash": "no",
-            "generated": "xrelay",
-            "running": "xrelay",
-            "xrelay_ports": "socks5:25002(L)",
-            "xrelay_api_port": "10002(L)",
-            "clash_socks": "17002(L)",
-            "clash_http": "18002(L)",
-            "clash_controller": "19002(L)",
-        },
+        lifecycle_module.StackListSummary(
+            name="draft",
+            role="edge",
+            enabled=True,
+            overall_status="running",
+            xrelay=lifecycle_module.StackListComponentSummary(
+                enabled=False,
+                running=False,
+                generated=False,
+                management_label="API",
+                management_verbose=None,
+                ports=(
+                    lifecycle_module.StackListPort(
+                        label="socks5",
+                        compact="25001(*)",
+                        verbose="0.0.0.0:25001 (*)",
+                    ),
+                ),
+            ),
+            clash=lifecycle_module.StackListComponentSummary(
+                enabled=True,
+                running=True,
+                generated=True,
+                management_label="Controller",
+                management_verbose="127.0.0.1:19001 (L)",
+                ports=(
+                    lifecycle_module.StackListPort(
+                        label="socks",
+                        compact="17001(L)",
+                        verbose="127.0.0.1:17001 (L)",
+                    ),
+                    lifecycle_module.StackListPort(
+                        label="http",
+                        compact="18001(*)",
+                        verbose="0.0.0.0:18001 (*)",
+                    ),
+                ),
+            ),
+        ),
+        lifecycle_module.StackListSummary(
+            name="local",
+            role="edge",
+            enabled=True,
+            overall_status="running",
+            xrelay=lifecycle_module.StackListComponentSummary(
+                enabled=True,
+                running=True,
+                generated=True,
+                management_label="API",
+                management_verbose="127.0.0.1:10002 (L)",
+                ports=(
+                    lifecycle_module.StackListPort(
+                        label="socks5",
+                        compact="25002(L)",
+                        verbose="127.0.0.1:25002 (L)",
+                    ),
+                ),
+            ),
+            clash=lifecycle_module.StackListComponentSummary(
+                enabled=False,
+                running=False,
+                generated=False,
+                management_label="Controller",
+                management_verbose=None,
+                ports=(
+                    lifecycle_module.StackListPort(
+                        label="socks",
+                        compact="17002(L)",
+                        verbose="127.0.0.1:17002 (L)",
+                    ),
+                    lifecycle_module.StackListPort(
+                        label="http",
+                        compact="18002(L)",
+                        verbose="127.0.0.1:18002 (L)",
+                    ),
+                ),
+            ),
+        ),
     ]
-    lines = agent_module.format_stack_table(rows)
-    verbose_lines = agent_module.format_stack_table(rows, verbose=True)
+    lines = agent_module.format_stack_tree(rows)
+    verbose_lines = agent_module.format_stack_tree(rows, verbose=True)
 
-    assert "Name" in lines[0]
-    assert "Role" in lines[0]
-    assert "Component" in lines[0]
-    assert "Ports" in lines[0]
-    assert lines[2].split(maxsplit=6) == [
-        "draft",
-        "edge",
-        "yes",
-        "xrelay",
-        "disabled",
-        "disabled",
-        "socks5:25001(*)",
-    ]
-    assert lines[3].lstrip().startswith("clash")
-    assert lines[3].strip().split(maxsplit=3) == [
-        "clash",
-        "yes",
-        "yes",
-        "socks:17001(L) | http:18001(*)",
-    ]
-    assert lines[4] == ""
-    assert lines[6].lstrip().startswith("clash")
-    assert lines[6].strip().split(maxsplit=3) == [
-        "clash",
-        "disabled",
-        "disabled",
-        "socks:17002(L) | http:18002(L)",
-    ]
-    assert "Endpoints" in verbose_lines[0]
-    assert "inbounds: socks5:25001(*) | api:-" in verbose_lines[2]
-    assert "socks:17001(L) | http:18001(*) | controller:19001(L)" in verbose_lines[3]
+    assert lines[0] == "draft (edge)  [enabled] [running]"
+    assert "│  Status     : disabled" in lines
+    assert "│  Generated  : disabled" in lines
+    assert "│  └─ socks5  25001(*)" in lines
+    assert "   Status     : running" in lines
+    assert "   ├─ socks  17001(L)" in lines
+    assert "   └─ http   18001(*)" in lines
+    assert any("API        : 127.0.0.1:10002 (L)" in line for line in verbose_lines)
+    assert any("Controller : 127.0.0.1:19001 (L)" in line for line in verbose_lines)
+    assert "   Status     : disabled" in verbose_lines
+    assert "   ├─ socks  127.0.0.1:17002 (L)" in verbose_lines
+    assert "   └─ http   127.0.0.1:18002 (L)" in verbose_lines
     assert lines[-1] == agent_module.LIST_PORT_SCOPE_NOTE
     assert verbose_lines[-1] == agent_module.LIST_PORT_SCOPE_NOTE
+
+
+def test_agent_list_supports_single_stack_filter(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """验证 list 支持按 stack 名称过滤输出。"""
+    config = copy_example_project(tmp_path)
+    monkeypatch.setattr(lifecycle_module, "is_service_active", lambda _service_name: False)
+
+    result = runner.invoke(agent_app, ["list", "usa1", "-c", str(config)])
+
+    assert result.exit_code == 0
+    assert "usa1 (edge)" in result.output
+    assert "usa2 (edge)" not in result.output
+    assert "auto (auto)" not in result.output
+    assert result.output.splitlines()[-1] == agent_module.LIST_PORT_SCOPE_NOTE
+
+
+def test_agent_list_reports_missing_stack_for_filter(tmp_path: Path) -> None:
+    """验证 list 过滤不存在的 stack 时返回友好错误。"""
+    config = copy_example_project(tmp_path)
+
+    result = runner.invoke(agent_app, ["list", "missing", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "读取 stack 列表失败" in result.output
+    assert "stack does not exist: missing" in result.output
 
 
 def test_agent_list_skips_system_port_check_by_default(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
