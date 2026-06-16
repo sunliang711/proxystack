@@ -37,7 +37,9 @@ keyword-filter-type = false
 [Proxy]
 {% for proxy_line in surge_proxy_lines %}{{ proxy_line }}
 {% endfor %}
+# wireguard 占位符，在module中覆盖
 wgHome = DIRECT
+wgChiefOffice = DIRECT
 
 [Proxy Group]
 AutoGroup = url-test{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, url={{ test_url }}, interval=120, tolerance=100, timeout=15, icon-url={{ surge_auto_icon_url }}

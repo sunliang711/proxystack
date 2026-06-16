@@ -38,6 +38,7 @@ SUBSCRIPTION_TEMPLATE_NAMES = ("clash.yaml.j2", "premium-clash.yaml.j2", "surge.
 UVICORN_LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 UVICORN_DEFAULT_LOG_FORMAT = "%(asctime)s %(levelprefix)s %(message)s"
 UVICORN_ACCESS_LOG_FORMAT = '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
+UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT = 1
 
 app = typer.Typer(
     help="订阅服务管理命令。",
@@ -171,6 +172,7 @@ def serve(
                 host=sub_config.host,
                 port=sub_config.port,
                 log_config=build_uvicorn_log_config(),
+                timeout_graceful_shutdown=UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT,
             )
     except (OSError, ValueError) as exc:
         if step_logger.step_index == 0:

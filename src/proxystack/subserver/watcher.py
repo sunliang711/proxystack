@@ -15,6 +15,7 @@ from typing import Callable
 InputChangeCallback = Callable[[], None]
 LOGGER = logging.getLogger(__name__)
 WATCHED_INPUT_EXTENSIONS = {".yaml", ".yml", ".json"}
+WATCHER_STOP_TIMEOUT = 1.0
 
 IN_ATTRIB = 0x00000004
 IN_CLOSE_WRITE = 0x00000008
@@ -77,7 +78,7 @@ class PollingInputWatcher(InputWatcher):
         """通知轮询线程退出。"""
         self._stop_event.set()
         if self._thread is not None:
-            self._thread.join(timeout=self.interval + 1.0)
+            self._thread.join(timeout=WATCHER_STOP_TIMEOUT)
 
     def _run(self) -> None:
         """周期比较 inputs 快照，变化时触发 reload。"""
@@ -115,8 +116,13 @@ class InotifyInputWatcher(InputWatcher):
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._libc = ctypes.CDLL(None, use_errno=True)
-        self._fd = self._inotify_init()
-        self._wd = self._inotify_add_watch()
+        self._wake_reader, self._wake_writer = self._create_wakeup_pipe()
+        try:
+            self._fd = self._inotify_init()
+            self._wd = self._inotify_add_watch()
+        except OSError:
+            self._close()
+            raise
 
     def start(self) -> None:
         """后台启动 inotify 事件循环。"""
@@ -128,15 +134,23 @@ class InotifyInputWatcher(InputWatcher):
     def stop(self) -> None:
         """停止 inotify 线程并关闭 fd。"""
         self._stop_event.set()
+        self._wake_stop()
         if self._thread is not None:
-            self._thread.join(timeout=self.interval + self.debounce + 1.0)
+            self._thread.join(timeout=WATCHER_STOP_TIMEOUT)
         self._close()
 
     def _run(self) -> None:
         """读取 inotify 事件，目录变化后 debounce 再触发 reload。"""
         while not self._stop_event.is_set():
-            readable, _writable, _error = select.select([self._fd], [], [], self.interval)
-            if not readable:
+            try:
+                readable, _writable, _error = select.select([self._fd, self._wake_reader], [], [], self.interval)
+            except OSError:
+                return
+            if self._wake_reader in readable:
+                self._drain_wakeup()
+                if self._stop_event.is_set():
+                    return
+            if self._fd not in readable:
                 continue
             if self._read_events():
                 if self._stop_event.wait(self.debounce):
@@ -166,6 +180,35 @@ class InotifyInputWatcher(InputWatcher):
             except OSError:
                 return
 
+    def _create_wakeup_pipe(self) -> tuple[int, int]:
+        """创建用于快速唤醒 select 的非阻塞管道。"""
+        if hasattr(os, "pipe2"):
+            return os.pipe2(os.O_NONBLOCK | os.O_CLOEXEC)
+        reader, writer = os.pipe()
+        os.set_blocking(reader, False)
+        os.set_blocking(writer, False)
+        return reader, writer
+
+    def _wake_stop(self) -> None:
+        """写入唤醒管道，使 stop 不必等待 inotify select 超时。"""
+        try:
+            os.write(self._wake_writer, b"x")
+        except BlockingIOError:
+            return
+        except OSError:
+            return
+
+    def _drain_wakeup(self) -> None:
+        """清空停止唤醒管道中的字节。"""
+        while True:
+            try:
+                if not os.read(self._wake_reader, 1024):
+                    return
+            except BlockingIOError:
+                return
+            except OSError:
+                return
+
     def _inotify_init(self) -> int:
         """调用 libc 创建非阻塞 inotify fd。"""
         fd = self._libc.inotify_init1(os.O_NONBLOCK | os.O_CLOEXEC)
@@ -187,13 +230,17 @@ class InotifyInputWatcher(InputWatcher):
         """移除 watch 并关闭 inotify fd。"""
         fd = getattr(self, "_fd", -1)
         wd = getattr(self, "_wd", -1)
-        if fd < 0:
-            return
-        if wd >= 0:
+        if fd >= 0 and wd >= 0:
             self._libc.inotify_rm_watch(fd, wd)
-        os.close(fd)
+        if fd >= 0:
+            os.close(fd)
         self._fd = -1
         self._wd = -1
+        for attr_name in ("_wake_reader", "_wake_writer"):
+            wake_fd = getattr(self, attr_name, -1)
+            if wake_fd >= 0:
+                os.close(wake_fd)
+                setattr(self, attr_name, -1)
 
 
 def create_input_watcher(

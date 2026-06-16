@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import sys
 from threading import Event
+import time
 
 from fastapi.testclient import TestClient
 import pytest
@@ -28,6 +30,7 @@ from proxystack.subserver.watcher import IN_MODIFY
 from proxystack.subserver.watcher import IN_MOVED_FROM
 from proxystack.subserver.watcher import IN_MOVED_TO
 from proxystack.subserver.watcher import IN_Q_OVERFLOW
+from proxystack.subserver.watcher import InotifyInputWatcher
 from proxystack.subserver.watcher import PollingInputWatcher
 from proxystack.subserver.watcher import WATCH_MASK
 from proxystack.subserver.watcher import is_relevant_input_event
@@ -277,6 +280,25 @@ def test_inotify_event_filter_only_accepts_supported_input_changes() -> None:
     assert is_relevant_input_event(IN_ATTRIB, "manual.yaml") is False
     assert is_relevant_input_event(IN_CREATE | IN_ISDIR, "manual.yaml") is False
     assert is_relevant_input_event(IN_Q_OVERFLOW, "") is True
+
+
+def test_inotify_watcher_stop_wakes_select_without_waiting_interval(tmp_path: Path) -> None:
+    """验证 inotify watcher stop 会唤醒 select，而不是等完整 interval。"""
+    if not sys.platform.startswith("linux"):
+        pytest.skip("inotify is only available on linux")
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+    changed = Event()
+    try:
+        watcher = InotifyInputWatcher(input_dir, changed.set, interval=5.0, debounce=0)
+    except OSError as exc:
+        pytest.skip(f"inotify unavailable: {exc}")
+
+    watcher.start()
+    started_at = time.monotonic()
+    watcher.stop()
+
+    assert time.monotonic() - started_at < 2.0
 
 
 def test_polling_watcher_survives_callback_error(tmp_path: Path) -> None:
