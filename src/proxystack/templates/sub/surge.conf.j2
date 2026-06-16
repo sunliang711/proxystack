@@ -37,14 +37,7 @@ keyword-filter-type = false
 [Proxy]
 {% for proxy_line in surge_proxy_lines %}{{ proxy_line }}
 {% endfor %}
-wgHome = wireguard, section-name=wgHome
-
-[WireGuard wgHome]
-private-key = oDuSR2BHGvoQ8Rypgcmq5LMwfPuERlUry0rKpFlpiE4=
-self-ip = 10.10.10.7
-dns-server = 10.1.1.1
-mtu = 1420
-peer = (public-key = 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=, allowed-ips = "0.0.0.0/0, ::0/0", endpoint = sh.example.cc:51820, keepalive = 25)
+wgHome = DIRECT
 
 [Proxy Group]
 AutoGroup = url-test{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, url={{ test_url }}, interval=120, tolerance=100, timeout=15, icon-url={{ surge_auto_icon_url }}
