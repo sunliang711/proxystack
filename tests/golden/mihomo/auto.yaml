@@ -7,7 +7,7 @@ listeners:
     type: socks
     listen: 127.0.0.1
     port: 17093
-  - name: local
+  - name: local-http
     type: http
     listen: 127.0.0.1
     port: 18093

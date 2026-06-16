@@ -174,7 +174,7 @@ clash:
     # HTTP 监听器列表，供本机 HTTP 代理客户端连接。
     http:
       # 【一般不改】HTTP 监听器名称。
-      - name: local
+      - name: local-http
         # 【按需改】HTTP 监听地址；可与 socks 监听地址独立配置。
         listen: 127.0.0.1
         # 【按需改】HTTP 监听端口；需要避免与其他服务冲突。

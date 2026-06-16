@@ -117,16 +117,17 @@ def clash_listeners_allow_lan(listener: SocksListener, http_listener: Optional[H
 
 def render_clash_listeners(listener: SocksListener, http_listener: Optional[HttpListener]) -> list[dict[str, Any]]:
     """把 stack 中的 socks/http listener 转为 mihomo 高级 listeners 配置。"""
-    listeners = [render_clash_listener("socks", listener)]
+    used_names: set[str] = set()
+    listeners = [render_clash_listener("socks", listener, used_names)]
     if http_listener is not None:
-        listeners.append(render_clash_listener("http", http_listener))
+        listeners.append(render_clash_listener("http", http_listener, used_names))
     return listeners
 
 
-def render_clash_listener(listener_type: str, listener: Any) -> dict[str, Any]:
+def render_clash_listener(listener_type: str, listener: Any, used_names: set[str]) -> dict[str, Any]:
     """生成单个 mihomo 高级 listener，并保留 users 未配置和空数组的差异。"""
     listener_config: dict[str, Any] = {
-        "name": listener.name,
+        "name": unique_clash_listener_name(listener_type, listener.name, used_names),
         "type": listener_type,
         "listen": listener.listen,
         "port": listener.port,
@@ -140,6 +141,19 @@ def render_clash_listener(listener_type: str, listener: Any) -> dict[str, Any]:
             for user in listener.users
         ]
     return listener_config
+
+
+def unique_clash_listener_name(listener_type: str, name: str, used_names: set[str]) -> str:
+    """生成 mihomo 高级 listener 名称，避免同名 listener 被 mihomo 覆盖或跳过。"""
+    candidates = [name, f"{name}-{listener_type}"]
+    suffix = 2
+    while True:
+        for candidate in candidates:
+            if candidate not in used_names:
+                used_names.add(candidate)
+                return candidate
+        candidates = [f"{name}-{listener_type}-{suffix}"]
+        suffix += 1
 
 
 def is_loopback_listen_host(host: str) -> bool:

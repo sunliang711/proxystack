@@ -244,8 +244,8 @@ def test_render_mihomo_requires_one_socks_listener() -> None:
         dumps_mihomo_config(stack_set, "nolisten")
 
 
-def test_render_mihomo_http_listener_uses_advanced_listener() -> None:
-    """验证 HTTP listener 会生成 mihomo 高级 listener 字段。"""
+def test_render_mihomo_http_listener_uses_unique_advanced_listener_name() -> None:
+    """验证 HTTP listener 同名时会去重，避免 mihomo 跳过已有 listener。"""
     stack_set = make_stack_set(
         make_stack(
             "http",
@@ -266,7 +266,7 @@ def test_render_mihomo_http_listener_uses_advanced_listener() -> None:
             "port": 17001,
         },
         {
-            "name": "local",
+            "name": "local-http",
             "type": "http",
             "listen": "127.0.0.1",
             "port": 18001,
