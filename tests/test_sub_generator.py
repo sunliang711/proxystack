@@ -479,7 +479,23 @@ def test_surge_subscription_groups_proxies_by_region_and_remark_prefix() -> None
     assert "FinalList = select, ProxyList, AutoGroup, DIRECT, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇸 美国节点, 🇬🇧 英国节点, 🌐 其他地区" in surge
     assert premium_group_names == surge_group_names
     assert "icon-url:" not in premium_text
-    assert premium["proxy-groups"][premium_group_names.index("OpenAI")]["icon"] == (
+    openai_group = premium["proxy-groups"][premium_group_names.index("OpenAI")]
+    assert openai_group["proxies"] == [
+        "ProxyList",
+        "DIRECT",
+        "🇭🇰 香港节点",
+        "🇯🇵 日本节点",
+        "🇺🇸 美国节点",
+        "🇬🇧 英国节点",
+        "🌐 其他地区",
+        "Node US",
+        "[JP] Tokyo",
+        "HK_01",
+        "London",
+        "Manual Relay",
+        "AUS-Relay",
+    ]
+    assert openai_group["icon"] == (
         "https://raw.githubusercontent.com/sunliang711/icons/main/chatgpt33.webp"
     )
     assert premium["rule-providers"]["OpenAIRules"]["url"] == (

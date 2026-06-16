@@ -84,6 +84,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/claude.webp
   - name: Cursor
     type: select
@@ -92,6 +95,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/cursor.png
   - name: OpenAI
@@ -102,6 +108,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/chatgpt33.webp
   - name: OtherAI
     type: select
@@ -110,6 +119,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/ai.jpeg
   - name: Google
@@ -120,6 +132,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/google3.png
   - name: Meta
     type: select
@@ -128,6 +143,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/meta.jpeg
   - name: Apple
@@ -139,6 +157,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/applew.png
   - name: Microsoft
     type: select
@@ -149,6 +170,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/windows.png
   - name: Binance
     type: select
@@ -157,6 +181,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/binance2.png
   - name: Crypto
@@ -167,6 +194,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/bitcoin.png
   - name: Github
     type: select
@@ -175,6 +205,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/github.png
   - name: Dropbox
@@ -185,6 +218,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/dropbox.png
   - name: 1password
     type: select
@@ -193,6 +229,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/1password.png
   - name: Telegram
@@ -203,6 +242,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/telegram.webp
   - name: Twitter
     type: select
@@ -211,6 +253,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/twitter3.png
   - name: Discord
@@ -221,6 +266,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/discord4.png
   - name: Docker
     type: select
@@ -229,6 +277,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/docker5.png
   - name: IP
@@ -239,6 +290,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/ip2.png
   - name: Netflix
     type: select
@@ -247,6 +301,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/netflix.png
   - name: Disney+
@@ -257,6 +314,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/disney.png
   - name: Spotify
     type: select
@@ -265,6 +325,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/spotify.png
   - name: TikTok
@@ -275,6 +338,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/tiktok.png
   - name: GlobalMedia
     type: select
@@ -283,6 +349,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
   - name: SpeedtestGroup
@@ -293,6 +362,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
   - name: Game
     type: select
@@ -301,6 +373,9 @@ proxy-groups:
       - DIRECT
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
+{% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/game.png
   - name: Overseas
@@ -311,6 +386,9 @@ proxy-groups:
 {% for region_group in surge_region_groups %}
       - {{ region_group.name }}
 {% endfor %}
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/overseas.png
   - name: China
     type: select
@@ -318,6 +396,9 @@ proxy-groups:
       - DIRECT
       - ProxyList
       - AutoGroup
+{% for proxy_name in proxy_names %}
+      - {{ proxy_name | tojson }}
+{% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/china.png
 rule-providers:
   AdsRules:
