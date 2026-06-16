@@ -57,6 +57,9 @@ from proxystack.generator.sub import SubscriptionGeneratorError
 from proxystack.generator.sub import SubscriptionBundleSummary
 from proxystack.generator.sub import index_to_json
 from proxystack.generator.sub import merge_input_files
+from proxystack.generator.sub import render_clash_subscription
+from proxystack.generator.sub import render_premium_clash_subscription
+from proxystack.generator.sub import render_surge_subscription
 from proxystack.generator.sub import render_stack_index
 from proxystack.generator.sub import render_stack_input
 from proxystack.generator.sub import stack_input_file
@@ -121,6 +124,7 @@ SYSTEMD_UNIT_DIR_OVERRIDE = SYSTEMD_UNIT_DIR
 SCRIPTABLE_SUBCOMMANDS = {"list", "render"}
 INSTALL_SOURCE_HELP = "安装源。mihomo/xray/geo 可用 auto/github/r2、本地文件或 http(s) URL；geo 默认下载 MetaCubeX geoip.metadb，普通远端 URL 需要 --sha256。"
 DOWNLOAD_PROGRESS_PREFIXES = ("download: start ", "download: progress ", "download: complete ", "download: slow ")
+SUBSCRIPTION_CONFIG_TYPES = ("sub", "premium_sub", "surge_sub")
 
 
 @app.callback()
@@ -1411,6 +1415,37 @@ def require_external_host_for_subscription_export(global_config: GlobalConfig) -
             "run `ps-agent config` and set external_host to the public domain/IP"
         )
     return global_config.external_host
+
+
+@sub_app.command("export-config")
+def export_subscription_config(
+    subscription_type: str = typer.Argument(..., help="订阅类型：sub/premium_sub/surge_sub。"),
+    user: str = typer.Argument(..., help="订阅用户。"),
+    config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config", "-c", help="全局配置文件路径。"),
+) -> None:
+    """直接输出指定用户的最终订阅配置文本，不写入发布包。"""
+    try:
+        rendered_config = render_subscription_config(config, subscription_type, user)
+    except (ValidationError, ConfigValidationError, ValueError, SubscriptionGeneratorError) as exc:
+        typer.echo(f"订阅配置导出失败：\n{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(rendered_config, nl=False)
+
+
+def render_subscription_config(config_path: Path, subscription_type: str, user: str) -> str:
+    """从 agent 当前 stack 配置直接渲染指定用户的一种订阅配置。"""
+    if subscription_type not in SUBSCRIPTION_CONFIG_TYPES:
+        supported_types = ", ".join(SUBSCRIPTION_CONFIG_TYPES)
+        raise ValueError(f"unsupported subscription config type: {subscription_type}; supported: {supported_types}")
+    global_config = load_config(config_path)
+    require_external_host_for_subscription_export(global_config)
+    stack_set = load_stacks(global_config, check_system_ports=False)
+    index = render_stack_index(stack_set, global_config.subscription.source)
+    if subscription_type == "sub":
+        return render_clash_subscription(index, user)
+    if subscription_type == "premium_sub":
+        return render_premium_clash_subscription(index, user)
+    return render_surge_subscription(index, user)
 
 
 @sub_app.command("validate-inputs")

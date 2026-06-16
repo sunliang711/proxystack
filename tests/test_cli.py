@@ -145,6 +145,7 @@ def test_agent_lifecycle_command_help_is_available() -> None:
         ["service", "status"],
         ["service", "log"],
         ["sub", "export"],
+        ["sub", "export-config"],
         ["version"],
         ["render"],
         ["render", "model"],
@@ -1325,6 +1326,54 @@ def test_agent_sub_export_bundle_schema(tmp_path: Path) -> None:
     assert manifest["bundle_version"] == 1
     assert "usa1.yaml" in manifest["inputs_sha256"]
     assert bundled_input["input_schema"] == "proxystack.subscription-input"
+
+
+def test_agent_sub_export_config_renders_three_types() -> None:
+    """验证 sub export-config 可以按类型直接输出指定用户订阅配置。"""
+    clash_result = runner.invoke(agent_app, ["sub", "export-config", "sub", "alice", "-c", "tests/fixtures/example-project/config.yaml"])
+    premium_result = runner.invoke(agent_app, ["sub", "export-config", "premium_sub", "alice", "-c", "tests/fixtures/example-project/config.yaml"])
+    surge_result = runner.invoke(agent_app, ["sub", "export-config", "surge_sub", "alice", "-c", "tests/fixtures/example-project/config.yaml"])
+
+    assert clash_result.exit_code == 0
+    clash = YAML(typ="safe").load(clash_result.output)
+    assert "proxies" in clash
+    assert "proxy-groups" in clash
+    assert "alice@usa1-socks5:24001-usa1 relay socks" in [proxy["name"] for proxy in clash["proxies"]]
+    assert premium_result.exit_code == 0
+    premium = YAML(typ="safe").load(premium_result.output)
+    assert "rule-providers" in premium
+    assert "rules" in premium
+    assert surge_result.exit_code == 0
+    assert surge_result.output.startswith("[General]")
+    assert "[Proxy]" in surge_result.output
+    assert "alice@usa1-socks5:24001-usa1 relay socks = socks5" in surge_result.output
+    assert "#!MANAGED-CONFIG" not in surge_result.output
+
+
+def test_agent_sub_export_config_rejects_invalid_type_and_missing_user() -> None:
+    """验证 sub export-config 对未知类型和无节点用户返回明确错误。"""
+    invalid_type = runner.invoke(agent_app, ["sub", "export-config", "clash", "alice", "-c", "tests/fixtures/example-project/config.yaml"])
+    missing_user = runner.invoke(agent_app, ["sub", "export-config", "sub", "missing", "-c", "tests/fixtures/example-project/config.yaml"])
+
+    assert invalid_type.exit_code == 1
+    assert "unsupported subscription config type: clash" in invalid_type.output
+    assert missing_user.exit_code == 1
+    assert "subscription user has no nodes: missing" in missing_user.output
+
+
+def test_agent_sub_export_config_rejects_missing_external_host(tmp_path: Path) -> None:
+    """验证 sub export-config 在未设置 external_host 时失败。"""
+    config = copy_example_project(tmp_path)
+    yaml = YAML()
+    config_data = YAML(typ="safe").load(config.read_text(encoding="utf-8"))
+    config_data.pop("external_host")
+    with config.open("w", encoding="utf-8") as config_file:
+        yaml.dump(config_data, config_file)
+
+    result = runner.invoke(agent_app, ["sub", "export-config", "sub", "alice", "-c", str(config)])
+
+    assert result.exit_code == 1
+    assert "external_host is required before exporting subscriptions" in result.output
 
 
 def test_agent_native_backup_export_import_roundtrip(tmp_path: Path) -> None:
