@@ -90,15 +90,19 @@ GlobalMedia = select, ProxyList, DIRECT{% for region_group in surge_region_group
 SpeedtestGroup = select, ProxyList, DIRECT{% for region_group in surge_region_groups %}, {{ region_group.name }}{% endfor %}{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, icon-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/HKMTMedia.png
 Game = select, ProxyList, DIRECT{% for region_group in surge_region_groups %}, {{ region_group.name }}{% endfor %}{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/game.png
 Overseas = select, ProxyList, DIRECT{% for region_group in surge_region_groups %}, {{ region_group.name }}{% endfor %}{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/overseas.png
+Lan10_1_1 = select, DIRECT, wgHome
+Lan10_2 = select, DIRECT, wgChiefOffice
 China = select, DIRECT, ProxyList, AutoGroup{% for proxy_name in proxy_names %}, {{ proxy_name }}{% endfor %}, icon-url=https://raw.githubusercontent.com/sunliang711/icons/main/china.png
 
 [Rule]
 
 # 内网流量走wireguard
 # IP-CIDR,10.1.1.0/24,wg,no-resolve // wireguard
+IP-CIDR,10.1.1.0/24,Lan10_1_1,no-resolve
+IP-CIDR,10.2.0.0/16,Lan10_2,no-resolve
 
 # > 订阅地址以及外部资源地址直连
-DOMAIN-SUFFIX,sub.rustez.cc,DIRECT
+DOMAIN-SUFFIX,www.rustez.cc,DIRECT
 
 # baseURL1: https://raw.githubusercontent.com/sunliang711/rule-set/refs/heads/main/surge/ads.list
 # baseURL2: https://pub-dd72fbc6e3904a7faf46f1599a3a4f6c.r2.dev/surge/ads.list
