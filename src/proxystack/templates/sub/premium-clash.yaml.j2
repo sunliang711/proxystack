@@ -29,10 +29,10 @@ proxies:
 # wireguard 占位符，在实际配置中覆盖
   - name: wgHome
     type: wireguard
-    server: sh.example.cc
+    server: example.cc
     port: 51820
     ip: 10.10.10.9
-    private-key: MGfzEmfwtvxUL/m0Hqou1nU/smad3as4nZDKiQUCr2U=
+    private-key: MGfzEmfwtvxUL/aaaqou1nU/smad3asanZDKaQUCr2U=
     public-key: 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=
     allowed-ips:
       - 0.0.0.0/0
@@ -45,10 +45,10 @@ proxies:
 # wireguard 占位符，在实际配置中覆盖
   - name: wgChiefOffice
     type: wireguard
-    server: sh.example.cc
+    server: example.cc
     port: 51820
     ip: 10.10.10.9
-    private-key: MGfzEmfwtvxUL/m0Hqou1nU/smad3as4nZDKiQUCr2U=
+    private-key: MGfzEmfwtvxUL/aaaqou1nU/smad3asanZDKaQUCr2U=
     public-key: 8Ih1UZSITx3LaNIuotXCaC0SmkVb8cxUDXnBTgF9RRw=
     allowed-ips:
       - 0.0.0.0/0
@@ -422,16 +422,18 @@ proxy-groups:
       - {{ proxy_name | tojson }}
 {% endfor %}
     icon: https://raw.githubusercontent.com/sunliang711/icons/main/overseas.png
-  - name: Lan10_1_1
+  - name: LAN10_1_1
     type: select
     proxies:
       - DIRECT
       - wgHome
-  - name: Lan10_2
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
+  - name: LAN10_2
     type: select
     proxies:
       - DIRECT
       - wgChiefOffice
+    icon: https://raw.githubusercontent.com/sunliang711/icons/main/lan.png
   - name: China
     type: select
     proxies:
@@ -631,8 +633,8 @@ rule-providers:
     interval: 86400
 rules:
   # 内网流量走wireguard
-  - IP-CIDR,10.1.1.0/24,Lan10_1_1,no-resolve
-  - IP-CIDR,10.2.0.0/16,Lan10_2,no-resolve
+  - IP-CIDR,10.1.1.0/24,LAN10_1_1,no-resolve
+  - IP-CIDR,10.2.0.0/16,LAN10_2,no-resolve
   - DOMAIN-SUFFIX,sub.rustez.cc,DIRECT
   - RULE-SET,AdsRules,REJECT
   - RULE-SET,OpenAIRules,OpenAI
