@@ -1804,6 +1804,7 @@ managed_config:
         host: str,
         port: int,
         log_config: dict[str, object],
+        timeout_keep_alive: int,
         timeout_graceful_shutdown: Optional[int],
     ) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
@@ -1811,6 +1812,7 @@ managed_config:
         captured["host"] = host
         captured["port"] = port
         captured["log_config"] = log_config
+        captured["timeout_keep_alive"] = timeout_keep_alive
         captured["timeout_graceful_shutdown"] = timeout_graceful_shutdown
 
     monkeypatch.setattr(sub_module.uvicorn, "run", fake_run)
@@ -1830,6 +1832,7 @@ managed_config:
     assert "Subscription server loaded inputs" in caplog.text
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 3004
+    assert captured["timeout_keep_alive"] == sub_module.UVICORN_KEEP_ALIVE_TIMEOUT
     assert captured["timeout_graceful_shutdown"] == sub_module.UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT
     log_config = captured["log_config"]
     assert isinstance(log_config, dict)
@@ -1874,6 +1877,7 @@ access:
         host: str,
         port: int,
         log_config: dict[str, object],
+        timeout_keep_alive: int,
         timeout_graceful_shutdown: Optional[int],
     ) -> None:
         """serve 输入校验失败时不应启动真实 HTTP 服务。"""
@@ -1907,6 +1911,7 @@ access:
         host: str,
         port: int,
         log_config: dict[str, object],
+        timeout_keep_alive: int,
         timeout_graceful_shutdown: Optional[int],
     ) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
@@ -1953,6 +1958,7 @@ access:
         host: str,
         port: int,
         log_config: dict[str, object],
+        timeout_keep_alive: int,
         timeout_graceful_shutdown: Optional[int],
     ) -> None:
         """记录 uvicorn.run 参数，避免测试启动真实 HTTP 服务。"""
