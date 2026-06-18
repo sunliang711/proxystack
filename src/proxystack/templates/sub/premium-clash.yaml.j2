@@ -31,7 +31,7 @@ proxy-groups:
     type: url-test
     url: {{ test_url }}
     interval: 120
-    tolerance: 100
+    tolerance: 200
     proxies:
 {% for proxy_name in proxy_names %}
       - {{ proxy_name | tojson }}
@@ -42,7 +42,7 @@ proxy-groups:
     type: url-test
     url: {{ test_url }}
     interval: 120
-    tolerance: 100
+    tolerance: 200
     proxies:
 {% for proxy_name in region_group.proxy_names %}
       - {{ proxy_name | tojson }}
